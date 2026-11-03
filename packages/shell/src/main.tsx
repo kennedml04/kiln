@@ -5,7 +5,10 @@ import type { SetupState } from '@kiln/widget-sdk';
 import { api, fetchMe } from './api.ts';
 import { SETUP_PATH } from './SetupWizard.tsx';
 import { connect, setMe } from './store.ts';
+import { applyStoredTheme } from './theme.ts';
 import './styles.css';
+
+applyStoredTheme();
 
 // Who we are first: someone with no role gets the no-access page and no event stream.
 void fetchMe().then(async (me) => {

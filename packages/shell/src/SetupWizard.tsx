@@ -55,18 +55,57 @@ function Step({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** A radio or checkbox drawn as a card: the title and detail are its label. */
+function Choice(props: {
+  type: 'radio' | 'checkbox';
+  name?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  title: ReactNode;
+  detail?: ReactNode;
+  path?: string;
+  side?: ReactNode;
+}) {
+  const { type, name, checked, disabled, onChange, title, detail, path, side } = props;
+  return (
+    <div className="choice-row">
+      {/* The checked look comes from React: :has(:checked) misses a radio its group unchecked. */}
+      <label className={`choice${checked ? ' is-checked' : ''}${disabled ? ' is-disabled' : ''}`}>
+        <input type={type} name={name} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        <span className="choice-text">
+          <span className="choice-title">{title}</span>
+          {detail ? <span className="choice-detail">{detail}</span> : null}
+          {path ? <span className="choice-path">{path}</span> : null}
+        </span>
+        {side ? <span className="choice-side">{side}</span> : null}
+      </label>
+    </div>
+  );
+}
+
 function LoginStep({ setup, login, setLogin }: { setup: SetupState; login: LoginMode; setLogin: (l: LoginMode) => void }) {
   return (
     <Step title="Login">
       <p>Who can reach this Kiln.</p>
-      <label>
-        <input type="radio" name="login" checked={login === 'local'} onChange={() => setLogin('local')} /> Local: only this PC, and
-        the person at it is Admin
-      </label>
-      <label>
-        <input type="radio" name="login" checked={login === 'tailscale'} onChange={() => setLogin('tailscale')} /> Tailscale: this PC
-        and your tailnet, each person with their own role
-      </label>
+      <div className="choices">
+        <Choice
+          type="radio"
+          name="login"
+          checked={login === 'local'}
+          onChange={() => setLogin('local')}
+          title="Local"
+          detail="Only this PC, and the person at it is Admin."
+        />
+        <Choice
+          type="radio"
+          name="login"
+          checked={login === 'tailscale'}
+          onChange={() => setLogin('tailscale')}
+          title="Tailscale"
+          detail="This PC and your tailnet, each person with their own role."
+        />
+      </div>
       {login === 'tailscale' ? (
         <p role="note" className="setup-warning">
           {setup.tailscale.warning}
@@ -75,7 +114,7 @@ function LoginStep({ setup, login, setLogin }: { setup: SetupState; login: Login
       {setup.tailscale.servesKiln ? (
         <p role="alert">tailscale serve forwards to Kiln now ({setup.tailscale.servesKiln}). Turn it off before you go on.</p>
       ) : null}
-      {login !== setup.running.login ? <p>Kiln switches to this login mode when it next restarts.</p> : null}
+      {login !== setup.running.login ? <p className="setup-hint">Kiln switches to this login mode when it next restarts.</p> : null}
     </Step>
   );
 }
@@ -85,7 +124,8 @@ function KnowledgeStep({ setup, folder, setFolder }: { setup: SetupState; folder
     <Step title="Knowledge store">
       <p>The markdown folder Kiln keeps Digests in. Pick a new folder, or your Obsidian vault.</p>
       <label>
-        Knowledge store folder <input value={folder} onChange={(e) => setFolder(e.target.value)} size={60} />
+        Knowledge store folder
+        <input value={folder} onChange={(e) => setFolder(e.target.value)} spellCheck={false} placeholder="C:\path\to\folder" />
       </label>
       {setup.obsidian.installed ? (
         <p>
@@ -129,13 +169,18 @@ function InstallStep(props: {
   const { install, setInstall, drafts, setDrafts, setup } = props;
   return (
     <Step title="Install">
-      <label>
-        <input type="radio" name="install" checked={install === 'work'} onChange={() => setInstall('work')} /> Work: metered credits
-      </label>
-      <label>
-        <input type="radio" name="install" checked={install === 'home'} onChange={() => setInstall('home')} /> Home: a Claude Max
-        subscription{setup.localModelServer.found ? ', and the local model server found at ' + setup.localModelServer.url : ''}
-      </label>
+      <p>What pays for the Agents' work.</p>
+      <div className="choices">
+        <Choice type="radio" name="install" checked={install === 'work'} onChange={() => setInstall('work')} title="Work" detail="Metered credits." />
+        <Choice
+          type="radio"
+          name="install"
+          checked={install === 'home'}
+          onChange={() => setInstall('home')}
+          title="Home"
+          detail={`A Claude Max subscription${setup.localModelServer.found ? ', and the local model server found at ' + setup.localModelServer.url : ''}.`}
+        />
+      </div>
       {install ? <p>These Budgets are offered. Change any limit now, or later on the Budget's page. Their models come next.</p> : null}
       {drafts.map((draft, i) => (
         <BudgetFields key={draft.id} draft={draft} onChange={(d) => setDrafts(drafts.map((x, j) => (j === i ? d : x)))} />
@@ -185,37 +230,40 @@ function AgentsStep(props: {
     <Step title="Agents">
       <p>The first-party Agent Widgets, installed from the Widget repo.</p>
       <label>
-        Widget repo <input value={repo} onChange={(e) => setRepo(e.target.value)} size={60} placeholder="a git URL or folder" />
+        Widget repo
+        <input value={repo} onChange={(e) => setRepo(e.target.value)} spellCheck={false} placeholder="a git URL or folder" />
       </label>
-      {!setup.widgetRepo && !repo ? <p>Kiln has no public Widget repo set yet: enter its git URL (or a local copy).</p> : null}
-      <ul>
-        {setup.agents.map((agent) => (
-          <li key={agent.id}>
-            <label>
-              <input
+      {!setup.widgetRepo && !repo ? <p className="setup-hint">Kiln has no public Widget repo set yet: enter its git URL (or a local copy).</p> : null}
+      <div className="choices">
+        {setup.agents.map((agent) => {
+          const state = states[agent.id] ?? (agent.installed ? 'installed' : undefined);
+          return (
+            <div key={agent.id} className="agent-choice">
+              <Choice
                 type="checkbox"
                 checked={agent.installed || chosen.has(agent.id)}
                 disabled={agent.installed}
-                onChange={(e) => {
+                onChange={(checked) => {
                   const next = new Set(chosen);
-                  if (e.target.checked) next.add(agent.id);
+                  if (checked) next.add(agent.id);
                   else next.delete(agent.id);
                   setChosen(next);
                 }}
-              />{' '}
-              {agent.name}
-            </label>{' '}
-            <span>{agent.about}</span>{' '}
-            {agent.installed || states[agent.id] ? (
-              <span role="status">
-                {agent.name}: {states[agent.id] ?? 'installed'}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <button type="button" onClick={() => void installAgents()} disabled={busy || !repo || chosen.size === 0}>
-        Install Agents
+                title={agent.name}
+                detail={agent.about}
+              />
+              {state ? (
+                <span role="status" className={`pill pill-${state}`}>
+                  <span className="visually-hidden">{agent.name}: </span>
+                  {state}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" className="primary setup-action" onClick={() => void installAgents()} disabled={busy || !repo || chosen.size === 0}>
+        {busy ? 'Installing…' : 'Install Agents'}
       </button>
       {error ? <p role="alert">{error}</p> : null}
     </Step>
@@ -233,12 +281,18 @@ function ModelsStep({ entries, models, setModels }: { entries: BudgetDraft[]; mo
       <p>
         Each model draws from one Budget. List each Budget's models, separated by commas. A Budget with no models is not set up.
       </p>
-      {agentModels.length ? <p>Your Agents run: {agentModels.join(', ')}</p> : null}
+      {agentModels.length ? <p className="setup-hint">Your Agents run: {agentModels.join(', ')}</p> : null}
       {entries.map((budget) => (
         <fieldset key={budget.id} aria-label={budget.name ?? budget.id}>
           <legend>{budget.name ?? budget.id}</legend>
           <label>
-            Models <input value={models[budget.id] ?? ''} onChange={(e) => setModels({ ...models, [budget.id]: e.target.value })} size={60} />
+            Models
+            <input
+              value={models[budget.id] ?? ''}
+              onChange={(e) => setModels({ ...models, [budget.id]: e.target.value })}
+              spellCheck={false}
+              placeholder="model-a, model-b"
+            />
           </label>
         </fieldset>
       ))}
@@ -268,37 +322,47 @@ function RolesStep({ setup, budgets, roles, setRoles }: { setup: SetupState; bud
   return (
     <Step title="Workflow roles">
       <p>Choose the model each role of the default Workflow runs on, and a fallback for when its Budget runs low.</p>
-      {setup.roles.map(({ role, stages }) => (
-        <div key={role} className="setup-role">
-          <strong>{role}</strong> ({stages.join(', ')}){' '}
-          <label>
-            <span className="visually-hidden">{role} model</span>
-            <select aria-label={`${role} model`} value={roles[role]?.model ?? ''} onChange={(e) => choose(role, { model: e.target.value })}>
-              <option value="">Choose a model</option>
-              {options.map((o) => (
-                <option key={o.model} value={o.model}>
-                  {o.model} ({o.budget})
-                </option>
-              ))}
-            </select>
-          </label>{' '}
-          <label>
-            <span className="visually-hidden">{role} fallback</span>
-            <select
-              aria-label={`${role} fallback`}
-              value={roles[role]?.fallbackModel ?? ''}
-              onChange={(e) => choose(role, { fallbackModel: e.target.value || undefined })}
-            >
-              <option value="">No fallback</option>
-              {options.map((o) => (
-                <option key={o.model} value={o.model}>
-                  {o.model} ({o.budget})
-                </option>
-              ))}
-            </select>
-          </label>
+      <div className="setup-roles">
+        <div className="setup-role-head" aria-hidden="true">
+          <span>Role</span>
+          <span>Model</span>
+          <span>Fallback</span>
         </div>
-      ))}
+        {setup.roles.map(({ role, stages }) => (
+          <div key={role} className="setup-role">
+            <span className="setup-role-name">
+              <strong>{role}</strong>
+              <small>{stages.join(', ')}</small>
+            </span>
+            <label>
+              <span className="visually-hidden">{role} model</span>
+              <select aria-label={`${role} model`} value={roles[role]?.model ?? ''} onChange={(e) => choose(role, { model: e.target.value })}>
+                <option value="">Choose a model</option>
+                {options.map((o) => (
+                  <option key={o.model} value={o.model}>
+                    {o.model} ({o.budget})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="visually-hidden">{role} fallback</span>
+              <select
+                aria-label={`${role} fallback`}
+                value={roles[role]?.fallbackModel ?? ''}
+                onChange={(e) => choose(role, { fallbackModel: e.target.value || undefined })}
+              >
+                <option value="">No fallback</option>
+                {options.map((o) => (
+                  <option key={o.model} value={o.model}>
+                    {o.model} ({o.budget})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ))}
+      </div>
     </Step>
   );
 }
@@ -326,29 +390,27 @@ function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () =
       <p>Bring the old board's Projects into Kiln, once. The old board is only read: nothing in its folder changes.</p>
       {!setup.oldBoard.found ? <p>No old board found at {setup.oldBoard.registry}. Nothing to import.</p> : null}
       {setup.oldBoard.error ? <p role="alert">{setup.oldBoard.error}</p> : null}
-      <ul>
+      <div className="choices">
         {setup.oldBoard.projects.map((p) => (
-          <li key={p.path}>
-            <label>
-              <input
-                type="checkbox"
-                disabled={Boolean(p.skip) || p.registered}
-                checked={chosen.has(p.path)}
-                onChange={(e) => {
-                  const next = new Set(chosen);
-                  if (e.target.checked) next.add(p.path);
-                  else next.delete(p.path);
-                  setChosen(next);
-                }}
-              />{' '}
-              {p.name}
-            </label>{' '}
-            <span>{p.path}</span> {p.skip ? <em>Not imported: {p.skip}</em> : p.registered ? <em>Already in Kiln</em> : null}
-          </li>
+          <Choice
+            key={p.path}
+            type="checkbox"
+            disabled={Boolean(p.skip) || p.registered}
+            checked={chosen.has(p.path)}
+            onChange={(checked) => {
+              const next = new Set(chosen);
+              if (checked) next.add(p.path);
+              else next.delete(p.path);
+              setChosen(next);
+            }}
+            title={p.name}
+            detail={p.skip ? `Not imported: ${p.skip}` : p.registered ? 'Already in Kiln' : undefined}
+            path={p.path}
+          />
         ))}
-      </ul>
+      </div>
       {importable.length ? (
-        <button type="button" onClick={() => void run()} disabled={busy || chosen.size === 0}>
+        <button type="button" className="primary setup-action" onClick={() => void run()} disabled={busy || chosen.size === 0}>
           Import Projects
         </button>
       ) : null}
@@ -473,11 +535,36 @@ export function SetupWizard() {
   const name = STEPS[step];
   return (
     <section aria-label="Set up Kiln" className="setup">
-      <h2>Set up Kiln</h2>
-      <p>
-        Step {step + 1} of {STEPS.length}
-        {setup.completed ? '. Kiln is set up already: change anything you like.' : ''}
-      </p>
+      <div className="setup-head">
+        <h2>Set up Kiln</h2>
+        <p>
+          Step {step + 1} of {STEPS.length}
+          {setup.completed ? '. Kiln is set up already: change anything you like.' : ''}
+        </p>
+        <div className="setup-progress" aria-hidden="true">
+          <span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+        </div>
+      </div>
+      <div className="setup-layout">
+        {/* Steps already passed can be revisited; later ones open only through Next, which saves. */}
+        <ol className="setup-steps" aria-label="Setup steps">
+          {STEPS.map((title, i) => (
+            <li key={title} className={i < step ? 'done' : undefined} aria-current={i === step ? 'step' : undefined}>
+              {i < step ? (
+                <button type="button" onClick={() => void go(i)} disabled={busy} aria-label={`Revisit ${title}`}>
+                  <span className="setup-step-dot" aria-hidden="true" />
+                  <span className="setup-step-name">{title}</span>
+                </button>
+              ) : (
+                <span className="setup-step-label">
+                  <span className="setup-step-dot" aria-hidden="true" />
+                  <span className="setup-step-name">{title}</span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        <div className="setup-card">
       {name === 'Login' ? <LoginStep setup={setup} login={login} setLogin={setLogin} /> : null}
       {name === 'Knowledge store' ? <KnowledgeStep setup={setup} folder={folder} setFolder={setFolder} /> : null}
       {name === 'Install' ? <InstallStep setup={setup} install={install} setInstall={setInstall} drafts={drafts} setDrafts={setDrafts} /> : null}
@@ -485,23 +572,26 @@ export function SetupWizard() {
       {name === 'Models' ? <ModelsStep entries={entries} models={models} setModels={setModels} /> : null}
       {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} /> : null}
       {name === 'Import' ? <ImportStep setup={setup} onImported={async () => void (await refresh())} /> : null}
-      <div className="setup-buttons">
-        {step > 0 ? (
-          <button type="button" onClick={() => void go(step - 1)} disabled={busy}>
-            Back
-          </button>
-        ) : null}
-        {step < STEPS.length - 1 ? (
-          <button type="button" onClick={() => void go(step + 1)} disabled={busy || !canGoOn}>
-            Next
-          </button>
-        ) : (
-          <button type="button" onClick={() => void finish()} disabled={busy}>
-            Finish
-          </button>
-        )}
+          {error ? <p role="alert">{error}</p> : null}
+          <div className="setup-buttons">
+            {step > 0 ? (
+              <button type="button" className="ghost" onClick={() => void go(step - 1)} disabled={busy}>
+                Back
+              </button>
+            ) : null}
+            <span className="spacer" />
+            {step < STEPS.length - 1 ? (
+              <button type="button" className="primary" onClick={() => void go(step + 1)} disabled={busy || !canGoOn}>
+                Next
+              </button>
+            ) : (
+              <button type="button" className="primary" onClick={() => void finish()} disabled={busy}>
+                Finish
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-      {error ? <p role="alert">{error}</p> : null}
     </section>
   );
 }

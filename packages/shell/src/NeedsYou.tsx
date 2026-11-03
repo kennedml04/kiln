@@ -2,6 +2,7 @@
 // The header link carries the live count on every page.
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { GATE_REJECT, projectOfThread, type Ask, type Item, type Project, type Proposal } from '@kiln/widget-sdk';
+import { InboxIcon } from './Icons.tsx';
 import { followLink, itemPath, projectThreadPath, usePath } from './router.ts';
 import { api, openAsks, useStore } from './store.ts';
 
@@ -25,6 +26,7 @@ export function NeedsYouLink() {
       aria-current={path === NEEDS_YOU_PATH ? 'page' : undefined}
       aria-label={`Needs you, ${count === 0 ? 'nothing open' : `${count} open`}`}
     >
+      <InboxIcon />
       Needs you{' '}
       <span className={count > 0 ? 'badge badge-open' : 'badge'} aria-hidden="true">
         {count}
@@ -122,7 +124,7 @@ function AskCard({ ask }: { ask: Ask }) {
           <fieldset>
             <legend>Your answer</legend>
             {ask.options.map((option) => (
-              <label key={option}>
+              <label key={option} className={answer === option ? 'is-checked' : undefined}>
                 <input
                   type="radio"
                   name={`answer-${ask.id}`}

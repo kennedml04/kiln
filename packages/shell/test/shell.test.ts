@@ -11,6 +11,20 @@ test('the Shell loads from the core and shows it is connected', async (t) => {
   assert.equal(await page.title(), 'Kiln');
 });
 
+test('the Shell is dark unless the person switches to light, and remembers the choice', async (t) => {
+  const kiln = await startTestKiln(t);
+  const page = await openShell(t, kiln);
+  const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
+  await page.getByRole('status').filter({ hasText: /^Connected$/ }).waitFor();
+  assert.equal(await theme(), 'dark');
+
+  await page.getByRole('button', { name: 'Switch to light theme' }).click();
+  assert.equal(await theme(), 'light');
+  await page.reload();
+  await page.getByRole('button', { name: 'Switch to dark theme' }).waitFor();
+  assert.equal(await theme(), 'light');
+});
+
 test('the Shell shows the connection drop as soon as the core goes away', async (t) => {
   const kiln = await startTestKiln(t);
   const page = await openShell(t, kiln);

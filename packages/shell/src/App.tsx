@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import type { Me } from '@kiln/widget-sdk';
 import { AuditPage } from './AuditPage.tsx';
+import { AuditIcon, BoardIcon, FlameIcon, MoonIcon, SettingsIcon, SunIcon, WidgetsIcon } from './Icons.tsx';
 import { NEEDS_YOU_PATH, NeedsYouLink, NeedsYouPage } from './NeedsYou.tsx';
 import { followLink, usePath } from './router.ts';
 import { SETUP_PATH, SetupWizard } from './SetupWizard.tsx';
 import { useStore, type ConnectionState } from './store.ts';
+import { setTheme, useTheme } from './theme.ts';
 import { WidgetsPage } from './WidgetsPage.tsx';
 import { HomeBoard } from './work/HomeBoard.tsx';
 import { ItemView } from './work/ItemView.tsx';
@@ -33,24 +36,48 @@ function LastEvent() {
   return <p data-testid="last-event">{event ? `Last event: ${event.type}` : 'No events yet'}</p>;
 }
 
-function NavLink({ to, children }: { to: string; children: string }) {
+function NavLink({ to, icon, children }: { to: string; icon: ReactNode; children: string }) {
   const path = usePath();
   return (
     <a href={to} onClick={followLink} aria-current={path === to ? 'page' : undefined}>
+      {icon}
       {children}
     </a>
+  );
+}
+
+function ThemeToggle() {
+  const theme = useTheme();
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button type="button" className="ghost theme-toggle" onClick={() => setTheme(next)} aria-label={`Switch to ${next} theme`}>
+      {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+    </button>
+  );
+}
+
+function Brand() {
+  return (
+    <h1 className="brand">
+      <span className="brand-mark">
+        <FlameIcon />
+      </span>
+      Kiln
+    </h1>
   );
 }
 
 function NoAccess({ me }: { me: Me }) {
   const who = me.actor.kind === 'user' ? (me.actor.name ?? me.actor.id) : me.actor.kind;
   return (
-    <main>
-      <h2>No access yet</h2>
-      <p>
-        You are signed in as <strong>{who}</strong>, but you have no role in this Kiln. Ask an Admin to give you one, then
-        reload this page.
-      </p>
+    <main className="content">
+      <section className="no-access">
+        <h2>No access yet</h2>
+        <p>
+          You are signed in as <strong>{who}</strong>, but you have no role in this Kiln. Ask an Admin to give you one, then
+          reload this page.
+        </p>
+      </section>
     </main>
   );
 }
@@ -82,8 +109,8 @@ export function App() {
   if (me && me.role === null) {
     return (
       <>
-        <header>
-          <h1>Kiln</h1>
+        <header className="sidebar no-access-bar">
+          <Brand />
         </header>
         <NoAccess me={me} />
       </>
@@ -91,24 +118,52 @@ export function App() {
   }
   const isAdmin = me?.role === 'admin';
   return (
-    <>
-      <header>
-        <h1>Kiln</h1>
-        <nav>
-          <NavLink to="/">All Projects</NavLink>
-          <NavLink to="/widgets">Widgets</NavLink>
+    <div className="app">
+      <header className="sidebar">
+        <Brand />
+        <nav className="nav" aria-label="Main">
+          <NavLink to="/" icon={<BoardIcon />}>
+            All Projects
+          </NavLink>
           <NeedsYouLink />
-          {isAdmin && <NavLink to="/audit">Audit log</NavLink>}
-          {isAdmin && <NavLink to="/settings">Settings</NavLink>}
+          <NavLink to="/widgets" icon={<WidgetsIcon />}>
+            Widgets
+          </NavLink>
+          {isAdmin && (
+            <NavLink to="/audit" icon={<AuditIcon />}>
+              Audit log
+            </NavLink>
+          )}
+          {isAdmin && (
+            <NavLink to="/settings" icon={<SettingsIcon />}>
+              Settings
+            </NavLink>
+          )}
         </nav>
-        <BudgetGauges />
-        <StopAll canAct={me?.role === 'admin' || me?.role === 'member'} />
-        <ConnectionBadge />
+        <BudgetSection />
+        <div className="sidebar-footer">
+          <StopAll canAct={me?.role === 'admin' || me?.role === 'member'} />
+          <div className="sidebar-status">
+            <ConnectionBadge />
+            <ThemeToggle />
+          </div>
+          <LastEvent />
+        </div>
       </header>
-      <main>
+      <main className="content">
         <Page isAdmin={isAdmin} />
-        <LastEvent />
       </main>
-    </>
+    </div>
+  );
+}
+
+function BudgetSection() {
+  const any = useStore((s) => s.budgets.length > 0);
+  if (!any) return null;
+  return (
+    <div className="sidebar-section">
+      <p className="sidebar-label">Budgets</p>
+      <BudgetGauges />
+    </div>
   );
 }
