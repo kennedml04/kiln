@@ -1,0 +1,15 @@
+{
+  "id": "github",
+  "name": "GitHub Issues",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "src/main.ts"],
+  "provides": {
+    "trackers": ["github"],
+    "pullRequests": ["github"]
+  },
+  "needs": {
+    "network": ["api.github.com"],
+    "secrets": ["github-token"]
+  }
+}

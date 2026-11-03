@@ -1,0 +1,12 @@
+{
+  "id": "gpu-monitor",
+  "name": "GPU monitor",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "src/main.ts"],
+  "provides": {
+    "panels": [{ "id": "gpus", "title": "GPUs", "placement": "home" }],
+    "pools": { "gpu": 1 }
+  },
+  "needs": {}
+}

@@ -1,0 +1,3 @@
+# Item records live in a Tracker; runtime state lives in SQLite
+
+Work data is split into two kinds. Item records (content and Stage) live in the Project's Tracker. The default Tracker is markdown in the Project's repo (carrying forward the old repo's ADR 0001); GitHub Issues and Jira come as Tracker Widgets. Kiln writes the Stage and Status fields; Agents write the content. Runtime state (Sessions, open asks, the audit log, events, Widget registrations) lives in one SQLite file in Kiln's data folder. That file replaces the old board's scattered `cards.json` and `*.jsonl` files. The rule: anything a person or team needs to read or share lives in the Tracker or the Knowledge store, so losing Kiln's SQLite never loses work.

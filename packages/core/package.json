@@ -1,0 +1,15 @@
+{
+  "name": "@kiln/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kiln": "bin/kiln.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kiln/widget-sdk": "*"
+  }
+}

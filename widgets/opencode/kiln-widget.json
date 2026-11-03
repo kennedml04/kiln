@@ -1,0 +1,13 @@
+{
+  "id": "opencode",
+  "name": "OpenCode",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "src/main.ts"],
+  "provides": {
+    "agents": [{ "id": "opencode", "name": "OpenCode" }]
+  },
+  "needs": {
+    "dataFolder": true
+  }
+}

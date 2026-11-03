@@ -1,0 +1,24 @@
+export {
+  startTestKiln,
+  createTempRepo,
+  createWidgetSource,
+  createFakeWidgetRepo,
+  type FakeAgentWidget,
+  driveTestWidget,
+  type TestWidgetDriver,
+  tempDir,
+  onCleanup,
+  type WidgetSource,
+  type WidgetSourceOptions,
+  TEST_PEER_HEADER,
+  type TestKiln,
+  type TestKilnOptions,
+  type ApiClient,
+  type ApiResponse,
+  type TempRepo,
+  type EventStream,
+  type Cleanup,
+  type FakeAgent,
+} from './harness.ts';
+export type { FakeAgentScript, FakeAgentScripts, FakeAgentStep, FakeAgentConfig, FakeAgentSettings } from './fake-agent/script.ts';
+export { assertIsolated, forbiddenFolders, FORBIDDEN_PORTS } from './isolation.ts';

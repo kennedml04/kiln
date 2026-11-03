@@ -1,0 +1,7 @@
+{
+  "name": "@kiln/gpu-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kiln Widget: a read-only panel of each GPU's use, VRAM and the processes holding it."
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@kiln/github",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kiln Widget: keeps a Project's Items in GitHub Issues, and ships PR-mode Projects as pull requests."
+}

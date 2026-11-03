@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm ci)",
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test:only)",
+      "Bash(npm run test:only:*)",
+      "Bash(npm run kiln -- status:*)",
+      "Bash(node --test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build:*)",
+      "Bash(npx playwright install chromium)",
+      "PowerShell(npm install)",
+      "PowerShell(npm ci)",
+      "PowerShell(npm test)",
+      "PowerShell(npm test:*)",
+      "PowerShell(npm run build)",
+      "PowerShell(npm run build:*)",
+      "PowerShell(npm run typecheck)",
+      "PowerShell(npm run test:only)",
+      "PowerShell(npm run test:only:*)",
+      "PowerShell(npm run kiln -- status:*)",
+      "PowerShell(node --test:*)",
+      "PowerShell(npx tsc:*)",
+      "PowerShell(npx vite build:*)",
+      "PowerShell(npx playwright install chromium)"
+    ]
+  }
+}

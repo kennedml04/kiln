@@ -1,0 +1,13 @@
+{
+  "id": "fake-agent",
+  "name": "Fake Agent",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "main.ts"],
+  "provides": {
+    "agents": [{ "id": "fake", "name": "Fake Agent" }]
+  },
+  "needs": {
+    "asks": true
+  }
+}

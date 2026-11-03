@@ -1,0 +1,15 @@
+{
+  "id": "claude-code",
+  "name": "Claude Code",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "src/main.ts"],
+  "provides": {
+    "agents": [{ "id": "claude-code", "name": "Claude Code" }]
+  },
+  "needs": {
+    "asks": true,
+    "network": ["api.anthropic.com"],
+    "dataFolder": true
+  }
+}
