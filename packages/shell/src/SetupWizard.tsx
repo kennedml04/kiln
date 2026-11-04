@@ -3,6 +3,7 @@
 // to mark setup done, which it refuses while a Budget or a role's model is missing.
 import { useEffect, useState, type ReactNode } from 'react';
 import type { BudgetDraft, BudgetInfo, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
+import { suggestRoles } from './role-defaults.ts';
 import { navigate } from './router.ts';
 import { api, useStore } from './store.ts';
 
@@ -423,12 +424,26 @@ function withAgents(roles: Record<string, RoleModel>, budgets: BudgetInfo[], wid
   );
 }
 
-function RolesStep({ setup, budgets, roles, setRoles }: { setup: SetupState; budgets: BudgetInfo[]; roles: Record<string, RoleModel>; setRoles: (r: Record<string, RoleModel>) => void }) {
+function RolesStep(props: {
+  setup: SetupState;
+  budgets: BudgetInfo[];
+  roles: Record<string, RoleModel>;
+  setRoles: (r: Record<string, RoleModel>) => void;
+  /** True when the wizard filled in some roles itself. */
+  suggested: boolean;
+}) {
+  const { setup, budgets, roles, setRoles, suggested } = props;
   const options = budgets.flatMap((b) => b.models.map((m) => ({ model: m, budget: b.name })));
   const choose = (role: string, change: Partial<RoleModel>) => setRoles({ ...roles, [role]: { ...(roles[role] ?? { model: '' }), ...change } });
   return (
     <Step title="Workflow roles">
       <p>Choose the model each role of the default Workflow runs on, and a fallback for when its Budget runs low.</p>
+      {suggested ? (
+        <p className="setup-hint">
+          Suggested from your Budgets: the strongest model for planning and review, a faster one for implementing, and a fallback from another
+          Budget where there is one. Change any of them.
+        </p>
+      ) : null}
       <div className="setup-roles">
         <div className="setup-role-head" aria-hidden="true">
           <span>Role</span>
@@ -549,6 +564,7 @@ export function SetupWizard() {
   const [added, setAdded] = useState<string[]>([]);
   const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
   const [roles, setRoles] = useState<Record<string, RoleModel>>({});
+  const [suggested, setSuggested] = useState(false);
 
   const refresh = async () => {
     const [state, list] = await Promise.all([api<SetupState>('GET', '/api/setup'), api<BudgetInfo[]>('GET', '/api/budgets')]);
@@ -586,6 +602,20 @@ export function SetupWizard() {
       clearInterval(timer);
     };
   }, [step]);
+
+  // The roles step opens with a model suggested for every role that has none yet.
+  useEffect(() => {
+    if (STEPS[step] !== 'Workflow roles' || !setup) return;
+    const filled = suggestRoles(
+      setup.roles.map((r) => r.role),
+      budgets,
+      roles,
+    );
+    if (filled !== roles) {
+      setRoles(filled);
+      setSuggested(true);
+    }
+  }, [step, budgets, setup]);
 
   if (!setup) return <section aria-label="Set up Kiln">{error ? <p role="alert">{error}</p> : <p>Loading setup.</p>}</section>;
 
@@ -711,7 +741,7 @@ export function SetupWizard() {
           add={(model) => setAdded(added.includes(model) ? added : [...added, model])}
         />
       ) : null}
-      {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} /> : null}
+      {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} suggested={suggested} /> : null}
       {name === 'Import' ? <ImportStep setup={setup} onImported={async () => void (await refresh())} /> : null}
           {error ? <p role="alert">{error}</p> : null}
           <div className="setup-buttons">

@@ -74,9 +74,11 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await wizard.getByLabel('Budget for cheap-test-model').selectOption('work-credits');
   await next();
 
-  // Every default Workflow role needs a model: no silent default.
+  // Every default Workflow role opens with a suggested model, said so, and each can be changed.
   await step('Workflow roles');
-  assert.equal(await wizard.getByRole('button', { name: 'Next' }).isDisabled(), true);
+  await wizard.getByText(/Suggested from your Budgets/).waitFor();
+  assert.equal(await wizard.getByLabel('implementer model', { exact: true }).inputValue(), 'claude-test-model');
+  assert.equal(await wizard.getByRole('button', { name: 'Next' }).isDisabled(), false);
   await wizard.getByLabel('implementer model', { exact: true }).selectOption('claude-test-model');
   await wizard.getByLabel('implementer fallback', { exact: true }).selectOption('cheap-test-model');
   await wizard.getByLabel('reviewer model', { exact: true }).selectOption('cheap-test-model');
@@ -114,6 +116,61 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('link', { name: 'Run setup again' }).click();
   await page.getByRole('region', { name: 'Set up Kiln' }).waitFor();
+});
+
+test('the roles step suggests the strongest model for planning and review, a mid one for implementing, each with a lighter fallback', async (t) => {
+  const widgetRepo = createFakeWidgetRepo(t, [
+    {
+      id: 'claude-code',
+      name: 'Claude Code',
+      agent: {
+        id: 'claude',
+        name: 'Claude Code',
+        model: 'claude-sonnet-test',
+        models: [
+          { id: 'claude-haiku-test', name: 'Haiku Test' },
+          { id: 'claude-sonnet-test', name: 'Sonnet Test' },
+          { id: 'claude-opus-test', name: 'Opus Test' },
+        ],
+      },
+    },
+  ]);
+  const kiln = await startTestKiln(t, { setup: 'fresh' });
+  const page = await openShell(t, kiln, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  const step = (name: string) => wizard.getByRole('heading', { name, level: 3 }).waitFor();
+  const next = () => wizard.getByRole('button', { name: 'Next' }).click();
+  for (const name of ['Login', 'Knowledge store', 'Install']) {
+    await step(name);
+    if (name === 'Install') await wizard.getByRole('radio', { name: /Work/ }).check();
+    await next();
+  }
+  await step('Agents');
+  await wizard.getByLabel('Widget repo').fill(widgetRepo.path);
+  await wizard.getByRole('button', { name: 'Install Agents' }).click();
+  await wizard.getByText('Claude Code: ready').waitFor({ timeout: 20_000 });
+  await next();
+  await step('Models');
+  await wizard.getByLabel('Budget for claude-opus-test').waitFor();
+  await next();
+
+  await step('Workflow roles');
+  const chosen = async (role: string) => [
+    await wizard.getByLabel(`${role} model`, { exact: true }).inputValue(),
+    await wizard.getByLabel(`${role} fallback`, { exact: true }).inputValue(),
+  ];
+  for (const role of ['griller', 'spec-writer', 'reviewer']) assert.deepEqual(await chosen(role), ['claude-opus-test', 'claude-sonnet-test'], role);
+  for (const role of ['implementer', 'ticket-writer']) assert.deepEqual(await chosen(role), ['claude-sonnet-test', 'claude-haiku-test'], role);
+
+  // A change stays when the step is left and opened again.
+  await wizard.getByLabel('reviewer model', { exact: true }).selectOption('claude-haiku-test');
+  await next();
+  await step('Import');
+  await wizard.getByRole('button', { name: 'Back' }).click();
+  await step('Workflow roles');
+  assert.equal(await wizard.getByLabel('reviewer model', { exact: true }).inputValue(), 'claude-haiku-test');
+  const setup = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.deepEqual(setup.settings.roles?.implementer && [setup.settings.roles.implementer.model, setup.settings.roles.implementer.fallbackModel], ['claude-sonnet-test', 'claude-haiku-test']);
 });
 
 test("the Agents step installs the real first-party Agent Widgets from a clone of this repo, and each reaches ready", async (t) => {
