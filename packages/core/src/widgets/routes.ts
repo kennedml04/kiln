@@ -41,7 +41,7 @@ export async function handleWidgetRoute(
   if (route === 'POST /api/widgets') {
     const body = ((await readJson(req)) ?? {}) as InstallWidgetRequest;
     deps.access.note(req, { detail: { source: body.source, ref: body.ref, path: body.path } });
-    const widget = lifecycle.install(body);
+    const widget = await lifecycle.install(body);
     deps.access.note(req, { target: `widget:${widget.id}` });
     sendJson(res, 201, widget);
     return true;

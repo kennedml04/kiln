@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type Project, type SetupState, type WidgetInfo } from '@kiln/widget-sdk';
-import { createFakeWidgetRepo, createTempRepo, startTestKiln, tempDir } from '@kiln/testing';
+import { createFakeWidgetRepo, createTempRepo, createWidgetRepoCopy, startTestKiln, tempDir } from '@kiln/testing';
 import { openShell } from '@kiln/testing/browser';
 import { seedScratch } from '@kiln/testing/scratch';
 
@@ -114,6 +114,30 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('link', { name: 'Run setup again' }).click();
   await page.getByRole('region', { name: 'Set up Kiln' }).waitFor();
+});
+
+test("the Agents step installs the real first-party Agent Widgets from a clone of this repo, and each reaches ready", async (t) => {
+  const widgetRepo = createWidgetRepoCopy(t);
+  // npm installs Claude Code's packages from its cache only: a test never needs the network.
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { npm_config_offline: 'true' } });
+  const page = await openShell(t, kiln, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  const step = (name: string) => wizard.getByRole('heading', { name, level: 3 }).waitFor();
+  for (const name of ['Login', 'Knowledge store', 'Install']) {
+    await step(name);
+    if (name === 'Install') await wizard.getByRole('radio', { name: /Home/ }).check();
+    await wizard.getByRole('button', { name: 'Next' }).click();
+  }
+
+  await step('Agents');
+  await wizard.getByLabel('Widget repo').fill(widgetRepo.path);
+  for (const name of ['Claude Code', 'OpenCode']) await wizard.getByRole('checkbox', { name: new RegExp(name) }).check();
+  await wizard.getByRole('button', { name: 'Install Agents' }).click();
+  await wizard.getByText('Claude Code: ready').waitFor({ timeout: 90_000 });
+  await wizard.getByText('OpenCode: ready').waitFor({ timeout: 30_000 });
+
+  const widgets = await kiln.api<WidgetInfo[]>('GET', '/api/widgets');
+  assert.deepEqual(widgets.map((w) => [w.id, w.state, w.pin.kind]).sort(), [['claude-code', 'ready', 'git'], ['opencode', 'ready', 'git']]);
 });
 
 /** Starts a fresh core whose fake `tailscale` reports `serve(port)` as its serve config. */

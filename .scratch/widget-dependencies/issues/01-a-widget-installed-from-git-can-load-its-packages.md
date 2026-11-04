@@ -25,12 +25,26 @@ Recommendation: A for the SDK and B for third-party packages, with `--ignore-scr
 
 **Blocked by:** None (can start immediately).
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] The Claude Code Widget installed from a git repo (a temp clone of this repo in a test, never the network) reaches `ready` and registers its Agent and models
-- [ ] A Widget whose packages cannot be installed is not started, and its problem says why (no crash loop)
-- [ ] An update to a new commit installs that commit's packages in its own checkout; the running Widget's code and packages don't change underneath it
-- [ ] No package's install scripts run
-- [ ] A folder install (`kind: 'folder'`) behaves as it does now
-- [ ] The OpenCode Widget, which needs no packages, installs and starts as it does now, with no npm run
-- [ ] A test installs the first-party Agent Widgets through the wizard's Agents step from a clone of this repo, so this gap cannot come back silently
+- [x] The Claude Code Widget installed from a git repo (a temp clone of this repo in a test, never the network) reaches `ready` and registers its Agent and models
+- [x] A Widget whose packages cannot be installed is not started, and its problem says why (no crash loop)
+- [x] An update to a new commit installs that commit's packages in its own checkout; the running Widget's code and packages don't change underneath it
+- [x] No package's install scripts run
+- [x] A folder install (`kind: 'folder'`) behaves as it does now
+- [x] The OpenCode Widget, which needs no packages, installs and starts as it does now, with no npm run
+- [x] A test installs the first-party Agent Widgets through the wizard's Agents step from a clone of this repo, so this gap cannot come back silently
+
+## Comments
+
+2026-11-03: Built A and B, as recommended.
+
+- **A.** The Widget host starts every `node` Widget with `--import packages/core/src/widgets/sdk-loader.ts`. It is a `module.registerHooks` resolve hook that maps `@kiln/widget-sdk` to the running core's copy. Widgets whose command is not `node` are unaffected.
+- **B.** `resolveWidget` is now async. For a git checkout whose `package.json` lists `dependencies`, it runs `npm ci --omit=dev --ignore-scripts --prefix <folder>` with npm's own script and the core's Node, so npm need not be on the PATH (`KILN_NPM_CLI` overrides). A missing `package-lock.json`, or a failed `npm ci`, refuses the install or update with a 400 that says why (npm's last lines), so nothing is recorded or started. A running Widget keeps its checkout. A checkout whose `node_modules/.package-lock.json` exists is not installed again. Folder installs never run npm.
+- `widgets/claude-code/package-lock.json` is new. `npm run check` (`scripts/check-lock.ts`) now also checks the lock of each Widget folder that lists packages.
+- **Tests:**
+  - `packages/core/test/widget-packages.test.ts` covers a local tarball package, scripts not run, an update getting the new commit's package, no lock, a broken lock, and a folder install.
+  - `widgets/claude-code/test/install-from-git.test.ts` covers the real Widget from a copy of this repo.
+  - The wizard test installs both real Agents from a copy.
+  - `createWidgetRepoCopy` in `@kiln/testing` copies the working tree's Widget folders into a temp git repo. Its tests set `npm_config_offline=true`, so npm uses its cache only.
+- **Not done:** a git install made before this change has a checkout with no `node_modules`. It is not repaired at start. Remove and reinstall it, or update it to a new commit.

@@ -1,5 +1,5 @@
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -369,6 +369,31 @@ export function createFakeWidgetRepo(t: Cleanup, widgets?: FakeAgentWidget[]): T
   }
   repo.git('add', '.');
   repo.git('commit', '-q', '-m', 'Agent Widgets');
+  return repo;
+}
+
+/** This checkout's root. */
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+
+/** The first-party Agent Widgets, as the Widget repo holds them. */
+export const FIRST_PARTY_AGENT_WIDGETS = ['claude-code', 'opencode'];
+
+/**
+ * A stand-in for a clone of this repo: a temp git repo holding this checkout's `widgets/<id>`
+ * folders as they are now (without node_modules), so a test installs the real Widgets the way Kiln
+ * installs them from the public repo. Install with `npm_config_offline=true` in the core's env so
+ * their packages come from npm's cache, never the network.
+ */
+export function createWidgetRepoCopy(t: Cleanup, widgetIds: string[] = FIRST_PARTY_AGENT_WIDGETS): TempRepo {
+  const repo = initRepo(tempDir(t, 'kiln-widget-repo-copy'));
+  for (const id of widgetIds) {
+    cpSync(join(REPO_ROOT, 'widgets', id), join(repo.path, 'widgets', id), {
+      recursive: true,
+      filter: (source) => !source.split(/[\\/]/).includes('node_modules'),
+    });
+  }
+  repo.git('add', '.');
+  repo.git('commit', '-q', '-m', 'First-party Widgets');
   return repo;
 }
 

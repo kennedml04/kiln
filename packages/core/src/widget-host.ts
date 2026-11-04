@@ -16,6 +16,9 @@ import type { EventBus } from './events.ts';
 
 const STOP_GRACE_MS = 3_000;
 
+/** Passed to every Node Widget with `--import`: it resolves `@kiln/widget-sdk` to the core's own copy. */
+const SDK_LOADER = new URL('./widgets/sdk-loader.ts', import.meta.url).href;
+
 /** A refused or invalid Widget request; `status` is the HTTP code to answer with. */
 export class WidgetHostError extends Error {
   status: number;
@@ -182,7 +185,8 @@ export function createWidgetHost(bus: EventBus, dataDir: string): WidgetHost {
       if (widgetData) mkdirSync(widgetData, { recursive: true });
       const token = randomBytes(32);
       const [command, ...args] = manifest.command as [string, ...string[]];
-      const child = spawn(command === 'node' ? process.execPath : command, args, {
+      const isNode = command === 'node';
+      const child = spawn(isNode ? process.execPath : command, isNode ? ['--import', SDK_LOADER, ...args] : args, {
         cwd: folder,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

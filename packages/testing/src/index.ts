@@ -3,6 +3,8 @@ export {
   createTempRepo,
   createWidgetSource,
   createFakeWidgetRepo,
+  createWidgetRepoCopy,
+  FIRST_PARTY_AGENT_WIDGETS,
   type FakeAgentWidget,
   driveTestWidget,
   type TestWidgetDriver,

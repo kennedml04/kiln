@@ -49,7 +49,8 @@ export interface WidgetLifecycle {
   sourcePolicy(): WidgetSourcePolicy;
   setSourcePolicy(policy: WidgetSourcePolicy): WidgetSourcePolicy;
   /** Resolves and pins the source, then waits for approval. 403 `source` when the Org Policy says no. */
-  install(request: InstallWidgetRequest): WidgetInfo;
+  /** Resolves the source to exact code (cloning and installing npm packages for a git source). */
+  install(request: InstallWidgetRequest): Promise<WidgetInfo>;
   /**
    * Grants what the Manifest asks for, then starts it. With an update pending, grants its Manifest
    * and swaps it in. `approvedBy` is the Admin's user id.
@@ -337,7 +338,7 @@ export function createWidgetLifecycle({ db, bus, host, dataDir, apiUrl, restartM
         throw new WidgetHostError(403, `The Org Policy no longer allows ${record.pin.source}`, 'source');
       }
       const ref = request?.ref ?? record.pin.ref;
-      const next = resolveWidget({ source: record.pin.source, ...(ref ? { ref } : {}), ...(record.pin.path ? { path: record.pin.path } : {}) }, codeRoot);
+      const next = await resolveWidget({ source: record.pin.source, ...(ref ? { ref } : {}), ...(record.pin.path ? { path: record.pin.path } : {}) }, codeRoot);
       if (next.manifest.id !== id) throw new WidgetHostError(400, `The source now holds Widget "${next.manifest.id}", not "${id}"`);
       const same = next.pin.commit === record.pin.commit && next.pin.hash === record.pin.hash;
       if (same) {
@@ -388,12 +389,12 @@ export function createWidgetLifecycle({ db, bus, host, dataDir, apiUrl, restartM
       return value;
     },
 
-    install(request) {
+    async install(request) {
       if (!request || typeof request.source !== 'string' || !request.source) throw new WidgetHostError(400, 'source is required');
       if (!sourceAllowed(sourcePolicy(), request.source)) {
         throw new WidgetHostError(403, `The Org Policy does not allow installing from ${normalizeSource(request.source)}`, 'source');
       }
-      const resolved = resolveWidget(request, codeRoot);
+      const resolved = await resolveWidget(request, codeRoot);
       const id = resolved.manifest.id;
       if (installs.has(id)) throw new WidgetHostError(409, `Widget "${id}" is already installed; update it instead`);
       const record: InstallRecord = {
