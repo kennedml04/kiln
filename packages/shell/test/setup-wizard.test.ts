@@ -57,8 +57,21 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
 
   // Which models belong to which Budget.
   await step('Models');
-  await wizard.getByText('Your Agents run: claude-test-model').waitFor();
-  await wizard.getByRole('group', { name: 'Work credits' }).getByLabel('Models').fill('claude-test-model, cheap-test-model');
+  // The Agent's models are listed by name, already in the install's Budget.
+  await wizard.getByText('A Budget is what pays for a model').waitFor();
+  const claude = wizard.getByRole('listitem', { name: 'Claude Test' });
+  await claude.getByText('claude-test-model').waitFor();
+  await claude.getByText('Claude Code').waitFor();
+  assert.equal(await wizard.getByLabel('Budget for claude-test-model').inputValue(), 'work-credits');
+  // One no Agent reports is added by hand, with a reminder to type its exact ID.
+  await wizard.getByLabel('Add a model').fill('cheap-test-model');
+  await wizard.getByRole('button', { name: 'Add', exact: true }).click();
+  const cheap = wizard.getByRole('listitem', { name: 'cheap-test-model' });
+  await cheap.getByText('Check it is the exact ID the Agent reports.').waitFor();
+  assert.equal(await wizard.getByLabel('Budget for cheap-test-model').inputValue(), 'work-credits');
+  // None leaves a model out of every Budget.
+  await wizard.getByLabel('Budget for cheap-test-model').selectOption('');
+  await wizard.getByLabel('Budget for cheap-test-model').selectOption('work-credits');
   await next();
 
   // Every default Workflow role needs a model: no silent default.

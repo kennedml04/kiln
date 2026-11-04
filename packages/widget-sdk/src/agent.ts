@@ -111,6 +111,21 @@ export interface AgentRegistration {
   cacheLifetimeMs?: number;
   /** The model this Agent runs when a Stage names none; it decides which Budget such Sessions draw from. */
   model?: string;
+  /**
+   * The models this Agent can run, offered when an Admin decides which Budget each model draws
+   * from. Each id must be exactly the name the Agent reports usage under.
+   */
+  models?: AgentModel[];
+}
+
+/** A model an Agent can run. */
+export interface AgentModel {
+  /** Exactly as the Agent reports it in usage, e.g. `claude-opus-5-5`. */
+  id: string;
+  /** For people, e.g. `Opus 5.5`. */
+  name?: string;
+  /** Served on this machine. Setup puts it in a local Budget by default. */
+  local?: boolean;
 }
 
 /** Handed to the Agent for each Session, to report its events. */

@@ -1857,6 +1857,22 @@ pre {
   color: var(--text-faint);
 }
 
+.setup-role-name .setup-model-id {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.setup-add-model {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.setup-add-model label {
+  flex: 1;
+}
+
 .setup-step [role='status'] {
   color: var(--success);
   font-size: 0.88rem;

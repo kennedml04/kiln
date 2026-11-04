@@ -11,6 +11,7 @@ import {
   type Manifest,
   type AgentCommand,
   type AgentMessage,
+  type AgentModel,
   type KilnEvent,
   type SessionStart,
   type WidgetInfo,
@@ -338,7 +339,7 @@ export interface FakeAgentWidget {
   /** The Widget id, and its folder `widgets/<id>` in the repo. */
   id: string;
   name: string;
-  agent: { id: string; name: string; model?: string };
+  agent: { id: string; name: string; model?: string; models?: AgentModel[] };
 }
 
 /**
@@ -348,7 +349,7 @@ export interface FakeAgentWidget {
 export function createFakeWidgetRepo(t: Cleanup, widgets?: FakeAgentWidget[]): TempRepo {
   const repo = initRepo(tempDir(t, 'kiln-widget-repo'));
   for (const widget of widgets ?? [
-    { id: 'claude-code', name: 'Claude Code', agent: { id: 'claude', name: 'Claude Code', model: 'claude-test-model' } },
+    { id: 'claude-code', name: 'Claude Code', agent: { id: 'claude', name: 'Claude Code', model: 'claude-test-model', models: [{ id: 'claude-test-model', name: 'Claude Test' }] } },
     { id: 'opencode', name: 'OpenCode', agent: { id: 'opencode', name: 'OpenCode', model: 'local-test-model' } },
   ]) {
     const folder = join(repo.path, 'widgets', widget.id);

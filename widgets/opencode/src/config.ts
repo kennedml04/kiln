@@ -1,5 +1,5 @@
 // The Widget's install config, and the OpenCode config each Session's server runs with.
-import type { SessionStart } from '@kiln/widget-sdk';
+import type { AgentModel, SessionStart } from '@kiln/widget-sdk';
 import { openCodePermission } from './policy.ts';
 
 /** A model server on this machine that speaks the OpenAI API (llama.cpp, Ollama, LM Studio, vLLM...). */
@@ -39,6 +39,22 @@ export interface OpenCodeWidgetConfig {
 }
 
 export const DEFAULT_CACHE_LIFETIME_MS = 5 * 60_000;
+
+/**
+ * The models setup offers for this Agent, by the `<provider>/<model>` name OpenCode reports usage
+ * under: the default model, then every model on a local model server.
+ */
+export function offeredModels(config: OpenCodeWidgetConfig): AgentModel[] {
+  const offered = new Map<string, AgentModel>();
+  if (config.model) offered.set(config.model, { id: config.model });
+  for (const [provider, local] of Object.entries(config.local ?? {})) {
+    for (const model of local.models) {
+      const id = `${provider}/${model}`;
+      offered.set(id, { id, name: `${model} (${local.name ?? provider})`, local: true });
+    }
+  }
+  return [...offered.values()];
+}
 
 export function parseConfig(raw: unknown): OpenCodeWidgetConfig {
   const c = (raw && typeof raw === 'object' ? raw : {}) as OpenCodeWidgetConfig;

@@ -38,7 +38,50 @@ const setPath = (value: Record<string, unknown>, path: string[], next: unknown):
 };
 
 const withoutId = ({ id: _id, ...rest }: BudgetDraft) => rest;
-const splitModels = (text: string) => [...new Set(text.split(',').map((m) => m.trim()).filter(Boolean))];
+
+/** A model the Models step lists: its exact id, a name for people, and where Kiln heard of it. */
+interface ModelRow {
+  id: string;
+  name?: string;
+  from: string;
+  local?: boolean;
+}
+
+const ADDED_BY_YOU = 'Added by you';
+
+/** Every model setup knows of: each Agent's, the local model server's, each Budget's, and those added by hand. */
+function modelRows(widgets: WidgetInfo[], setup: SetupState, entries: BudgetDraft[], existing: BudgetInfo[], added: string[]): ModelRow[] {
+  const rows = new Map<string, ModelRow>();
+  const add = (raw: string, from: string, name?: string, local?: boolean) => {
+    const id = raw.trim();
+    if (!id) return;
+    const row = rows.get(id);
+    if (!row) rows.set(id, { id, from, ...(name ? { name } : {}), ...(local ? { local } : {}) });
+    else if (name && !row.name) row.name = name;
+  };
+  for (const w of widgets) {
+    for (const agent of w.agents) {
+      for (const m of agent.models ?? []) add(m.id, agent.name, m.name, m.local);
+      if (agent.model) add(agent.model, agent.name);
+    }
+  }
+  for (const m of setup.localModelServer.models) add(m, 'Local model server', undefined, true);
+  for (const e of entries) for (const m of e.models) add(m, existing.some((b) => b.id === e.id) ? `Set up in ${e.name ?? e.id}` : 'Suggested');
+  for (const m of added) add(m, ADDED_BY_YOU);
+  return [...rows.values()];
+}
+
+/**
+ * The Budget a model draws from: the one picked for it here, else the Budget that lists it, else a
+ * local Budget for a local model and the first other Budget for the rest. '' is none.
+ */
+function budgetFor(row: ModelRow, entries: BudgetDraft[], picked: Record<string, string>): string {
+  if (row.id in picked) return picked[row.id]!;
+  const listed = entries.find((e) => e.models.includes(row.id));
+  if (listed) return listed.id;
+  const fallback = entries.find((e) => (e.kind === 'local') === Boolean(row.local));
+  return fallback?.id ?? '';
+}
 
 /** A Budget the wizard offers: what is set up already wins over the install's defaults. */
 const draftFor = (draft: BudgetDraft, existing: BudgetInfo[]): BudgetDraft => {
@@ -292,32 +335,74 @@ function AgentsStep(props: {
   );
 }
 
-function ModelsStep({ entries, models, setModels }: { entries: BudgetDraft[]; models: Record<string, string>; setModels: (m: Record<string, string>) => void }) {
-  const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
-  useEffect(() => {
-    void api<WidgetInfo[]>('GET', '/api/widgets').then(setWidgets, () => undefined);
-  }, []);
-  const agentModels = [...new Set(widgets.flatMap((w) => w.agents.map((a) => a.model)).filter((m): m is string => Boolean(m)))];
+function ModelsStep(props: {
+  rows: ModelRow[];
+  entries: BudgetDraft[];
+  budgetOf: (row: ModelRow) => string;
+  pick: (model: string, budget: string) => void;
+  add: (model: string) => void;
+}) {
+  const { rows, entries, budgetOf, pick, add } = props;
+  const [draft, setDraft] = useState('');
   return (
     <Step title="Models">
       <p>
-        Each model draws from one Budget. List each Budget's models, separated by commas. A Budget with no models is not set up.
+        A Budget is what pays for a model: a Claude plan, work credits, or this PC's own GPU. Kiln counts each model's
+        usage against its Budget and holds work back before the Budget runs out.
       </p>
-      {agentModels.length ? <p className="setup-hint">Your Agents run: {agentModels.join(', ')}</p> : null}
-      {entries.map((budget) => (
-        <fieldset key={budget.id} aria-label={budget.name ?? budget.id}>
-          <legend>{budget.name ?? budget.id}</legend>
-          <label>
-            Models
-            <input
-              value={models[budget.id] ?? ''}
-              onChange={(e) => setModels({ ...models, [budget.id]: e.target.value })}
-              spellCheck={false}
-              placeholder="model-a, model-b"
-            />
-          </label>
-        </fieldset>
-      ))}
+      <p className="setup-hint">Pick the Budget each model draws from. A model draws from one Budget; a Budget with no models isn't set up.</p>
+      {rows.length ? (
+        <div className="setup-roles" role="list" aria-label="Models">
+          <div className="setup-role-head" aria-hidden="true">
+            <span>Model</span>
+            <span>From</span>
+            <span>Budget</span>
+          </div>
+          {rows.map((row) => (
+            <div className="setup-role" role="listitem" key={row.id} aria-label={row.name ?? row.id}>
+              <span className="setup-role-name">
+                <span>{row.name ?? row.id}</span>
+                {row.name ? <small className="setup-model-id">{row.id}</small> : null}
+              </span>
+              <span className="setup-role-name">
+                <span>{row.from}</span>
+                {row.from === ADDED_BY_YOU ? <small>Check it is the exact ID the Agent reports.</small> : null}
+              </span>
+              <select aria-label={`Budget for ${row.id}`} value={budgetOf(row)} onChange={(e) => pick(row.id, e.target.value)}>
+                <option value="">None</option>
+                {entries.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name ?? b.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>No Agent has reported its models yet. Add one below.</p>
+      )}
+      <form
+        className="setup-add-model"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!draft.trim()) return;
+          add(draft.trim());
+          setDraft('');
+        }}
+      >
+        <label>
+          Add a model
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} placeholder="provider/model-id" />
+        </label>
+        <button type="submit" disabled={!draft.trim()}>
+          Add
+        </button>
+      </form>
+      <p className="setup-hint">
+        Type the ID exactly as the Agent reports it. Kiln matches usage to a Budget by that ID, so a typo means the model's
+        usage counts against no Budget.
+      </p>
     </Step>
   );
 }
@@ -459,7 +544,10 @@ export function SetupWizard() {
   const [install, setInstallKind] = useState<InstallKind>();
   const [drafts, setDrafts] = useState<BudgetDraft[]>([]);
   const [repo, setRepo] = useState('');
-  const [models, setModels] = useState<Record<string, string>>({});
+  // The Models step: the Budget picked for a model ('' for none), and the models added by hand.
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [added, setAdded] = useState<string[]>([]);
+  const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
   const [roles, setRoles] = useState<Record<string, RoleModel>>({});
 
   const refresh = async () => {
@@ -486,6 +574,18 @@ export function SetupWizard() {
   useEffect(() => {
     if (liveBudgets.length) setBudgets(liveBudgets);
   }, [liveBudgets]);
+  // An Agent reports its models when its Widget registers, which can be just after it's installed.
+  useEffect(() => {
+    if (STEPS[step] !== 'Models') return;
+    let live = true;
+    const load = () => api<WidgetInfo[]>('GET', '/api/widgets').then((w) => live && setWidgets(w), () => undefined);
+    void load();
+    const timer = setInterval(load, 3000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [step]);
 
   if (!setup) return <section aria-label="Set up Kiln">{error ? <p role="alert">{error}</p> : <p>Loading setup.</p>}</section>;
 
@@ -500,6 +600,8 @@ export function SetupWizard() {
     ...drafts,
     ...budgets.filter((b) => !drafts.some((d) => d.id === b.id)).map((b) => ({ ...b.config, id: b.id, kind: b.kind, name: b.name, models: b.models })),
   ];
+  const rows = modelRows(widgets, setup, entries, budgets, added);
+  const budgetOf = (row: ModelRow) => budgetFor(row, entries, picked);
   const canGoOn = [true, folder.trim() !== '', Boolean(install), true, true, rolesChosen, true][step];
 
   /** Saves what this step chose; returns false to stay on it. */
@@ -509,13 +611,22 @@ export function SetupWizard() {
     if (name === 'Knowledge store') await api('PUT', '/api/setup', { knowledgeDir: folder.trim() });
     if (name === 'Install') {
       await api('PUT', '/api/setup', { install });
-      setModels(Object.fromEntries(entries.map((b) => [b.id, b.models.join(', ')])));
+      setPicked({});
     }
     if (name === 'Models') {
+      const wanted = new Map(entries.map((e) => [e.id, [] as string[]]));
+      for (const row of rows) wanted.get(budgetOf(row))?.push(row.id);
       for (const entry of entries) {
-        const wanted = splitModels(models[entry.id] ?? '');
-        if (wanted.length === 0) continue;
-        await api('PUT', `/api/budgets/${encodeURIComponent(entry.id)}`, { ...withoutId(entry), models: wanted });
+        if (budgets.some((b) => b.id === entry.id) && !wanted.get(entry.id)!.length) {
+          throw new Error(`${entry.name ?? entry.id} needs at least one model. Give it one, or remove it on its Budget's page.`);
+        }
+      }
+      // Budgets that give a model up save first, so no model is in two Budgets on the way.
+      const drops = (e: BudgetDraft) => e.models.some((m) => !wanted.get(e.id)!.includes(m));
+      for (const entry of [...entries].sort((a, b) => Number(drops(b)) - Number(drops(a)))) {
+        const models = wanted.get(entry.id)!;
+        if (models.length === 0) continue;
+        await api('PUT', `/api/budgets/${encodeURIComponent(entry.id)}`, { ...withoutId(entry), models });
       }
       const { list } = await refresh();
       if (list.length === 0) throw new Error('Give at least one Budget its models.');
@@ -591,7 +702,15 @@ export function SetupWizard() {
       {name === 'Knowledge store' ? <KnowledgeStep setup={setup} folder={folder} setFolder={setFolder} /> : null}
       {name === 'Install' ? <InstallStep setup={setup} install={install} setInstall={setInstall} drafts={drafts} setDrafts={setDrafts} /> : null}
       {name === 'Agents' ? <AgentsStep setup={setup} install={install} repo={repo} setRepo={setRepo} onInstalled={async () => void (await refresh())} /> : null}
-      {name === 'Models' ? <ModelsStep entries={entries} models={models} setModels={setModels} /> : null}
+      {name === 'Models' ? (
+        <ModelsStep
+          rows={rows}
+          entries={entries}
+          budgetOf={budgetOf}
+          pick={(model, budget) => setPicked({ ...picked, [model]: budget })}
+          add={(model) => setAdded(added.includes(model) ? added : [...added, model])}
+        />
+      ) : null}
       {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} /> : null}
       {name === 'Import' ? <ImportStep setup={setup} onImported={async () => void (await refresh())} /> : null}
           {error ? <p role="alert">{error}</p> : null}

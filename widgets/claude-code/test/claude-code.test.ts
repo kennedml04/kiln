@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AskRaisedEvent, BudgetInfo, ContextAlarmEvent, DigestWrittenEvent, ExitCheckedEvent, Item, ItemStageChangedEvent, Project, SessionAgentEvent, StartResult, UsageRecord } from '@kiln/widget-sdk';
+import type { AskRaisedEvent, BudgetInfo, ContextAlarmEvent, DigestWrittenEvent, ExitCheckedEvent, Item, ItemStageChangedEvent, Project, SessionAgentEvent, StartResult, UsageRecord, WidgetInfo } from '@kiln/widget-sdk';
 import { startTestKiln, tempDir, type TestKiln } from '@kiln/testing';
 import { seedScratch, writeRepoFile } from '@kiln/testing/scratch';
 import { installClaudeCode } from './install.ts';
@@ -369,4 +369,16 @@ test('a running Session reads the quota at an interval, and on stop it closes Cl
   assert.equal(finished.payload.reason, 'stopped');
   assert.ok(claude.log().some((e) => e.kind === 'close'), 'Claude Code is closed');
   assert.ok(!claude.log().some((e) => e.kind === 'interrupt'));
+});
+
+test("the Agent offers setup Claude's models by name, or the ones its config lists", async (t) => {
+  const offered = async (config: Record<string, unknown>) => {
+    const kiln = await startTestKiln(t);
+    await installClaudeCode(t, kiln, { turns: [] }, config);
+    return (await kiln.api<WidgetInfo[]>('GET', '/api/widgets')).find((w) => w.id === 'claude-code')!.agents[0]!.models;
+  };
+  const models = await offered({});
+  assert.ok(models?.some((m) => m.id === 'claude-opus-5-5' && m.name === 'Opus 5.5'));
+  assert.ok(models?.every((m) => m.id.startsWith('claude-') && m.name));
+  assert.deepEqual(await offered({ models: [{ id: 'claude-work-proxy', name: 'Work proxy' }] }), [{ id: 'claude-work-proxy', name: 'Work proxy' }]);
 });

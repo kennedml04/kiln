@@ -252,9 +252,20 @@ export function createWidgetHost(bus: EventBus, dataDir: string): WidgetHost {
       const agents = request.agents ?? [];
       const undeclared = agents.filter((a) => !declared.has(a.id));
       if (undeclared.length) throw new WidgetHostError(403, `Agents not in the Manifest: ${undeclared.map((a) => a.id).join(', ')}`);
-      w.agents = agents;
+      // Keep only well-formed model offers: an id string, and a name string if any.
+      w.agents = agents.map(({ models, ...agent }) => {
+        if (!Array.isArray(models)) return agent;
+        const offered = models
+          .filter((m) => m && typeof m.id === 'string' && m.id.trim())
+          .map((m) => ({
+            id: m.id,
+            ...(typeof m.name === 'string' && m.name.trim() ? { name: m.name } : {}),
+            ...(m.local === true ? { local: true } : {}),
+          }));
+        return { ...agent, models: offered };
+      });
       w.state = 'registered';
-      bus.publish('widget.registered', { widgetId: id, name: w.manifest.name, version: w.manifest.version, agents });
+      bus.publish('widget.registered', { widgetId: id, name: w.manifest.name, version: w.manifest.version, agents: w.agents });
     },
 
     ready(id) {

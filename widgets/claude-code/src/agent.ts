@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CanUseTool, HookCallback, Options, PermissionResult, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { Agent, AgentEvent, AgentMessage, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
+import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
 import { ORG_POLICY_DEFAULT } from '@kiln/widget-sdk';
 import { requestFor } from './permissions.ts';
 import { overageCredits, readingFromRateLimit, readingsFromUsage, type UsageReply } from './quota.ts';
@@ -32,7 +32,20 @@ export interface ClaudeCodeConfig {
   claudePath?: string;
   /** For tests only: a module to use in place of the SDK. */
   sdkModule?: string;
+  /** The models this Agent offers in setup, in place of CLAUDE_MODELS (e.g. when Anthropic ships new ones). */
+  models?: AgentModel[];
 }
+
+/**
+ * The Claude models Claude Code runs, by the id it reports usage under. Setup offers them when an
+ * Admin decides which Budget each model draws from. Override with the `models` setting.
+ */
+export const CLAUDE_MODELS: AgentModel[] = [
+  { id: 'claude-opus-5-5', name: 'Opus 5.5' },
+  { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5' },
+  { id: 'claude-haiku-5-5', name: 'Haiku 5.5' },
+  { id: 'claude-fable-5-1', name: 'Fable 5.1' },
+];
 
 const QUOTA_INTERVAL_MS = 5 * 60_000;
 const CONTINUE = 'Kiln paused you; carry on where you left off.';

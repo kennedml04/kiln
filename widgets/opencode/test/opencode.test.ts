@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Ask, AskRaisedEvent, AuditEntry, ContextAlarmEvent, Item, PolicyLayer, Project, SessionAgentEvent, SessionInfo, StartResult, UsageRecord } from '@kiln/widget-sdk';
+import type { Ask, AskRaisedEvent, AuditEntry, ContextAlarmEvent, Item, PolicyLayer, Project, SessionAgentEvent, SessionInfo, StartResult, UsageRecord, WidgetInfo } from '@kiln/widget-sdk';
 import { startTestKiln, type Cleanup, type EventStream, type TestKiln } from '@kiln/testing';
 import { seedScratch, writeRepoFile } from '@kiln/testing/scratch';
 import { fakeOpenCode, installOpenCode, type FakeScenario } from './support.ts';
@@ -252,4 +252,17 @@ test('an OpenCode whose server API this Widget does not speak ends the Session w
   const end = await finished(events, session.id);
   assert.equal(end.reason, 'error');
   assert.match(end.message ?? '', /OpenCode 2\.2\.5 is not supported.*1\.x/);
+});
+
+test('the Agent offers setup its model and every local server model, by the names it reports usage under', async (t) => {
+  const kiln = await startTestKiln(t);
+  const opencode = fakeOpenCode(t, { steps: [] });
+  const local = { homegpu: { baseURL: 'http://127.0.0.1:9/v1', models: ['qwen3-coder', 'gemma-4'], name: 'Home GPU' } };
+  await installOpenCode(t, kiln, { opencode: opencode.command, model: MODEL, local });
+  const widgets = await kiln.api<WidgetInfo[]>('GET', '/api/widgets');
+  assert.deepEqual(widgets.find((w) => w.id === 'opencode')!.agents[0]!.models, [
+    { id: MODEL },
+    { id: 'homegpu/qwen3-coder', name: 'qwen3-coder (Home GPU)', local: true },
+    { id: 'homegpu/gemma-4', name: 'gemma-4 (Home GPU)', local: true },
+  ]);
 });

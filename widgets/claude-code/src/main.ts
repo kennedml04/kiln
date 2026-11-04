@@ -1,14 +1,14 @@
 // The Claude Code Agent Widget process: runs Kiln Sessions with Claude Code through the Claude
 // Agent SDK (see agent.ts).
 //
-// Config (KILN_WIDGET_CONFIG), all optional: model, cacheLifetimeMs, quotaIntervalMs,
+// Config (KILN_WIDGET_CONFIG), all optional: model, models, cacheLifetimeMs, quotaIntervalMs,
 // maxBudgetUsd, claudePath, and sdkModule (tests only). See ClaudeCodeConfig.
 //
 // Claude Code signs in the way it does on this PC (the person's own login); the Widget reads no
 // Claude Code settings files and passes none on.
 import { pathToFileURL } from 'node:url';
 import { createWidgetClient, serveAgent } from '@kiln/widget-sdk';
-import { createClaudeCodeAgent, type ClaudeCodeConfig, type ClaudeSdk } from './agent.ts';
+import { CLAUDE_MODELS, createClaudeCodeAgent, type ClaudeCodeConfig, type ClaudeSdk } from './agent.ts';
 
 const client = createWidgetClient();
 const config = (client.context.config ?? {}) as ClaudeCodeConfig;
@@ -30,6 +30,7 @@ await serveAgent(createClaudeCodeAgent({ sdk, config, dataDir }), {
       name: 'Claude Code',
       cacheLifetimeMs: config.cacheLifetimeMs ?? 60 * 60_000,
       ...(config.model ? { model: config.model } : {}),
+      models: config.models ?? CLAUDE_MODELS,
     },
   ],
 });

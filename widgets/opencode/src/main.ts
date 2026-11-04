@@ -6,7 +6,7 @@
 // (erased at run time), so it runs from a clone of the public repo that has no node_modules.
 // Config (KILN_WIDGET_CONFIG): see OpenCodeWidgetConfig in config.ts.
 import type { AgentEvent, AgentRegistration, WidgetCommand } from '@kiln/widget-sdk';
-import { DEFAULT_CACHE_LIFETIME_MS, parseConfig } from './config.ts';
+import { DEFAULT_CACHE_LIFETIME_MS, offeredModels, parseConfig } from './config.ts';
 import { readSse } from './server.ts';
 import { OpenCodeSession } from './session.ts';
 
@@ -31,6 +31,7 @@ const AGENT: AgentRegistration = {
   name: 'OpenCode',
   cacheLifetimeMs: config.cacheLifetimeMs ?? DEFAULT_CACHE_LIFETIME_MS,
   ...(config.model ? { model: config.model } : {}),
+  models: offeredModels(config),
 };
 
 const sessions = new Map<string, OpenCodeSession>();
