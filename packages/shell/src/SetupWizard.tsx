@@ -2,7 +2,7 @@
 // Each step saves as it goes (PUT /api/setup, the Budget and Widget routes); Finish asks the core
 // to mark setup done, which it refuses while a Budget or a role's model is missing.
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BudgetDraft, BudgetInfo, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, WidgetInfo } from '@kiln/widget-sdk';
+import type { BudgetDraft, BudgetInfo, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
 import { navigate } from './router.ts';
 import { api, useStore } from './store.ts';
 
@@ -84,6 +84,30 @@ function Choice(props: {
   );
 }
 
+/** What `tailscale serve` does with Kiln now, when that needs saying. */
+function ServeStatus({ serve, login }: { serve: TailscaleServe | undefined; login: LoginMode }) {
+  if (!serve) return null;
+  if (serve.kind === 'tcp') {
+    return (
+      <p role="alert" className="setup-warning">
+        tailscale serve forwards raw TCP to Kiln ({serve.target}), so every remote caller would be the local Admin. Turn it off, or serve Kiln
+        over HTTPS, before you go on.
+      </p>
+    );
+  }
+  if (login === 'local') {
+    return (
+      <p className="setup-hint">
+        tailscale serve forwards to Kiln ({serve.target}). In Local mode its callers get no access: pick Tailscale to let them in.
+      </p>
+    );
+  }
+  if (serve.funnel) {
+    return <p className="setup-hint">Funnel is on for Kiln's tailscale serve entry. Callers from the internet get no access.</p>;
+  }
+  return null;
+}
+
 function LoginStep({ setup, login, setLogin }: { setup: SetupState; login: LoginMode; setLogin: (l: LoginMode) => void }) {
   return (
     <Step title="Login">
@@ -107,13 +131,11 @@ function LoginStep({ setup, login, setLogin }: { setup: SetupState; login: Login
         />
       </div>
       {login === 'tailscale' ? (
-        <p role="note" className="setup-warning">
-          {setup.tailscale.warning}
+        <p role="note" className="setup-hint">
+          {setup.tailscale.note}
         </p>
       ) : null}
-      {setup.tailscale.servesKiln ? (
-        <p role="alert">tailscale serve forwards to Kiln now ({setup.tailscale.servesKiln}). Turn it off before you go on.</p>
-      ) : null}
+      <ServeStatus serve={setup.tailscale.servesKiln} login={login} />
       {login !== setup.running.login ? <p className="setup-hint">Kiln switches to this login mode when it next restarts.</p> : null}
     </Step>
   );

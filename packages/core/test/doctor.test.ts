@@ -146,31 +146,90 @@ test('kiln doctor fails when git is missing', async (t) => {
   assert.match(run.byId('git').fix!, /Install Git/);
 });
 
-test('kiln doctor fails when a local reverse proxy fronts Kiln, since its callers would all be the local Admin', async (t) => {
+test('kiln doctor warns when a local proxy forwards callers Kiln cannot name, since they get no access', async (t) => {
   const kiln = await startTestKiln(t, { login: 'tailscale' });
   await kiln.request('GET', '/api/status', undefined, { 'x-forwarded-for': '100.64.0.7' });
 
   const run = await doctor(target(kiln));
 
-  assert.equal(run.byId('proxy').status, 'fail');
-  assert.match(run.byId('proxy').detail, /local Admin/);
-  assert.match(run.byId('proxy').fix!, /tailscale/);
+  assert.equal(run.byId('proxy').status, 'warn');
+  assert.match(run.byId('proxy').detail, /no access/);
+  assert.match(run.byId('proxy').fix!, /tailscale serve/);
 });
 
-test('kiln doctor fails when tailscale serve forwards to Kiln', async (t) => {
+test('kiln doctor passes a proxy that names each tailnet caller', async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale' });
+  await kiln.request('GET', '/api/me', undefined, { 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'alice@example.com' });
+
+  const run = await doctor(target(kiln));
+
+  assert.equal(run.byId('proxy').status, 'pass');
+  assert.match(run.byId('proxy').detail, /Tailscale login/);
+});
+
+/**
+ * Starts a core whose fake `tailscale` reports `serve(port)` as its serve config. The fake is written
+ * once the core's port is known; the core runs it only when asked for checks.
+ */
+const withServe = async (t: Parameters<typeof tempDir>[0], login: 'local' | 'tailscale', serve: (port: number) => unknown) => {
   const fakeTailscale = join(tempDir(t, 'kiln-fake-tailscale'), 'tailscale.mjs');
-  // The fake is written once the core's port is known; the core runs it only when asked for checks.
-  const kiln = await startTestKiln(t, { login: 'tailscale', env: { KILN_TAILSCALE_CLI: fakeTailscale } });
+  const kiln = await startTestKiln(t, { login, env: { KILN_TAILSCALE_CLI: fakeTailscale } });
   writeFileSync(
     fakeTailscale,
-    `const port = ${kiln.port};\n` +
-      'if (process.argv.slice(2).join(" ") === "serve status --json") {\n' +
-      '  console.log(JSON.stringify({ Web: { "pc.example.ts.net:443": { Handlers: { "/": { Proxy: `http://127.0.0.1:${port}` } } } } }));\n' +
+    'if (process.argv.slice(2).join(" ") === "serve status --json") {\n' +
+      `  console.log(${JSON.stringify(JSON.stringify(serve(kiln.port)))});\n` +
       '} else process.exit(1);\n',
   );
+  return kiln;
+};
+const webServe = (port: number, funnel = false) => ({
+  TCP: { '443': { HTTPS: true } },
+  Web: { 'pc.example.ts.net:443': { Handlers: { '/': { Proxy: `http://127.0.0.1:${port}` } } } },
+  ...(funnel ? { AllowFunnel: { 'pc.example.ts.net:443': true } } : {}),
+});
+
+test('kiln doctor passes tailscale serve in front of Kiln in Tailscale mode', async (t) => {
+  const kiln = await withServe(t, 'tailscale', (port) => webServe(port));
+
+  const run = await doctor(target(kiln));
+
+  assert.equal(run.byId('proxy').status, 'pass');
+  assert.match(run.byId('proxy').detail, /tailscale serve forwards to Kiln .* own role/);
+});
+
+test('kiln doctor warns when tailscale serve fronts Kiln in Local mode, since its callers get no access', async (t) => {
+  const kiln = await withServe(t, 'local', (port) => webServe(port));
+
+  const run = await doctor(target(kiln));
+
+  assert.equal(run.byId('proxy').status, 'warn');
+  assert.match(run.byId('proxy').detail, /Local login mode/);
+  assert.match(run.byId('proxy').fix!, /--login tailscale/);
+});
+
+test('kiln doctor warns when Funnel is on for Kiln, since internet callers get no access', async (t) => {
+  const kiln = await withServe(t, 'tailscale', (port) => webServe(port, true));
+
+  const run = await doctor(target(kiln));
+
+  assert.equal(run.byId('proxy').status, 'warn');
+  assert.match(run.byId('proxy').detail, /Funnel/);
+});
+
+test('kiln doctor fails when tailscale serve forwards raw TCP to Kiln, since its callers would all be the local Admin', async (t) => {
+  const kiln = await withServe(t, 'tailscale', (port) => ({ TCP: { '8443': { TCPForward: `127.0.0.1:${port}` } } }));
 
   const run = await doctor(target(kiln));
 
   assert.equal(run.byId('proxy').status, 'fail');
-  assert.match(run.byId('proxy').detail, /tailscale serve/);
+  assert.match(run.byId('proxy').detail, /raw TCP.*local Admin/);
+});
+
+test('kiln doctor finds Kiln in a foreground tailscale serve session too', async (t) => {
+  const kiln = await withServe(t, 'local', (port) => ({ Foreground: { session1: webServe(port) } }));
+
+  const run = await doctor(target(kiln));
+
+  assert.equal(run.byId('proxy').status, 'warn');
+  assert.match(run.byId('proxy').detail, /tailscale serve forwards to Kiln/);
 });

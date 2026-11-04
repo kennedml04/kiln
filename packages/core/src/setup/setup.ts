@@ -14,7 +14,7 @@ import {
   OLD_BOARD_DATA_FOLDER,
   PUBLIC_WIDGET_REPO,
   SUBSCRIPTION_DEFAULTS,
-  TAILSCALE_SERVE_WARNING,
+  TAILSCALE_SERVE_NOTE,
   type BudgetDraft,
   type BudgetInfo,
   type FirstPartyAgent,
@@ -25,6 +25,7 @@ import {
   type RoleModel,
   type SetupSettings,
   type SetupState,
+  type TailscaleServe,
   type WidgetInfo,
   type Workflow,
 } from '@kiln/widget-sdk';
@@ -141,7 +142,7 @@ export interface SetupDeps {
   budgets(): BudgetInfo[];
   widgets(): WidgetInfo[];
   /** What `tailscale serve` forwards to Kiln, if anything. */
-  servedByTailscale(): Promise<string | undefined>;
+  servedByTailscale(): Promise<TailscaleServe | undefined>;
   running: { login: LoginMode; knowledgeDir(): string };
   /** Points the Knowledge store at a new folder, at once. */
   moveKnowledge(root: string): void;
@@ -286,7 +287,7 @@ export function createSetup(deps: SetupDeps): Setup {
       restartNeeded: settings.login !== undefined && settings.login !== deps.running.login,
       widgetRepo: widgetRepo(),
       obsidian: obsidian(),
-      tailscale: { warning: TAILSCALE_SERVE_WARNING, ...(await servesKiln()) },
+      tailscale: { note: TAILSCALE_SERVE_NOTE, ...(await servesKiln()) },
       localModelServer: local,
       defaults: defaultBudgets(local),
       roles: defaultRoles(),

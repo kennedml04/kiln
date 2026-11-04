@@ -17,11 +17,20 @@ export const PUBLIC_WIDGET_REPO = 'https://github.com/kennedml04/kiln.git';
  */
 export const OLD_BOARD_DATA_FOLDER = ['gpu', 'board_data'].join('');
 
-/** Shown wherever the Tailscale login mode is chosen or checked. */
-export const TAILSCALE_SERVE_WARNING =
-  "Don't put `tailscale serve` (or any reverse proxy) in front of Kiln. Its requests reach Kiln from this PC, " +
-  'and Kiln treats every request from this PC as the local Admin, so every remote caller would be Admin. ' +
-  "Kiln's Tailscale login mode serves the tailnet itself and knows who each caller is.";
+/** Shown where the Tailscale login mode is chosen. */
+export const TAILSCALE_SERVE_NOTE =
+  '`tailscale serve` (HTTPS on your *.ts.net name) works in front of Kiln: each caller keeps their own Tailscale login and role. ' +
+  'Leave Funnel off for Kiln: callers from the internet get no access.';
+
+/** What `tailscale serve` forwards to Kiln's port. */
+export interface TailscaleServe {
+  /** The handler or listener that points at Kiln, e.g. `http://127.0.0.1:8300`. */
+  target: string;
+  /** `web`: an HTTP(S) proxy, which names each caller. `tcp`: a raw TCP forward, which names nobody. */
+  kind: 'web' | 'tcp';
+  /** Funnel is on for it, so it is reachable from the internet. */
+  funnel: boolean;
+}
 
 /** A work install meters credits; a home install has a Claude Max subscription and maybe local models. */
 export type InstallKind = 'work' | 'home';
@@ -101,9 +110,9 @@ export interface SetupState {
     suggestion?: string;
   };
   tailscale: {
-    warning: string;
-    /** What `tailscale serve` forwards to Kiln, if it does (it must not). */
-    servesKiln?: string;
+    note: string;
+    /** What `tailscale serve` forwards to Kiln, if it does. */
+    servesKiln?: TailscaleServe;
   };
   localModelServer: { found: boolean; url?: string; models: string[] };
   /** The Budgets each kind of install starts with. Home includes a local Budget only when a local model server was found. */

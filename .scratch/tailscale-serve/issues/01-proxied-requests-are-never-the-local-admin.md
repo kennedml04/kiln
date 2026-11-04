@@ -15,14 +15,22 @@ Decisions:
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] In Tailscale mode, a loopback request with `Tailscale-User-Login: alice@example.com` acts as alice: her role applies, and the audit log names her, not the local person
-- [ ] In Tailscale mode, a loopback request with `Tailscale-User-Login` for a login with no role gets no access
-- [ ] A loopback request with `X-Forwarded-For` (or `Forwarded`, `X-Real-IP`) and no `Tailscale-User-Login` gets no access, in both login modes
-- [ ] In Local mode, a loopback request with `Tailscale-User-Login` gets no access
-- [ ] A plain loopback request with no proxy headers is still the local Admin, in both modes
-- [ ] The event stream (SSE) and every other endpoint use the same identity rule as the REST API
-- [ ] `kiln doctor`'s proxy check passes with `tailscale serve` in front of Kiln in Tailscale mode, and warns in the cases listed in decision 5
-- [ ] The setup wizard no longer blocks or warns when `tailscale serve` fronts Kiln in Tailscale mode
-- [ ] Tests use the fake `tailscale` CLI (`KILN_TAILSCALE_CLI`) and real HTTP headers, never the PC's real Tailscale
+- [x] In Tailscale mode, a loopback request with `Tailscale-User-Login: alice@example.com` acts as alice: her role applies, and the audit log names her, not the local person
+- [x] In Tailscale mode, a loopback request with `Tailscale-User-Login` for a login with no role gets no access
+- [x] A loopback request with `X-Forwarded-For` (or `Forwarded`, `X-Real-IP`) and no `Tailscale-User-Login` gets no access, in both login modes
+- [x] In Local mode, a loopback request with `Tailscale-User-Login` gets no access
+- [x] A plain loopback request with no proxy headers is still the local Admin, in both modes
+- [x] The event stream (SSE) and every other endpoint use the same identity rule as the REST API
+- [x] `kiln doctor`'s proxy check passes with `tailscale serve` in front of Kiln in Tailscale mode, and warns in the cases listed in decision 5
+- [x] The setup wizard no longer blocks or warns when `tailscale serve` fronts Kiln in Tailscale mode
+- [x] Tests use the fake `tailscale` CLI (`KILN_TAILSCALE_CLI`) and real HTTP headers, never the PC's real Tailscale
+
+## Comments
+
+2026-11-03, built:
+
+- `login.ts` owns the proxy header list (`PROXY_HEADERS`, now also `Tailscale-User-Name`). `proxy.ts` uses the same list. Display names in RFC 2047 encoding (which serve uses for names that aren't plain ASCII) are decoded.
+- Found while building: a raw TCP forward (`tailscale serve --tcp`) adds no headers, so its callers would still be the local Admin. The doctor check **fails** on it, and the wizard shows an alert. `proxy.ts` now reads `tailscale serve status --json` as a ServeConfig (Web handlers, TCP forwards, `AllowFunnel`, foreground sessions and Services) instead of matching text, so it can tell a web proxy from a TCP forward and spot Funnel.
+- `TAILSCALE_SERVE_WARNING` became `TAILSCALE_SERVE_NOTE`. `SetupState.tailscale.servesKiln` is now `{ target, kind, funnel }`.

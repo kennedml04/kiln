@@ -1,6 +1,8 @@
 // Login adapters: who is on the other end of a request.
 // Local mode binds 127.0.0.1 only and the person at the PC is Admin.
 // Tailscale mode also binds the Tailscale interface and asks the local Tailscale daemon who each peer is.
+// A loopback request a proxy forwarded is never the person at the PC: in Tailscale mode it is the
+// tailnet user `tailscale serve` names, otherwise nobody.
 import type { IncomingMessage } from 'node:http';
 import type { LoginMode } from '@kiln/widget-sdk';
 import { run } from './exec.ts';
@@ -41,8 +43,62 @@ export function hostName(header: string | undefined): string {
   return host.replace(/:\d+$/, '');
 }
 
-const isLoopback = (address: string | undefined) =>
+export const isLoopback = (address: string | undefined) =>
   address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+
+/**
+ * Headers a reverse proxy adds. A loopback request carrying one was forwarded by something on this
+ * PC (`tailscale serve`, or any other proxy), so it is not the person at the PC.
+ */
+export const PROXY_HEADERS = [
+  'forwarded',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-real-ip',
+  'tailscale-user-login',
+  'tailscale-user-name',
+];
+
+/** The first proxy header the request carries, if any. */
+export const proxyHeader = (req: IncomingMessage): string | undefined => PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
+
+/** Decodes RFC 2047 Q-encoded words, which `tailscale serve` uses for header values that aren't plain ASCII. */
+function decodeWords(value: string): string {
+  return value
+    .replace(/(\?=)\s+(=\?)/g, '$1$2')
+    .replace(/=\?utf-8\?q\?([^?]*)\?=/gi, (_, text: string) => {
+      const bytes: number[] = [];
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i]!;
+        if (ch === '_') bytes.push(0x20);
+        else if (ch === '=' && /^[0-9a-f]{2}$/i.test(text.slice(i + 1, i + 3))) {
+          bytes.push(parseInt(text.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else bytes.push(ch.charCodeAt(0));
+      }
+      return Buffer.from(bytes).toString('utf8');
+    });
+}
+
+const header = (req: IncomingMessage, name: string): string | undefined => {
+  const value = req.headers[name];
+  const text = Array.isArray(value) ? value[0] : value;
+  return text?.trim() ? decodeWords(text.trim()) : undefined;
+};
+
+/**
+ * The tailnet user `tailscale serve` names on a request it forwards. Serve sets these headers for
+ * tailnet callers and strips any the caller sent; Funnel (internet) callers get none. Only a program
+ * on this PC could forge them, and it could leave them off and be the local Admin instead, so
+ * trusting them never raises anyone's access.
+ */
+const servePeer = (req: IncomingMessage): Peer | undefined => {
+  const id = header(req, 'tailscale-user-login');
+  if (!id) return undefined;
+  const name = header(req, 'tailscale-user-name');
+  return name ? { id, name } : { id };
+};
 
 export interface LoginOptions {
   mode: LoginMode;
@@ -56,7 +112,8 @@ export function createLoginAdapter(options: LoginOptions): LoginAdapter {
     return {
       mode: 'local',
       bindAddresses: async () => [],
-      identify: async (req) => (isLoopback(req.socket.remoteAddress) ? 'local' : undefined),
+      // A proxied request came from somewhere else; Local mode has no way to know who sent it.
+      identify: async (req) => (isLoopback(req.socket.remoteAddress) && !proxyHeader(req) ? 'local' : undefined),
       acceptsHost: (hostname) => LOOPBACK_NAMES.has(hostname),
     };
   }
@@ -107,7 +164,10 @@ function createTailscaleAdapter(options: LoginOptions): LoginAdapter {
       const remote = req.socket.remoteAddress;
       if (isLoopback(remote)) {
         const testPeer = options.testMode ? req.headers[TEST_PEER_HEADER] : undefined;
-        return typeof testPeer === 'string' && testPeer ? { id: testPeer } : 'local';
+        if (typeof testPeer === 'string' && testPeer) return { id: testPeer };
+        // Forwarded by a proxy on this PC: the tailnet user `tailscale serve` names, or nobody.
+        if (proxyHeader(req)) return servePeer(req);
+        return 'local';
       }
       if (!remote) return undefined;
       return whois(remote.replace(/^::ffff:/, ''));

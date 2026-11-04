@@ -150,7 +150,7 @@ test("the models chosen for the default Workflow's roles are the ones its Stages
   assert.equal(stage('review').model, 'small-model');
 });
 
-test('choosing Tailscale login warns about tailscale serve, and takes effect when Kiln restarts', async (t) => {
+test('choosing Tailscale login notes that tailscale serve works, and takes effect when Kiln restarts', async (t) => {
   const kiln = await startTestKiln(t, { setup: 'fresh' });
 
   const state = await kiln.api<SetupState>('PUT', '/api/setup', { login: 'tailscale' });
@@ -158,17 +158,28 @@ test('choosing Tailscale login warns about tailscale serve, and takes effect whe
   assert.equal(state.settings.login, 'tailscale');
   assert.equal(state.running.login, 'local');
   assert.equal(state.restartNeeded, true);
-  assert.match(state.tailscale.warning, /tailscale serve/);
-  assert.match(state.tailscale.warning, /Admin/);
+  assert.match(state.tailscale.note, /tailscale serve/);
+  assert.match(state.tailscale.note, /Funnel/);
   assert.equal(state.tailscale.servesKiln, undefined);
 });
 
-test("kiln doctor repeats the tailscale serve warning in Tailscale mode", async (t) => {
+test('setup reports what tailscale serve forwards to Kiln, and how', async (t) => {
+  const fakeTailscale = join(tempDir(t, 'kiln-fake-tailscale'), 'tailscale.mjs');
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_TAILSCALE_CLI: fakeTailscale } });
+  const serve = { TCP: { '8443': { TCPForward: `127.0.0.1:${kiln.port}` } }, AllowFunnel: { 'pc.example.ts.net:8443': true } };
+  writeFileSync(fakeTailscale, `console.log(${JSON.stringify(JSON.stringify(serve))});\n`);
+
+  const state = await kiln.api<SetupState>('GET', '/api/setup');
+
+  assert.deepEqual(state.tailscale.servesKiln, { target: `127.0.0.1:${kiln.port}`, kind: 'tcp', funnel: true });
+});
+
+test('kiln doctor passes with no proxy in Tailscale mode, and no longer warns people off tailscale serve', async (t) => {
   const kiln = await startTestKiln(t, { login: 'tailscale' });
   const doctor = await kiln.api<DoctorReport>('GET', '/api/doctor');
   const proxy = doctor.checks.find((c) => c.id === 'proxy')!;
   assert.equal(proxy.status, 'pass');
-  assert.match(proxy.detail, /tailscale serve/);
+  assert.equal(proxy.detail, 'No reverse proxy found in front of Kiln.');
 });
 
 test("importing from the old board registers its Projects with their .scratch Items, and never writes to the old board's folder", async (t) => {

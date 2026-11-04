@@ -189,3 +189,69 @@ test('only an Admin can stop the core', async (t) => {
 
   assert.equal(stopped.status, 202);
 });
+
+// `tailscale serve` forwards tailnet callers to Kiln from this PC, adding headers that name them.
+const viaServe = (login: string, name?: string): Record<string, string> => ({
+  'x-forwarded-for': '100.64.0.7',
+  'tailscale-user-login': login,
+  ...(name ? { 'tailscale-user-name': name } : {}),
+});
+
+test('in Tailscale mode a request through tailscale serve is the tailnet user it names, with their role and in the audit log', async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale' });
+  await kiln.api('PUT', '/api/users/alice%40example.com', { role: 'member' });
+
+  const me = await kiln.request<Me>('GET', '/api/me', undefined, viaServe('alice@example.com', 'Alice'));
+  assert.equal(me.body.role, 'member');
+  assert.deepEqual(me.body.actor, { kind: 'user', id: 'alice@example.com', name: 'Alice' });
+
+  assert.equal((await kiln.request('POST', '/api/test/echo', { hi: 1 }, viaServe('alice@example.com'))).status, 200);
+  assert.equal((await kiln.request('POST', '/api/core/stop', undefined, viaServe('alice@example.com'))).status, 403);
+  const changes = await kiln.api<AuditEntry[]>('GET', '/api/audit?action=echo');
+  assert.deepEqual(
+    changes.map((e) => [e.actor, e.outcome]),
+    [[{ kind: 'user', id: 'alice@example.com', name: 'Alice' }, 'allowed']],
+  );
+});
+
+test("tailscale serve's encoded display names are decoded", async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale' });
+
+  const me = await kiln.request<Me>('GET', '/api/me', undefined, viaServe('jorg@example.com', '=?utf-8?q?J=C3=B6rg_M?='));
+
+  assert.deepEqual(me.body.actor, { kind: 'user', id: 'jorg@example.com', name: 'Jörg M' });
+});
+
+test('in Tailscale mode a tailnet user with no role gets no access through tailscale serve', async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale' });
+
+  const me = await kiln.request<Me>('GET', '/api/me', undefined, viaServe('bob@example.com'));
+  assert.equal(me.body.role, null);
+  assert.deepEqual(me.body.actor, { kind: 'user', id: 'bob@example.com' });
+  assert.equal((await kiln.request('GET', '/api/status', undefined, viaServe('bob@example.com'))).status, 403);
+  assert.equal((await kiln.request('GET', '/api/events', undefined, viaServe('bob@example.com'))).status, 403);
+});
+
+for (const login of ['local', 'tailscale'] as const) {
+  test(`in ${login} mode a proxied request that names no caller gets no access`, async (t) => {
+    const kiln = await startTestKiln(t, { login });
+
+    for (const header of ['x-forwarded-for', 'forwarded', 'x-real-ip']) {
+      const headers = { [header]: header === 'forwarded' ? 'for=203.0.113.9' : '203.0.113.9' };
+      const me = await kiln.request<Me>('GET', '/api/me', undefined, headers);
+      assert.equal(me.body.role, null, header);
+      assert.equal((await kiln.request('GET', '/api/status', undefined, headers)).status, 403, header);
+      assert.equal((await kiln.request('GET', '/api/events', undefined, headers)).status, 403, header);
+      assert.equal((await kiln.request('POST', '/api/core/stop', undefined, headers)).status, 403, header);
+    }
+    // The person at the PC, with no proxy in between, is still Admin.
+    assert.equal((await kiln.api<Me>('GET', '/api/me')).role, 'admin');
+  });
+}
+
+test('in Local mode a request naming a Tailscale user gets no access', async (t) => {
+  const kiln = await startTestKiln(t);
+
+  assert.equal((await kiln.request<Me>('GET', '/api/me', undefined, viaServe('alice@example.com'))).body.role, null);
+  assert.equal((await kiln.request('GET', '/api/status', undefined, { 'tailscale-user-login': 'alice@example.com' })).status, 403);
+});

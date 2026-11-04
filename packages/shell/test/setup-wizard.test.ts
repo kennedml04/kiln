@@ -27,7 +27,7 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   const next = () => wizard.getByRole('button', { name: 'Next' }).click();
   const step = (name: string) => wizard.getByRole('heading', { name, level: 3 }).waitFor();
 
-  // Login mode: Tailscale warns that tailscale serve would make every caller the local Admin.
+  // Login mode: Tailscale notes that tailscale serve works in front of Kiln.
   await step('Login');
   await wizard.getByRole('radio', { name: /Tailscale/ }).check();
   await wizard.getByRole('note').filter({ hasText: 'tailscale serve' }).waitFor();
@@ -101,6 +101,30 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('link', { name: 'Run setup again' }).click();
   await page.getByRole('region', { name: 'Set up Kiln' }).waitFor();
+});
+
+/** Starts a fresh core whose fake `tailscale` reports `serve(port)` as its serve config. */
+async function withServe(t: Parameters<typeof tempDir>[0], serve: (port: number) => unknown) {
+  const fakeTailscale = join(tempDir(t, 'kiln-fake-tailscale'), 'tailscale.mjs');
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_TAILSCALE_CLI: fakeTailscale } });
+  writeFileSync(fakeTailscale, `console.log(${JSON.stringify(JSON.stringify(serve(kiln.port)))});\n`);
+  return kiln;
+}
+
+test('the wizard lets tailscale serve be, but stops on a raw TCP forward that would make every caller Admin', async (t) => {
+  const web = await withServe(t, (port) => ({ Web: { 'pc.example.ts.net:443': { Handlers: { '/': { Proxy: `http://127.0.0.1:${port}` } } } } }));
+  const page = await openShell(t, web, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  await wizard.getByRole('heading', { name: 'Login', level: 3 }).waitFor();
+  await wizard.getByText(/In Local mode its callers get no access/).waitFor();
+  await wizard.getByRole('radio', { name: /Tailscale/ }).check();
+  await wizard.getByRole('note').filter({ hasText: 'tailscale serve' }).waitFor();
+  assert.equal(await wizard.getByText(/In Local mode its callers get no access/).count(), 0);
+  assert.equal(await wizard.getByRole('alert').count(), 0);
+
+  const tcp = await withServe(t, (port) => ({ TCP: { '8443': { TCPForward: `127.0.0.1:${port}` } } }));
+  const tcpPage = await openShell(t, tcp, '/');
+  await tcpPage.getByRole('region', { name: 'Set up Kiln' }).getByRole('alert').filter({ hasText: /raw TCP.*local Admin/ }).waitFor();
 });
 
 test('a core that has been set up opens on the board, not the wizard', async (t) => {
