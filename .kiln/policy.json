@@ -504,6 +504,11 @@
       "action": "other_commands",
       "match": "head -20",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline --all -i --grep=\"escalat\"",
+      "decision": "allow"
     }
   ]
 }
