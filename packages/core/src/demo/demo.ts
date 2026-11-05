@@ -37,8 +37,11 @@ const FAKE_AGENT = 'fake';
 const FAKE_MODEL = 'fake-model';
 const REPLAY_BUDGET = 'replay';
 const DEMO_NAME = 'Demo';
-/** The demo repo's own author, so the commit works on a machine with no git identity set. */
-const AS_DEMO = ['-c', 'user.name=Kiln demo', '-c', 'user.email=demo@kiln.invalid'];
+/**
+ * The demo repo's own author, written into its `.git/config`: every commit in it, the first one's and
+ * each Agent's in its worktrees, works on a machine with no git identity and never borrows the person's.
+ */
+const DEMO_IDENTITY = { 'user.name': 'Kiln demo', 'user.email': 'demo@kiln.invalid' };
 
 export interface DemoDeps {
   db: DatabaseSync;
@@ -185,8 +188,11 @@ export function createDemo(deps: DemoDeps): Demo {
 
   const commit = async (folder: string) => {
     await git(folder, 'init', '-q', '-b', 'main');
+    for (const [key, value] of Object.entries(DEMO_IDENTITY)) await git(folder, 'config', key, value);
     await git(folder, 'add', '-A');
-    await git(folder, ...AS_DEMO, 'commit', '-q', '-m', 'Demo project');
+    // Kiln's own `git` names Kiln as the author on the command line, over the config, so name the demo here too.
+    const asDemo = Object.entries(DEMO_IDENTITY).flatMap(([key, value]) => ['-c', `${key}=${value}`]);
+    await git(folder, ...asDemo, 'commit', '-q', '-m', 'Demo project');
   };
 
   return {

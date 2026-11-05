@@ -120,7 +120,16 @@ export interface SessionManager {
    * points when the Session wrote none. False when the Session is not live.
    */
   renew(id: string, reason: string): Promise<boolean>;
+  /**
+   * The Item's worktree is going (its branch merged): lets go of the Agents its finished Sessions
+   * kept warm for a follow-up message, and waits (a few seconds at most) until each has stopped, so
+   * no Agent process still works in the worktree.
+   */
+  releaseItem(itemId: string): Promise<void>;
 }
+
+/** How long releaseItem waits for an Agent to report its Session stopped. */
+const RELEASE_WAIT_MS = 10_000;
 
 interface Live {
   info: SessionInfo;
@@ -448,12 +457,19 @@ export function createSessionManager({
     widgets.sendCommand(session.info.widgetId, { type: 'agent.interrupt', sessionId: session.info.id });
   };
 
-  /** Tells the Agent to let a Session go (its conversation is not coming back). */
+  /** Sessions whose Agent was told to let go, and who waits for the Agent's `stopped` finish. */
+  const letGo = new Set<string>();
+  const stopWaiters = new Map<string, () => void>();
+
+  /** Tells the Agent to let a Session go (its conversation is not coming back). False when its Widget isn't running. */
   const stopAgent = (info: SessionInfo) => {
+    letGo.add(info.id);
     try {
       widgets.sendCommand(info.widgetId, { type: 'agent.stop', sessionId: info.id });
+      return true;
     } catch {
       // The Agent's Widget is not running: there is nothing to let go.
+      return false;
     }
   };
 
@@ -565,6 +581,7 @@ export function createSessionManager({
       recordDigest(session, { decided: [], changed: [], open: [], summary: event.digest.trim() }, 'session');
     }
     if (event.kind === 'permission_request') onPermissionRequest(session, event);
+    if (event.kind === 'finished' && event.reason === 'stopped') stopWaiters.get(session.info.id)?.();
     if (event.kind === 'finished') {
       session.queue = session.queue
         .then(() => onFinished(session, event))
@@ -831,7 +848,7 @@ export function createSessionManager({
       // The Item's last Session in this Stage, if it ended in a way its Agent can pick up again.
       const last = [...live.values()].filter((s) => s.info.itemId === itemId && s.info.stage === item.stage).at(-1);
       if (last && RESUMABLE.has(last.info.state)) {
-        if (resume && cacheWarm(last.info, Date.parse(last.info.endedAt!))) {
+        if (resume && !letGo.has(last.info.id) && cacheWarm(last.info, Date.parse(last.info.endedAt!))) {
           const { info } = last;
           info.state = 'running';
           delete info.endedAt;
@@ -856,6 +873,24 @@ export function createSessionManager({
       const hash = createHash('sha256');
       for (const artifact of seedArtifacts(item, root)) hash.update(`${artifact.name}\u0000${artifact.content}\u0000`);
       return `${readHead(root) ?? ''} ${hash.digest('hex')}`;
+    },
+    async releaseItem(itemId) {
+      const warm = [...live.values()].filter((s) => s.info.itemId === itemId && s.info.state === 'finished' && !letGo.has(s.info.id));
+      await Promise.all(
+        warm.map(
+          ({ info }) =>
+            new Promise<void>((done) => {
+              const timer = setTimeout(finish, RELEASE_WAIT_MS);
+              function finish() {
+                clearTimeout(timer);
+                stopWaiters.delete(info.id);
+                done();
+              }
+              stopWaiters.set(info.id, finish);
+              if (!stopAgent(info)) finish();
+            }),
+        ),
+      );
     },
     async renew(id, reason) {
       const session = live.get(id);

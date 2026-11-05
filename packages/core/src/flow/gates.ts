@@ -27,7 +27,7 @@ import type { PullRequests } from './pull-requests.ts';
 import type { EventBus } from '../events.ts';
 import { WorkError, type Work } from '../work/work.ts';
 import { specPathOf } from './exit-checker.ts';
-import { coAuthoredCommits, coAuthoredFix, currentBranch, defaultBranch, diffSummary, fileAtHead, mergeBranch, mergeConflicts, removeWorktree, worktreePath } from './git.ts';
+import { coAuthoredCommits, coAuthoredFix, currentBranch, defaultBranch, diffSummary, fileAtHead, git, isMerged, mergeBranch, mergeConflicts, removeWorktree, worktreePath } from './git.ts';
 
 export interface Gates {
   /** The Gate's Stage Session met its Exit: raise the Review Ask and hold the Item until a person answers. */
@@ -68,9 +68,11 @@ export interface GatesDeps {
   policy?: PolicyEngine;
   audit?: AuditLog;
   pullRequests?: PullRequests;
+  /** Lets go of the Agents of the Item's finished Sessions, once their processes have exited. */
+  release?: (itemId: string) => Promise<void>;
 }
 
-export function createGates({ bus, work, asks, dataDir, policy, audit, pullRequests }: GatesDeps): Gates {
+export function createGates({ bus, work, asks, dataDir, policy, audit, pullRequests, release }: GatesDeps): Gates {
   /** Answers are acted on one at a time per Item. */
   const chains = new Map<string, Promise<void>>();
 
@@ -178,8 +180,19 @@ export function createGates({ bus, work, asks, dataDir, policy, audit, pullReque
       });
       return;
     }
-    const commit = await mergeBranch(project.path, branch, `Kiln: merge ${item.title} (${branch})`);
-    await removeWorktree(project.path, worktreePath(dataDir, project.id, item.key), branch);
+    // An earlier answer may have merged and then failed later on: that merge stands, and the rest is done now.
+    const commit = (await isMerged(project.path, branch, base))
+      ? (await git(project.path, 'rev-parse', base)).trim()
+      : await mergeBranch(project.path, branch, `Kiln: merge ${item.title} (${branch})`);
+    // The Item's finished Sessions keep their Agent warm for a follow-up message; after the merge none
+    // is coming, and an Agent's process working in the worktree would keep it from being removed.
+    await release?.(item.id);
+    try {
+      await removeWorktree(project.path, worktreePath(dataDir, project.id, item.key), branch);
+    } catch (err) {
+      // The merge is done, so the Item still moves on; its next Stage makes the stale worktree again.
+      bus.publish('item.cleanup_failed', { itemId: item.id, projectId: item.projectId, branch, error: err instanceof Error ? err.message : String(err) });
+    }
     // The records written in the worktree (a Story's Tickets) are now read from the default branch.
     await work.refresh(project.id);
     const stage = stagesOf(item).find((s) => s.id === item.stage);
@@ -264,6 +277,7 @@ export function createGates({ bus, work, asks, dataDir, policy, audit, pullReque
     const item = work.item(record.itemId);
     const project = work.project(record.projectId);
     if (!item || !project) return;
+    await release?.(item.id);
     await removeWorktree(project.path, worktreePath(dataDir, project.id, item.key), record.branch).catch(() => undefined);
     work.setGated(item.id, false, { quiet: true });
     await work.advance(item.id);

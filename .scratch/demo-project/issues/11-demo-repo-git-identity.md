@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] A fresh demo repo has `user.name` and `user.email` set in its local config
-- [ ] An Agent's commit in a demo worktree succeeds with no global git identity and no `-c` flags
+- [x] A fresh demo repo has `user.name` and `user.email` set in its local config
+- [x] An Agent's commit in a demo worktree succeeds with no global git identity and no `-c` flags

@@ -52,15 +52,26 @@ export async function currentBranch(cwd: string): Promise<string | null> {
 
 /**
  * Makes sure `path` is a worktree of `repo` on `branch`, creating the branch from `base` if it is new.
- * An existing worktree at `path` is reused as it is.
+ * An existing worktree at `path` is reused as it is, unless it is stale: left behind by a merge whose
+ * cleanup failed (its branch holds nothing `base` lacks and is behind it, with nothing uncommitted).
+ * A stale one is made again from `base`; if it still can't be removed, it is reused.
  */
 export async function ensureWorktree(repo: string, path: string, branch: string, base: string): Promise<void> {
+  const stale = async () =>
+    (await isMerged(repo, branch, base)) && !(await isMerged(repo, base, branch));
   if (existsSync(path)) {
-    if (await succeeds(path, 'rev-parse', '--is-inside-work-tree')) return;
-    throw new Error(`${path} exists and is not a worktree`);
+    if (!(await succeeds(path, 'rev-parse', '--is-inside-work-tree'))) throw new Error(`${path} exists and is not a worktree`);
+    if (!(await stale()) || (await uncommitted(path)).length > 0) return;
+    try {
+      await removeWorktree(repo, path, branch);
+    } catch {
+      return;
+    }
   }
   mkdirSync(dirname(path), { recursive: true });
-  if (await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)) {
+  const branchExists = await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`);
+  if (branchExists && (await stale())) await git(repo, 'branch', '-D', branch);
+  if (branchExists && (await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`))) {
     await git(repo, 'worktree', 'add', path, branch);
   } else {
     await git(repo, 'worktree', 'add', '-b', branch, path, base);
@@ -174,11 +185,31 @@ export async function mergeBranch(repo: string, branch: string, message: string)
   return (await git(repo, 'rev-parse', 'HEAD')).trim();
 }
 
-/** Removes a merged Item's worktree and its branch. */
+/** Whether every commit on `branch` is already on `base` (a merge that already happened). */
+export async function isMerged(repo: string, branch: string, base: string): Promise<boolean> {
+  return succeeds(repo, 'merge-base', '--is-ancestor', branch, base);
+}
+
+/** How long removeWorktree keeps trying while a closing process still holds the folder (Windows). */
+const REMOVE_TRIES_MS = [100, 250, 500, 1000, 2000, 3000];
+
+/**
+ * Removes a merged Item's worktree and its branch. On Windows a folder can't be removed while a
+ * process works in it, and an Agent's process that was just told to stop takes a moment to exit,
+ * so a failed removal is tried again for a few seconds before it gives up.
+ */
 export async function removeWorktree(repo: string, path: string, branch: string): Promise<void> {
-  if (existsSync(path)) await git(repo, 'worktree', 'remove', '--force', path);
+  for (let attempt = 0; existsSync(path); attempt++) {
+    try {
+      await git(repo, 'worktree', 'remove', '--force', path);
+    } catch (err) {
+      const wait = REMOVE_TRIES_MS[attempt];
+      if (wait === undefined) throw err;
+      await new Promise((done) => setTimeout(done, wait));
+    }
+  }
   await git(repo, 'worktree', 'prune');
-  await git(repo, 'branch', '-d', branch);
+  if (await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)) await git(repo, 'branch', '-d', branch);
 }
 
 /** Uncommitted changes in `cwd` (porcelain status lines), empty when the tree is clean. */

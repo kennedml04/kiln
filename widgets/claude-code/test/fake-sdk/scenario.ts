@@ -37,6 +37,12 @@ export interface FakeScenario {
   sessionId?: string;
   /** The context window `result.modelUsage` reports for every model. Default 200,000. */
   contextWindow?: number;
+  /**
+   * Run a real child process in the Session's folder for as long as the query is open, as
+   * `claude.exe` does (on Windows it keeps the folder from being removed). It exits `exitDelayMs`
+   * after `close()`, and only then does the query's message stream end.
+   */
+  holdsCwd?: { exitDelayMs?: number };
 }
 
 /** One line of the fake's log (`<scenario>.log`, JSON lines), for tests to check what happened. */
@@ -46,4 +52,6 @@ export type FakeLogEntry =
   | { kind: 'tool'; name: string; input: Record<string, unknown>; outcome: 'ran' | 'denied'; via: 'hook' | 'permission'; message?: string }
   | { kind: 'mcp'; tool: string; result: unknown }
   | { kind: 'interrupt' }
-  | { kind: 'close' };
+  | { kind: 'close' }
+  /** The `holdsCwd` process exited. */
+  | { kind: 'exited'; cwd: string };

@@ -13,9 +13,11 @@ Three parts:
 
 **Blocked by:** None
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] No `claude.exe` is left running in a worktree after its Session finishes, interrupted-and-resumed Sessions included
-- [ ] A worktree held open for a moment is still removed
-- [ ] A merge that succeeded but whose cleanup failed still moves the Item on, or asks the person, and never leaves it stuck
-- [ ] Approving a Gate whose branch is already merged finishes the cleanup and advances, instead of raising the review Ask again
+**As built:** A finished Session's `claude.exe` stays up on purpose, so a follow-up Thread message resumes it while its cache is warm. It is ended when its Item merges instead: the Gate (and `mergeOnExit`) releases the Item's finished Sessions first (`SessionManager.releaseItem`), and the Claude Code Agent's stop closes the query and waits up to 5 s for the process to exit before it reports "stopped". A Session started again under the same id closes the earlier run first. `removeWorktree` retries for about 7 s. A merge whose cleanup still fails publishes `item.cleanup_failed` and moves the Item on; the next `ensureWorktree` on that branch replaces the stale worktree. A branch already merged into the default branch is not merged again.
+
+- [x] No `claude.exe` is left running in a worktree after its Session finishes, interrupted-and-resumed Sessions included (ended at the merge, see above)
+- [x] A worktree held open for a moment is still removed
+- [x] A merge that succeeded but whose cleanup failed still moves the Item on, or asks the person, and never leaves it stuck
+- [x] Approving a Gate whose branch is already merged finishes the cleanup and advances, instead of raising the review Ask again

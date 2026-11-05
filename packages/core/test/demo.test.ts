@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { BudgetInfo, CoreStatus, DemoState, Item, Project, SessionInfo, SetupState, StartResult, WidgetInfo } from '@kiln/widget-sdk';
 import { startTestKiln, type TestKiln } from '@kiln/testing';
@@ -144,4 +144,25 @@ test('starting twice leaves one fresh demo Project, nothing of the first run, an
     return status.pid !== pid ? status : undefined;
   });
   assert.deepEqual(await kiln.api<DemoState>('GET', '/api/demo'), second);
+});
+
+test('the demo repo names its own author, so an Agent can commit in it on a machine with no git identity', async (t) => {
+  const kiln = await startTestKiln(t, { devInstance: true });
+  await chooseModels(kiln);
+  await kiln.api<DemoState>('POST', '/api/demo/start', { mode: 'live' });
+  const demo = (await kiln.api<Project[]>('GET', '/api/projects'))[0]!;
+  const config = (key: string) => execFileSync('git', ['config', key], { cwd: demo.path, encoding: 'utf8' }).trim();
+  assert.equal(config('user.name'), 'Kiln demo');
+  assert.equal(config('user.email'), 'demo@kiln.invalid');
+  assert.equal(execFileSync('git', ['log', '-1', '--format=%an <%ae>'], { cwd: demo.path, encoding: 'utf8' }).trim(), 'Kiln demo <demo@kiln.invalid>');
+
+  // No global or system config: only the repo's own identity is left.
+  const empty = join(kiln.dataDir, 'empty.gitconfig');
+  writeFileSync(empty, '');
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CONFIG_GLOBAL: empty, GIT_CONFIG_NOSYSTEM: '1' };
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) delete env[key];
+  writeFileSync(join(demo.path, 'agent.txt'), 'work\n');
+  execFileSync('git', ['add', 'agent.txt'], { cwd: demo.path, env });
+  execFileSync('git', ['commit', '-q', '-m', 'Agent work'], { cwd: demo.path, env });
+  assert.equal(execFileSync('git', ['log', '-1', '--format=%an'], { cwd: demo.path, encoding: 'utf8', env }).trim(), 'Kiln demo');
 });

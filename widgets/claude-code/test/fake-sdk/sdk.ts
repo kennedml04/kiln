@@ -4,7 +4,7 @@
 // produces, and goes through the Widget's hooks and permission callback the way Claude Code does:
 // a PreToolUse hook's allow runs the tool, its deny blocks it, and ask (or no decision) calls
 // `canUseTool`. Tools really run, so files change and commits land in the worktree.
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { CanUseTool, HookCallbackMatcher, Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -78,6 +78,14 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
   /** Subagent id -> the Agent tool_use id it runs under. */
   const subagents = new Map<string, string>();
   log({ kind: 'options', options: logged(options) });
+  // claude.exe's stand-in: a process working in the Session's folder until the query is closed.
+  const holder = scenario.holdsCwd ? spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { cwd, stdio: 'ignore', windowsHide: true }) : undefined;
+  const holderGone = holder ? new Promise<void>((done) => holder.once('exit', () => (log({ kind: 'exited', cwd }), done()))) : Promise.resolve();
+  const endOnceExited = () => {
+    if (!holder) return out.end();
+    setTimeout(() => holder.kill(), scenario.holdsCwd?.exitDelayMs ?? 0);
+    void holderGone.then(() => out.end());
+  };
 
   const parentOf = (subagent: string | undefined) => (subagent ? (subagents.get(subagent) ?? null) : null);
   const assistant = (content: unknown[], subagent?: string, extra: { model?: string; usage?: FakeUsage } = {}) =>
@@ -293,7 +301,7 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
     } catch (err) {
       out.push({ type: 'result', subtype: 'error_during_execution', is_error: true, errors: [String(err)], total_cost_usd: totalCost, usage: {}, modelUsage: {}, session_id: sessionId });
     }
-    out.end();
+    endOnceExited();
   };
   void play();
 
@@ -312,7 +320,7 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
       log({ kind: 'close' });
       abort.abort();
       onInterrupt?.();
-      out.end();
+      endOnceExited();
     },
     async usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(_request?: { skipBehaviors?: boolean }) {
       if (usageReply === 'unavailable') throw new Error('Usage is not available for this login');

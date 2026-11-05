@@ -148,7 +148,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   // Stages a person moved to another model (a Fable reserve Ask's fallback).
   const stageModels = createStageModels(db);
   const pullRequests = createPullRequests({ db, bus, bridge });
-  const gates = createGates({ bus, work, asks, dataDir: options.dataDir, policy, audit, pullRequests });
+  // `sessions` is made below; a Gate releases an Item's Agents only once the core runs.
+  const gates = createGates({ bus, work, asks, dataDir: options.dataDir, policy, audit, pullRequests, release: (itemId) => sessions.releaseItem(itemId) });
   // The Knowledge store (ticket 10): the markdown folder Digests live in.
   const knowledge = createMovableKnowledgeStore({ root: knowledgeDir, rollupAt: options.digestRollupAt });
   const sessions = createSessionManager({

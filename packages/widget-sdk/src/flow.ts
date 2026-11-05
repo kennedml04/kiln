@@ -144,6 +144,11 @@ export type ItemStageChangedEvent = KilnEvent<'item.stage_changed', { itemId: st
  * and removed its worktree. `stage` is the Stage whose work was merged.
  */
 export type ItemMergedEvent = KilnEvent<'item.merged', { itemId: string; projectId: string; branch: string; into: string; commit: string; stage: string }>;
+/**
+ * The merge went in but the Item's worktree could not be removed (a process still held it, or it is
+ * locked). The Item moves on regardless; the next Session on its branch replaces the stale worktree.
+ */
+export type ItemCleanupFailedEvent = KilnEvent<'item.cleanup_failed', { itemId: string; projectId: string; branch: string; error: string }>;
 /** A rejected Gate whose Stage reworks in place: the Item keeps its Stage and a fresh Session starts there. */
 export type ItemReworkEvent = KilnEvent<'item.rework', { itemId: string; projectId: string; stage: string }>;
 

@@ -371,6 +371,40 @@ test('a running Session reads the quota at an interval, and on stop it closes Cl
   assert.ok(!claude.log().some((e) => e.kind === 'interrupt'));
 });
 
+test("approving the Gate closes each finished Session's Claude Code and waits for it to exit, so the worktree is removed", async (t) => {
+  const kiln = await startTestKiln(t);
+  answerProject(kiln);
+  // Both Sessions play turn 0: the implementer writes and commits, the reviewer finds it all there.
+  const commitIfChanged = { tool: 'Bash', input: { command: 'git add -A && git commit -q --allow-empty -m "Answer"' } };
+  const claude = await installClaudeCode(t, kiln, {
+    holdsCwd: { exitDelayMs: 500 },
+    turns: [
+      [
+        { tool: 'Write', input: { file_path: 'answer.txt', content: '42\n' } },
+        { tool: 'Write', input: { file_path: '.scratch/home-board/reviews/01-draw-the-columns.md', content: '# Review\n\nLooks good.\n' } },
+        commitIfChanged,
+        { text: 'Done.' },
+      ],
+    ],
+  });
+  const { events } = await startTicket(kiln);
+  let ask: AskRaisedEvent;
+  do ask = await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 30_000 });
+  while (ask.payload.ask.type !== 'review');
+  assert.ok(!claude.log().some((e) => e.kind === 'exited'), 'finished Sessions stay warm until the Gate');
+  const worktree = kiln.repo.git('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice('worktree '.length))[1];
+  assert.ok(worktree && existsSync(worktree), 'the Ticket has its worktree');
+
+  const answered = await kiln.request('POST', `/api/asks/${encodeURIComponent(ask.payload.ask.id)}/answer`, { answer: 'Approve' });
+  assert.equal(answered.status, 200);
+  await events.next('item.merged', { timeoutMs: 30_000 });
+  assert.equal(kiln.repo.git('show', 'main:answer.txt'), '42\n');
+  assert.ok(!existsSync(worktree), 'the worktree folder is removed');
+  assert.equal(kiln.repo.git('worktree', 'list').trim().split('\n').length, 1);
+  const log = claude.log();
+  assert.equal(log.filter((e) => e.kind === 'exited').length, log.filter((e) => e.kind === 'options').length, 'every Claude Code process exited');
+});
+
 test('Claude Code runs with no settings files and attribution turned off, so it never asks for a Co-Authored-By trailer', async (t) => {
   const kiln = await startTestKiln(t);
   answerProject(kiln);

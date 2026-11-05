@@ -93,7 +93,12 @@ interface Run {
   quotaTimer?: ReturnType<typeof setInterval>;
   overageBaseline: number | null;
   usingOverage: boolean;
+  /** Settles once Claude Code's message stream has ended, i.e. its process is gone. */
+  done: Promise<void>;
 }
+
+/** How long stop waits for Claude Code's process to exit after closing it. */
+const EXIT_WAIT_MS = 5_000;
 
 /** What the Session is told at the start, after the Stage's prompt. */
 function firstMessage(start: SessionStart): string {
@@ -253,8 +258,20 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       if (!run.stopped) await emit(run, { kind: 'finished', reason: 'error', message: String(err) });
     } finally {
       if (run.quotaTimer) clearInterval(run.quotaTimer);
-      runs.delete(run.session.start.sessionId);
+      if (runs.get(run.session.start.sessionId) === run) runs.delete(run.session.start.sessionId);
     }
+  };
+
+  /** Closes Claude Code and waits (EXIT_WAIT_MS at most) for its process to end. */
+  const closeRun = async (run: Run) => {
+    run.stopped = true;
+    denyPending(run);
+    if (run.quotaTimer) clearInterval(run.quotaTimer);
+    run.input.close();
+    run.query.close();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([run.done, new Promise<void>((done) => (timer = setTimeout(done, EXIT_WAIT_MS)))]);
+    clearTimeout(timer);
   };
 
   return {
@@ -262,6 +279,9 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       const { start } = session;
       const cwd = start.worktree ?? join(deps.dataDir, 'sessions', start.sessionId);
       mkdirSync(cwd, { recursive: true });
+      // A Session started again under the same id: the Claude Code an earlier start left must not linger.
+      const earlier = runs.get(start.sessionId);
+      if (earlier) void closeRun(earlier);
       const input = inputQueue();
       const run = {
         session,
@@ -274,11 +294,11 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
         permissions: new Map(),
         overageBaseline: null,
         usingOverage: false,
-      } as Omit<Run, 'query'> as Run;
+      } as Omit<Run, 'query' | 'done'> as Run;
       run.query = sdk.query({ prompt: input, options: optionsFor(run, start, cwd) });
       runs.set(start.sessionId, run);
       send(run, firstMessage(start));
-      void play(run);
+      run.done = play(run);
       void pollQuota(run);
       run.quotaTimer = setInterval(() => void pollQuota(run), config.quotaIntervalMs ?? QUOTA_INTERVAL_MS);
       run.quotaTimer.unref();
@@ -326,12 +346,10 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
     async stop(sessionId) {
       const run = runs.get(sessionId);
       if (!run || run.stopped) return;
-      run.stopped = true;
-      denyPending(run);
       if (run.quotaTimer) clearInterval(run.quotaTimer);
       await pollQuota(run);
-      run.input.close();
-      run.query.close();
+      // Kiln may remove the worktree as soon as it hears "stopped", so the process goes first.
+      await closeRun(run);
       await emit(run, { kind: 'finished', reason: 'stopped' });
     },
   };
