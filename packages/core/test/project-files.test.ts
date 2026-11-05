@@ -305,6 +305,32 @@ test('modules in .kiln/settings.json resolve from the Project own .kiln/modules 
   ]);
 });
 
+test('a module whose needed Widget is not installed is a Project error naming it, gone once it is installed; so is a skill with no folder', async (t) => {
+  const kiln = await startTestKiln(t);
+  commitKilnFile(kiln, 'modules/print/kiln-module.json', {
+    id: 'print',
+    name: '3D print',
+    description: 'Slice and print',
+    needs: { widgets: ['fake-agent'] },
+    skills: ['slicing'],
+  });
+  commitKilnFile(kiln, 'settings.json', { modules: ['print'] });
+
+  const project = await register(kiln);
+  assert.deepEqual(project.errors, [
+    { file: '.kiln/settings.json', at: 'modules[0]', message: 'The "print" module needs the "fake-agent" Widget, which isn\'t installed. Install it from Widgets.' },
+    { file: '.kiln/settings.json', at: 'modules[0]', message: 'The "print" module lists the skill "slicing", but it has no skills/slicing/SKILL.md' },
+  ]);
+
+  const events = await kiln.events();
+  await kiln.installFakeAgent();
+  const installed = await projectUpdated(events);
+  assert.deepEqual(installed.errors.map((e) => e.message), ['The "print" module lists the skill "slicing", but it has no skills/slicing/SKILL.md']);
+
+  commitKilnFile(kiln, 'modules/print/skills/slicing/SKILL.md', '---\nname: slicing\ndescription: Slice a part\n---\nSlice it.\n');
+  assert.deepEqual((await projectUpdated(events)).errors, []);
+});
+
 test('a Project with no modules field behaves as before: the default Workflow, no errors, no modules setting', async (t) => {
   const kiln = await startTestKiln(t);
   commitKilnFile(kiln, 'settings.json', { testCommand: 'npm test' });

@@ -42,6 +42,8 @@ import type { PolicyEngine, PolicyScope } from '../policy/policy.ts';
 import type { EventBus } from '../events.ts';
 import { WidgetHostError, type WidgetHost } from '../widget-host.ts';
 import { WorkError, type Work } from '../work/work.ts';
+import { readProjectFiles } from '../work/project-files.ts';
+import { moduleSessionKit } from '../work/skills.ts';
 import { checkExit, exitFeedback, grillPathOf, specPathOf } from './exit-checker.ts';
 import { findingsPathOf, type Gates } from './gates.ts';
 import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
@@ -783,6 +785,8 @@ export function createSessionManager({
       // Never the Agent tool's own default: the Budget guard holds such an Item before it gets here.
       if (!model) throw new WorkError(409, `${item.title}'s ${stage.name} Stage names no model, and neither does its Agent`);
       const sessionPolicy = policy.effective({ project, kind: item.kind, stage: stage.id });
+      // The Project's modules as they stand now: the Session keeps these skills and servers to the end.
+      const kit = moduleSessionKit(readProjectFiles(project.path).modules);
       let worktree: string | null = null;
       let branch: string | null = null;
       let base: string | null = null;
@@ -828,6 +832,8 @@ export function createSessionManager({
           worktree,
           kilnTools: { url: kilnToolsUrl(), headers: { authorization: `Bearer ${toolsToken}` } },
           policy: sessionPolicy,
+          ...(kit.skills.length ? { skills: kit.skills } : {}),
+          ...(Object.keys(kit.mcpServers).length ? { mcpServers: kit.mcpServers } : {}),
         },
       });
       for (const text of held.get(itemId) ?? []) send(info, text, 'person');

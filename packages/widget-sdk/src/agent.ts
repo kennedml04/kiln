@@ -1,5 +1,6 @@
 // The Agent interface (ADR 0004). The core knows Agents only through this.
 // Commands flow core -> Agent Widget; events flow Agent Widget -> core.
+import type { ModuleMcpServer } from './module.ts';
 import type { EffectivePolicy } from './policy.ts';
 
 /** Everything a fresh Session starts from. */
@@ -19,6 +20,28 @@ export interface SessionStart {
   policy?: EffectivePolicy;
   /** The Kiln tools for this Session: an MCP server scoped to the Session's own Item (see kiln-tools.ts). */
   kilnTools?: KilnToolsEndpoint;
+  /**
+   * The skills the Session runs with, decided by the core. Give the Agent exactly these: copy or
+   * link the folders into the Session's own config, never into the worktree, and load nothing else
+   * from them (no settings, hooks or permissions). A skill is instructions, not a grant.
+   */
+  skills?: SessionSkill[];
+  /**
+   * MCP servers from the Project's modules, by server name, in the Claude Code entry shape. Their
+   * tool calls go through `policy` like any other tool. The `kiln` server is always Kiln's own.
+   */
+  mcpServers?: Record<string, ModuleMcpServer>;
+}
+
+/** One skill a Session runs with: a folder holding `SKILL.md` (and whatever files it refers to). */
+export interface SessionSkill {
+  name: string;
+  /** Where it comes from: `module:<id>` for a module's own skill folder (later a Skill repo, or the Project). */
+  source: string;
+  /** The commit the folder is at, when its source is a pinned checkout; null when it is not. */
+  commit: string | null;
+  /** The skill's folder. Read-only to the Agent Widget. */
+  folder: string;
 }
 
 /**

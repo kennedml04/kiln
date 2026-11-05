@@ -52,7 +52,7 @@ export interface Module {
   /** The wizard presets that tick it, e.g. "Software", "Printed part". */
   presets?: string[];
   needs?: { widgets?: string[] };
-  /** Skill names. Until Skill repos land, each is a skill folder inside the module. */
+  /** Skill names. Until Skill repos land, each is a skill folder inside the module: `skills/<name>/SKILL.md`. */
   skills?: string[];
   /** Claude Code MCP server entries, by server name. */
   mcpServers?: Record<string, ModuleMcpServer>;

@@ -135,7 +135,10 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   // Tracker and pull-request Widgets (ticket 24) answer the core's requests through the bridge. It
   // exists before Work, which opens the stored Projects (and their Trackers) at once.
   const bridge = createWidgetBridge({ bus, host: widgets, widgets: () => installs.list() });
-  const work = createWork(db, bus, { widgetTracker: (project) => createWidgetTracker(bridge, project) });
+  const work = createWork(db, bus, {
+    widgetTracker: (project) => createWidgetTracker(bridge, project),
+    installedWidgets: () => installs.list().map((w) => w.id),
+  });
   const policy = createPolicyEngine({
     db,
     bus,

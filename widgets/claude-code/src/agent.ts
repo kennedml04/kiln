@@ -8,6 +8,7 @@ import type { CanUseTool, HookCallback, Options, PermissionResult, Query, SDKUse
 import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
 import { ORG_POLICY_DEFAULT } from '@kiln/widget-sdk';
 import { requestFor } from './permissions.ts';
+import { buildSkillsPlugin, removeSessionConfig, sessionConfigDir } from './skills.ts';
 import { overageCredits, readingFromRateLimit, readingsFromUsage, type UsageReply } from './quota.ts';
 import { createUsageTracker } from './usage.ts';
 
@@ -95,6 +96,8 @@ interface Run {
   usingOverage: boolean;
   /** Settles once Claude Code's message stream has ended, i.e. its process is gone. */
   done: Promise<void>;
+  /** The Session's own config folder (its skills plugin), removed when it stops. */
+  configDir: string;
 }
 
 /** How long stop waits for Claude Code's process to exit after closing it. */
@@ -170,9 +173,12 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
 
   const optionsFor = (run: Run, start: SessionStart, cwd: string): Options => {
     const policy: EffectivePolicy = start.policy ?? { actions: { ...ORG_POLICY_DEFAULT }, rules: [], knownCommands: [] };
+    // The module skills go in the Session's own config folder, never the repo.
+    const skills = buildSkillsPlugin(run.configDir, start.skills ?? []);
+    const skillFolders = skills?.folders ?? [];
     const hook: HookCallback = async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return {};
-      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>);
+      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, skillFolders);
       const decision = request?.decision ?? 'allow';
       return {
         hookSpecificOutput: {
@@ -183,7 +189,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       };
     };
     const canUseTool: CanUseTool = async (toolName, input, { signal }): Promise<PermissionResult> => {
-      const request = requestFor(policy, cwd, toolName, input);
+      const request = requestFor(policy, cwd, toolName, input, skillFolders);
       const decision = request?.decision ?? 'allow';
       if (decision === 'allow') return { behavior: 'allow', updatedInput: input };
       if (decision === 'deny' || !request) return { behavior: 'deny', message: `Kiln's Policy denies ${request?.action}: ${request?.detail}` };
@@ -210,7 +216,12 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       settings: { attribution: { commit: '', pr: '' } },
       hooks: { PreToolUse: [{ hooks: [hook], onFailure: 'block' }] },
       canUseTool,
-      mcpServers: start.kilnTools ? { kiln: { type: 'http', url: start.kilnTools.url, headers: start.kilnTools.headers } } : {},
+      // The modules' servers, then Kiln's own, which no module can replace. Their tool calls pass the same hook.
+      mcpServers: {
+        ...(start.mcpServers ?? {}),
+        ...(start.kilnTools ? { kiln: { type: 'http', url: start.kilnTools.url, headers: start.kilnTools.headers } } : {}),
+      },
+      ...(skills ? { plugins: [skills.plugin] } : {}),
       systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(start, cwd) },
       env: claudeEnv(),
       ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
@@ -294,6 +305,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
         permissions: new Map(),
         overageBaseline: null,
         usingOverage: false,
+        configDir: sessionConfigDir(deps.dataDir, start.sessionId),
       } as Omit<Run, 'query' | 'done'> as Run;
       run.query = sdk.query({ prompt: input, options: optionsFor(run, start, cwd) });
       runs.set(start.sessionId, run);
@@ -350,6 +362,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       await pollQuota(run);
       // Kiln may remove the worktree as soon as it hears "stopped", so the process goes first.
       await closeRun(run);
+      void removeSessionConfig(run.configDir);
       await emit(run, { kind: 'finished', reason: 'stopped' });
     },
   };

@@ -20,6 +20,7 @@ import { DEFAULT_WORKFLOW } from './default-workflow.ts';
 import { effectiveWorkflow } from './effective-workflow.ts';
 import { createMarkdownTracker } from './markdown-tracker.ts';
 import { readProjectFiles, watchProjectFiles } from './project-files.ts';
+import { moduleProblems } from './skills.ts';
 import { initialiseRepo, repoProblem } from './repo-check.ts';
 
 /** A request the caller got wrong; `status` is the HTTP status to answer with. */
@@ -117,18 +118,24 @@ type ProjectBase = Pick<Project, 'id' | 'name' | 'path' | 'registeredAt'>;
  * The Workflow in force is the effective one: that Workflow with the Project's modules applied. When
  * the modules make it invalid, the Project keeps `previous` (the Workflow it had), else runs without them.
  */
-function withFiles(base: ProjectBase, last: Workflow | undefined, previous?: Workflow): Project {
+function withFiles(
+  base: ProjectBase,
+  last: Workflow | undefined,
+  previous?: Workflow,
+  installedWidgets?: string[],
+): Project {
   const files = readProjectFiles(base.path);
   const own = files.workflow ?? (files.hasWorkflowFile ? last : undefined);
   const effective = effectiveWorkflow(own ?? DEFAULT_WORKFLOW, files.modules);
   const failed = Array.isArray(effective);
+  const errors = [...files.errors, ...moduleProblems(files.modules, files.settings.modules ?? [], installedWidgets)];
   const project: Project = {
     ...base,
     tracker: files.settings.tracker ?? 'markdown',
     workflow: failed ? (previous ?? own ?? DEFAULT_WORKFLOW) : effective,
     workflowSource: own ? 'file' : 'default',
     settings: files.settings,
-    errors: failed ? [...files.errors, ...effective] : files.errors,
+    errors: failed ? [...errors, ...effective] : errors,
   };
   if (own) ownWorkflows.set(project, own);
   return project;
@@ -201,6 +208,8 @@ function toItems(project: Project, records: TrackerItem[], marks: Marks): Map<st
 export interface WorkOptions {
   /** The Tracker of a Project whose `tracker` setting is not the built-in markdown one (a Widget's). */
   widgetTracker?: (project: () => Project) => Tracker;
+  /** The ids of the installed Widgets, so a module that needs a missing one is a Project error. Unset: not checked. */
+  installedWidgets?: () => string[];
 }
 
 export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions = {}): Work {
@@ -209,6 +218,8 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   const unregisterHooks: ((project: Project) => void | Promise<void>)[] = [];
   const deleteProject = db.prepare('DELETE FROM projects WHERE id = ?');
   const marks: Marks = { runs: new Map(), upNext: new Set(), gated: new Set() };
+  const projectOf = (base: ProjectBase, last: Workflow | undefined, previous?: Workflow) =>
+    withFiles(base, last, previous, options.installedWidgets?.());
   const insertProject = db.prepare(
     'INSERT INTO projects (id, name, path, tracker, workflow, workflow_from_file, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
@@ -270,7 +281,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
 
   /** Re-reads the Project's `.kiln` files; when they changed it, publishes `project.updated` and re-reads its Items. */
   const reload = (entry: Entry) => {
-    const next = withFiles(entry.project, ownWorkflows.get(entry.project), entry.project.workflow);
+    const next = projectOf(entry.project, ownWorkflows.get(entry.project), entry.project.workflow);
     if (JSON.stringify(next) === JSON.stringify(entry.project)) return;
     const trackerChanged = next.tracker !== entry.project.tracker;
     entry.project = next;
@@ -314,9 +325,15 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   const rows = db.prepare('SELECT * FROM projects ORDER BY registered_at, id').all() as unknown as ProjectRow[];
   for (const row of rows) {
     const base = { id: row.id, name: row.name, path: row.path, registeredAt: row.registered_at };
-    const project = withFiles(base, row.workflow_from_file ? (JSON.parse(row.workflow) as Workflow) : undefined);
+    const project = projectOf(base, row.workflow_from_file ? (JSON.parse(row.workflow) as Workflow) : undefined);
     store(project);
     void open(project, true);
+  }
+  // A module's needed Widget may have come or gone: the Projects' errors say so at once.
+  if (options.installedWidgets) {
+    bus.subscribe((event) => {
+      if (event.type === 'widget.installed' || event.type === 'widget.removed') for (const e of entries.values()) reload(e);
+    });
   }
 
   const entry = (projectId: string) => {
@@ -382,9 +399,9 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       if (options?.id !== undefined && entries.has(id)) throw new WorkError(409, `A Project with the id "${id}" is already registered`);
       for (let n = 2; entries.has(id); n++) id = `${slugify(name)}-${n}`;
       const base = { id, name, path, registeredAt: new Date().toISOString() };
-      for (const hook of registerHooks) await hook(withFiles(base, undefined));
+      for (const hook of registerHooks) await hook(projectOf(base, undefined));
       // Read after the hooks: they may write Kiln files (the Project Policy template).
-      const project = withFiles(base, undefined);
+      const project = projectOf(base, undefined);
       insertProject.run(id, name, path, project.tracker, '{}', 0, project.registeredAt);
       store(project);
       const opened = await open(project, true);

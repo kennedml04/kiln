@@ -28,6 +28,8 @@ const HARMLESS = new Set([
   'EnterPlanMode',
   'ExitPlanMode',
   'ToolSearch',
+  // Loads one of the Session's skills: instructions, not a grant (what it says to run is still checked).
+  'Skill',
   'WaitForMcpServers',
   'ListMcpResourcesTool',
   'ReadMcpResourceTool',
@@ -111,13 +113,27 @@ const RANK: Record<PolicyDecision, number> = { allow: 0, ask: 1, deny: 2 };
 
 /**
  * What a tool call amounts to and what the Policy says about it. `undefined` means the tool needs
- * no Kiln decision (it is harmless or a Kiln tool); a tool Kiln does not know asks.
+ * no Kiln decision (it is harmless or a Kiln tool); a tool Kiln does not know asks. `skillFolders`
+ * are the Session's own skill copies: reading them needs no decision.
  */
-export function requestFor(policy: EffectivePolicy, worktree: string, tool: string, input: Record<string, unknown>): ToolRequest | undefined {
+export function requestFor(
+  policy: EffectivePolicy,
+  worktree: string,
+  tool: string,
+  input: Record<string, unknown>,
+  skillFolders: string[] = [],
+): ToolRequest | undefined {
   if (HARMLESS.has(tool) || tool.startsWith('mcp__kiln__')) return undefined;
   if (AROUND_KILN[tool]) return { action: 'other_commands', detail: `${tool}: ${AROUND_KILN[tool]}`, decision: 'deny' };
+  // A module's MCP server: its calls are checked like a command, so rules can name a server's
+  // tools (`mcp__<server>__*`) and the action's rule covers the rest.
+  if (tool.startsWith('mcp__')) {
+    const detail = `${tool} ${JSON.stringify(input)}`;
+    return { action: 'other_commands', detail, decision: decide(policy, 'other_commands', detail) };
+  }
   if (READS.has(tool) || WRITES.has(tool)) {
     const target = resolve(worktree, pathOf(input) ?? '.');
+    if (READS.has(tool) && skillFolders.some((folder) => inside(samePathCase(folder), samePathCase(target)))) return undefined;
     const action: PolicyAction = !inside(samePathCase(worktree), samePathCase(target)) ? 'outside_worktree' : READS.has(tool) ? 'worktree_read' : 'worktree_write';
     const detail = action === 'outside_worktree' ? target : relative(worktree, target).split('\\').join('/') || '.';
     return { action, detail, decision: decide(policy, action, detail) };
