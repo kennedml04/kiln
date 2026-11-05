@@ -189,6 +189,11 @@
       "action": "other_commands",
       "match": "sed -n 160,215p packages/widget-sdk/src/work.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd .",
+      "decision": "allow"
     }
   ]
 }
