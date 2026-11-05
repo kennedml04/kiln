@@ -324,6 +324,11 @@
       "action": "other_commands",
       "match": "$p='packages/core/src/flow/session-manager.ts'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat .scratch/local-first/issues/08-escalate-to-cloud-on-failure.md",
+      "decision": "allow"
     }
   ]
 }
