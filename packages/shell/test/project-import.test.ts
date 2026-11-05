@@ -116,8 +116,11 @@ test('Import works at phone width', async (t) => {
 test('the Knowledge store folder in Settings uses the folder browser, and Settings saves the browse roots', async (t) => {
   const kiln = await startTestKiln(t);
   const { root, notes } = browseRoot(t);
-  const page = await openShell(t, kiln, '/settings');
+  // Reached by clicking, as a person would: loading /settings directly timed out under a full parallel run.
+  const page = await openShell(t, kiln);
+  await page.getByRole('link', { name: 'Settings' }).click();
   const form = page.getByRole('form', { name: 'Folders' });
+  await form.waitFor({ timeout: 60_000 });
 
   await form.getByLabel('Add a browse root').fill(root);
   await form.getByRole('button', { name: 'Add root' }).click();
