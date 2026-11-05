@@ -1,0 +1,8 @@
+{
+  "actions": {
+    "other_commands": "ask",
+    "network": "ask",
+    "external_writes": "ask"
+  },
+  "rules": []
+}

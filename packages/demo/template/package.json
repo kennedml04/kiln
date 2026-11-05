@@ -1,0 +1,10 @@
+{
+  "name": "kiln-demo-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A toy project for trying Kiln: a few string helpers.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -12,9 +12,9 @@ The folder is copied verbatim and is not a workspace package. See "The template"
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `node --test` passes in a fresh copy of the template
-- [ ] The monorepo's install and tests ignore the template's `package.json`
-- [ ] The template is registered as a Project by a test core, and its markdown Tracker reads exactly one Story, "Add `slugify(title)`", at Grill
-- [ ] The two open questions are in the Story body, so a real griller raises them in Live
+- [x] `node --test` passes in a fresh copy of the template
+- [x] The monorepo's install and tests ignore the template's `package.json`
+- [x] The template is registered as a Project by a test core, and its markdown Tracker reads exactly one Story, "Add `slugify(title)`", at Grill
+- [x] The two open questions are in the Story body, so a real griller raises them in Live
