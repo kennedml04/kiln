@@ -3,7 +3,7 @@
 // has the Exit checked when the Agent finishes. A met Exit moves the Item; a missing one goes back
 // to the Session as feedback.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -88,6 +88,11 @@ export interface SessionManager {
   release(id: string, reason: string): void;
   /** Ends a live Session (its Agent stops it; it becomes `stopped`). */
   stop(id: string): void;
+  /**
+   * For a Project being unregistered: stops its live Sessions (saying `reason` in their Threads),
+   * removes the worktrees and branches its Sessions made, and forgets its Sessions.
+   */
+  removeProject(project: Project, reason: string): Promise<void>;
   /** Shows a Session's live usage on it and its Item. */
   noteUsage(id: string, usage: SessionUsage): void;
   /**
@@ -289,6 +294,8 @@ export function createSessionManager({
   );
   const updateRow = db.prepare('UPDATE sessions SET state = ?, exit = ?, ended_at = ? WHERE id = ?');
   const selectAll = db.prepare('SELECT * FROM sessions ORDER BY started_at, id');
+  const selectProject = db.prepare('SELECT * FROM sessions WHERE project_id = ?');
+  const deleteProject = db.prepare('DELETE FROM sessions WHERE project_id = ?');
 
   // Sessions a previous core process was running cannot continue: their Agent processes are gone.
   db.prepare(`UPDATE sessions SET state = 'stopped', ended_at = ? WHERE state IN ('running', 'paused', 'waiting')`).run(new Date().toISOString());
@@ -948,6 +955,31 @@ export function createSessionManager({
       const info = live.get(id)?.info;
       if (!info || !ACTIVE.has(info.state)) return;
       widgets.sendCommand(info.widgetId, { type: 'agent.stop', sessionId: id });
+    },
+    async removeProject(project, reason) {
+      const sessions = [...live.values()].filter((s) => s.info.projectId === project.id);
+      for (const session of sessions) {
+        const { info } = session;
+        clearTimeout(session.idleTimer);
+        holds.delete(info.id);
+        await session.queue;
+        if (!ACTIVE.has(info.state)) continue;
+        bus.publish('session.message', { ...ref(info), from: 'kiln', text: `Kiln stopped this Session: ${reason}` });
+        stopAgent(info);
+        await end(session, 'stopped', reason);
+      }
+      // Every worktree and branch Kiln made for the Project: one per Item, named by its Sessions.
+      const rows = selectProject.all(project.id) as unknown as SessionRow[];
+      const made = new Map(rows.filter((r) => r.worktree && r.branch).map((r) => [r.worktree!, r.branch!]));
+      for (const [worktree, branch] of made) {
+        if (existsSync(worktree)) await git(project.path, 'worktree', 'remove', '--force', worktree).catch(() => undefined);
+        await git(project.path, 'worktree', 'prune').catch(() => undefined);
+        // Unmerged work goes too: the Project is leaving Kiln.
+        await git(project.path, 'branch', '-D', branch).catch(() => undefined);
+      }
+      rmSync(join(dataDir, 'worktrees', project.id), { recursive: true, force: true });
+      for (const session of sessions) live.delete(session.info.id);
+      deleteProject.run(project.id);
     },
     noteUsage(id, usage) {
       const info = live.get(id)?.info;

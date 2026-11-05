@@ -9,6 +9,7 @@ import {
   type Item,
   type ItemStageChangedEvent,
   type Pool,
+  type ProjectRemovedEvent,
   type QueueEntry,
   type SchedulerState,
   type SessionInfo,
@@ -222,6 +223,14 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       }
     } else if (event.type === 'widget.ready' || event.type === 'widget.approved') {
       void dispatch();
+    } else if (event.type === 'project.removed') {
+      // An unregistered Project's Items leave Up next, so none starts if the folder is registered again.
+      const { projectId } = (event as ProjectRemovedEvent).payload;
+      for (const entry of queue().filter((e) => e.projectId === projectId)) {
+        deleteEntry.run(entry.itemId);
+        attended.delete(entry.itemId);
+      }
+      publish();
     } else if (event.type === 'item.stage_changed' || event.type === 'item.rework') {
       // An Item entering a Stage that runs a Session (its Exit was met, or a Gate sent it back, maybe
       // to the Gate's own Stage) joins the queue by itself; nobody has to press Start.

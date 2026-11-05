@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Item, ItemCreatedEvent, ItemUpdatedEvent, Project, WorkSnapshotEvent } from '@kiln/widget-sdk';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import type {
+  Item,
+  ItemCreatedEvent,
+  ItemUpdatedEvent,
+  Project,
+  ProjectRemovedEvent,
+  SessionMessageEvent,
+  SessionUpdatedEvent,
+  StartResult,
+  WorkSnapshotEvent,
+} from '@kiln/widget-sdk';
 import { startTestKiln } from '@kiln/testing';
 import { readRepoFile, seedScratch, writeRepoFile } from '@kiln/testing/scratch';
 
@@ -148,6 +160,52 @@ test('editing an Item file in the repo raises an update with the new Stage', asy
   const updated = await events.next<ItemUpdatedEvent>('item.updated');
   assert.equal(updated.payload.item.title, 'Home board');
   assert.equal(updated.payload.item.stage, 'tickets');
+});
+
+test('unregistering a Project stops its running Session, removes its worktrees and Items, and leaves the folder to register again', async (t) => {
+  const kiln = await startTestKiln(t);
+  await kiln.installFakeAgent({
+    script: [
+      { do: 'write', path: 'feature.txt', content: 'columns\n' },
+      { do: 'commit', message: 'Draw the columns' },
+      { do: 'wait_for_message' },
+    ],
+  });
+  seedScratch(kiln.repo);
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const ticket = byTitle(await kiln.api<Item[]>('GET', `/api/projects/${project.id}/items`), 'Draw the columns');
+  const events = await kiln.events();
+  const { session } = await kiln.api<StartResult>('POST', `/api/items/${encodeURIComponent(ticket.id)}/start`);
+  await events.next('session.progress', { timeoutMs: 15_000 }); // wrote
+  await events.next('session.progress', { timeoutMs: 15_000 }); // committed, now waiting for a message
+  assert.ok(session?.worktree && session.branch && existsSync(session.worktree));
+
+  await kiln.unregisterProject(project.id);
+
+  let stopped: SessionUpdatedEvent;
+  do stopped = await events.next<SessionUpdatedEvent>('session.updated');
+  while (stopped.payload.session.state !== 'stopped');
+  assert.equal(stopped.payload.session.id, session.id);
+  const why = await events.next<SessionMessageEvent>('session.message');
+  assert.equal(why.payload.sessionId, session.id);
+  assert.match(why.payload.text, /^Kiln stopped this Session: .*unregistered/);
+  const removed = await events.next<ProjectRemovedEvent>('project.removed');
+  assert.equal(removed.payload.projectId, project.id);
+
+  assert.ok(!existsSync(session.worktree), 'the Session worktree is gone');
+  assert.equal(kiln.repo.git('worktree', 'list', '--porcelain').match(/^worktree /gm)?.length, 1, 'only the main checkout is left');
+  assert.equal(kiln.repo.git('branch', '--list', session.branch).trim(), '', 'the Session branch is gone');
+  assert.ok(existsSync(join(kiln.repo.path, '.scratch')), 'the repo folder is left in place');
+  assert.deepEqual(await kiln.api<Project[]>('GET', '/api/projects'), []);
+  assert.deepEqual(await kiln.api<Item[]>('GET', '/api/items'), []);
+  const fresh = await kiln.events();
+  const snapshot = await fresh.next<WorkSnapshotEvent>('work.snapshot');
+  assert.deepEqual([snapshot.payload.projects, snapshot.payload.items], [[], []]);
+
+  const again = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const items = await kiln.api<Item[]>('GET', `/api/projects/${again.id}/items`);
+  assert.equal(items.length, 4);
+  assert.equal(byTitle(items, 'Draw the columns').run, undefined, 'the new Project keeps no Session of the old one');
 });
 
 test('a Ticket file added to the repo appears as a new child of its Story', async (t) => {

@@ -4,10 +4,12 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unregistering a Project with a running Session stops that Session first and records why in its Thread
-- [ ] The Project's Kiln worktrees are removed; the repo folder itself is left in place
-- [ ] The DB row is gone, `project.removed` is published, and the Project's Items no longer appear on the all-Projects board
-- [ ] The same folder can be registered again afterwards as a new Project
-- [ ] Tests in `packages/core/test/projects.test.ts`
+- [x] Unregistering a Project with a running Session stops that Session first and records why in its Thread
+- [x] The Project's Kiln worktrees are removed; the repo folder itself is left in place
+- [x] The DB row is gone, `project.removed` is published, and the Project's Items no longer appear on the all-Projects board
+- [x] The same folder can be registered again afterwards as a new Project
+- [x] Tests in `packages/core/test/projects.test.ts`
+
+Tests reach `work.unregister` through a test-only route, `POST /api/test/projects/:id/unregister` (test cores only), via `kiln.unregisterProject(id)` in the harness. The Project's Session rows and Up next entries go with it, so a re-registered folder starts clean; its Digests in the Knowledge store and its past events stay.

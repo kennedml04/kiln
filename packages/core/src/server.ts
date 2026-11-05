@@ -167,6 +167,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     budgetOf: (model) => usage.budgets().find((b) => b.models.includes(model))?.id,
     kilnToolsUrl: () => `http://127.0.0.1:${port}${KILN_TOOLS_PATH}`,
   });
+  work.onUnregister((project) => sessions.removeProject(project, `the Project "${project.name}" was unregistered`));
   const panels = createWidgetPanels({ bus, host: widgets, widgets: () => installs.list() });
   // Pools come from approved Widgets' Manifests and from Budget kinds (local: gpu); the smaller size holds.
   const grantedPools = () => {
@@ -445,6 +446,12 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (route === 'POST /api/core/restart-when-idle') return sendJson(res, 202, restart.request());
       if (route === 'DELETE /api/core/restart-when-idle') {
         return restart.cancel() ? sendJson(res, 200, { cancelled: true }) : sendJson(res, 409, { error: 'No restart is pending' });
+      }
+      // `work.unregister` has no general route (the demo is its only caller); tests reach it here.
+      const testUnregister = /^\/api\/test\/projects\/([^/]+)\/unregister$/.exec(url.pathname);
+      if (testUnregister && req.method === 'POST' && options.testMode) {
+        await work.unregister(decodeURIComponent(testUnregister[1]!));
+        return sendJson(res, 200, { unregistered: true });
       }
       if (route === 'POST /api/test/echo' && options.testMode) {
         return sendJson(res, 200, bus.publish('test.echo', await readJson(req)));

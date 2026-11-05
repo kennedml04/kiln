@@ -33,6 +33,14 @@ export interface Work {
   register(request: RegisterProjectRequest): Promise<Project>;
   /** Runs before a newly registered Project opens (e.g. writing its Project Policy template). */
   onRegister(hook: (project: Project) => void | Promise<void>): void;
+  /**
+   * Removes a Project from Kiln: the unregister hooks run first (stopping its Sessions, removing its
+   * worktrees), then its DB row goes, `item.removed` goes out for each of its Items and
+   * `project.removed` last. Its repo folder is left alone; the same folder can be registered again.
+   */
+  unregister(projectId: string): Promise<void>;
+  /** Runs while a Project is being unregistered, before it is gone (e.g. stopping its Sessions). */
+  onUnregister(hook: (project: Project) => void | Promise<void>): void;
   projects(): Project[];
   project(id: string): Project | undefined;
   /** Every Item, or one Project's. */
@@ -178,6 +186,8 @@ export interface WorkOptions {
 export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions = {}): Work {
   const entries = new Map<string, Entry>();
   const registerHooks: ((project: Project) => void | Promise<void>)[] = [];
+  const unregisterHooks: ((project: Project) => void | Promise<void>)[] = [];
+  const deleteProject = db.prepare('DELETE FROM projects WHERE id = ?');
   const marks: Marks = { runs: new Map(), upNext: new Set(), gated: new Set() };
   const insertProject = db.prepare(
     'INSERT INTO projects (id, name, path, tracker, workflow, workflow_from_file, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -351,6 +361,23 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
     },
     onRegister(hook) {
       registerHooks.push(hook);
+    },
+    async unregister(projectId) {
+      const target = entry(projectId);
+      for (const hook of unregisterHooks) await hook(view(target.project));
+      target.unwatch();
+      await target.refreshing;
+      entries.delete(projectId);
+      deleteProject.run(projectId);
+      const prefix = `${projectId}/`;
+      for (const id of marks.runs.keys()) if (id.startsWith(prefix)) marks.runs.delete(id);
+      for (const id of marks.upNext) if (id.startsWith(prefix)) marks.upNext.delete(id);
+      for (const id of marks.gated) if (id.startsWith(prefix)) marks.gated.delete(id);
+      for (const id of target.items.keys()) bus.publish('item.removed', { id, projectId });
+      bus.publish('project.removed', { projectId });
+    },
+    onUnregister(hook) {
+      unregisterHooks.push(hook);
     },
     projects: () => [...entries.values()].map((e) => view(e.project)),
     project: (id) => {

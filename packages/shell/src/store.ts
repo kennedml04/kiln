@@ -20,6 +20,7 @@ import type {
   PanelView,
   Project,
   ProjectRegisteredEvent,
+  ProjectRemovedEvent,
   ProjectUpdatedEvent,
   SchedulerState,
   SchedulerUpdatedEvent,
@@ -145,6 +146,12 @@ function apply(event: KilnEvent) {
     case 'project.updated': {
       const { project } = (event as ProjectRegisteredEvent | ProjectUpdatedEvent).payload;
       return update({ projects: { ...state.projects, [project.id]: project }, lastEvent: event });
+    }
+    case 'project.removed': {
+      const { projectId } = (event as ProjectRemovedEvent).payload;
+      const { [projectId]: _removed, ...projects } = state.projects;
+      const items = Object.fromEntries(Object.entries(state.items).filter(([, i]) => i.projectId !== projectId));
+      return update({ projects, items, lastEvent: event });
     }
     case 'item.created':
     case 'item.updated': {

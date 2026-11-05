@@ -174,6 +174,8 @@ export interface Tracker {
 /** Sent on every SSE connection, after `core.hello` and any replayed events: the current Work state. */
 export type WorkSnapshotEvent = KilnEvent<'work.snapshot', { projects: Project[]; items: Item[] }>;
 export type ProjectRegisteredEvent = KilnEvent<'project.registered', { project: Project }>;
+/** A Project was unregistered. Its Items' `item.removed` events go out first; its repo folder is left alone. */
+export type ProjectRemovedEvent = KilnEvent<'project.removed', { projectId: string }>;
 /** A Project's `.kiln` files changed: its Workflow, settings or errors. Carries the whole Project. */
 export type ProjectUpdatedEvent = KilnEvent<'project.updated', { project: Project }>;
 export type ItemCreatedEvent = KilnEvent<'item.created', { item: Item }>;

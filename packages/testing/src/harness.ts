@@ -159,6 +159,11 @@ export interface TestKiln extends ApiClient {
    * model (default `fake-model`; null: none). `models` are the model ids it lists as runnable.
    */
   installFakeAgent(options?: { script?: FakeAgentScripts; cacheLifetimeMs?: number; model?: string | null; models?: string[] }): Promise<FakeAgent>;
+  /**
+   * Unregisters a Project (`work.unregister`) through a test-only core route: the core has no
+   * general route for it (the demo is its only caller).
+   */
+  unregisterProject(projectId: string): Promise<void>;
   /** Stops the core process (also done automatically at the end of the test). */
   stop(): Promise<void>;
 }
@@ -652,5 +657,8 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
     };
   };
 
-  return { url, port, dataDir, login, repo, api, request, as, events, installFakeAgent, stop };
+  const unregisterProject = (projectId: string) =>
+    api<void>('POST', `/api/test/projects/${encodeURIComponent(projectId)}/unregister`);
+
+  return { url, port, dataDir, login, repo, api, request, as, events, installFakeAgent, unregisterProject, stop };
 }
