@@ -254,6 +254,11 @@
       "action": "other_commands",
       "match": "git show --stat HEAD",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "node -e \"\nconst fs=require('fs');\nlet p='packages/widget-sdk/src/work.ts', s=fs.readFileSync(p,'utf8');\ns=s.replace(\\\"import type { PolicyLayer } from './policy.ts';\\\",\\\"import type { PolicyLayer } from './policy.ts';\\nimport type { RoleMode } from './variants.ts';\\\");\ns=s.replace(\\\"  fallbackModel?: string;\\n\\\",\\\"  fallbackModel?: string;\\n  /** Local first, cloud only or local only. Unset: local first for the implementer and reviewer, else cloud only. */\\n  mode?: RoleMode;\\n\\\");\nfs.writeFileSync(p,s);\np='packages/core/src/work/workflow-validator.ts'; s=fs.readFileSync(p,'utf8');\ns=s.replace(\\\"'fallbackModel', 'worktree'\\\",\\\"'fallbackModel', 'mode', 'worktree'\\\");\ns=s.replace(\\\"import { parsePolicyLayer,\\\",\\\"import { parsePolicyLayer, ROLE_MODES,\\\");\ns=s.replace(\\\"      const label =\\\",\\\"      if (stage.mode !== undefined && !ROLE_MODES.includes(stage.mode as never)) {\\n        problem(\\`\\${where}.mode\\`, \\`mode must be one of: \\${ROLE_MODES.join(', ')}\\`);\\n      }\\n      const label =\\\");\nfs.writeFileSync(p,s);\n\"",
+      "decision": "allow"
     }
   ]
 }
