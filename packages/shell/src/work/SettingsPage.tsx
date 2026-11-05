@@ -10,8 +10,11 @@ import {
   type RestartPending,
   type Role,
   type SchedulerState,
+  type SetupSettings,
+  type SetupState,
   type User,
 } from '@kiln/widget-sdk';
+import { FolderBrowser } from '../FolderBrowser.tsx';
 import { followLink } from '../router.ts';
 import { SETUP_PATH } from '../SetupWizard.tsx';
 import { MODELS_PATH } from './ModelsPage.tsx';
@@ -221,6 +224,97 @@ function UsersForm() {
   );
 }
 
+/**
+ * Folders: the Projects folder, the browse roots the folder browser may show, and the Knowledge
+ * store folder (picked with the folder browser, or typed).
+ */
+function FoldersForm() {
+  const [loaded, setLoaded] = useState<SetupState>();
+  const [projectsFolder, setProjectsFolder] = useState('');
+  const [roots, setRoots] = useState<string[]>([]);
+  const [newRoot, setNewRoot] = useState('');
+  const [knowledge, setKnowledge] = useState('');
+  const [status, setStatus] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const show = (state: SetupState) => {
+    setLoaded(state);
+    setProjectsFolder(state.settings.projectsFolder ?? '');
+    setRoots(state.settings.browseRoots ?? []);
+    setKnowledge(state.settings.knowledgeDir ?? state.running.knowledgeDir);
+  };
+  useEffect(() => {
+    api<SetupState>('GET', '/api/setup').then(show, (err: Error) => setError(err.message));
+  }, []);
+  const addRoot = () => {
+    const root = newRoot.trim();
+    if (root && !roots.includes(root)) setRoots([...roots, root]);
+    setNewRoot('');
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    setStatus(undefined);
+    try {
+      const change: SetupSettings = { browseRoots: roots };
+      if (projectsFolder.trim()) change.projectsFolder = projectsFolder.trim();
+      if (loaded && knowledge.trim() && knowledge.trim() !== (loaded.settings.knowledgeDir ?? loaded.running.knowledgeDir)) {
+        change.knowledgeDir = knowledge.trim();
+      }
+      show(await api<SetupState>('PUT', '/api/setup', change));
+      setStatus('Saved');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!loaded) return error ? <p role="alert">{error}</p> : <p>Loading.</p>;
+  const saved = loaded.settings;
+  return (
+    <form aria-label="Folders" className="folders" onSubmit={save}>
+      <p>The folder browser (+ Project → Import, the Knowledge store) shows only these roots and the Projects folder.</p>
+      <label>
+        Projects folder
+        <input value={projectsFolder} onChange={(e) => setProjectsFolder(e.target.value)} spellCheck={false} placeholder="C:\path\to\projects" />
+      </label>
+      <ul aria-label="Browse roots" className="browse-roots">
+        {roots.map((root) => (
+          <li key={root}>
+            <span>{root}</span>{' '}
+            <button type="button" onClick={() => setRoots(roots.filter((r) => r !== root))}>
+              Remove {root}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <label>
+        Add a browse root
+        <input value={newRoot} onChange={(e) => setNewRoot(e.target.value)} spellCheck={false} placeholder="C:\path\to\folder" />
+      </label>
+      <button type="button" onClick={addRoot} disabled={!newRoot.trim()}>
+        Add root
+      </button>
+      <label>
+        Knowledge store folder
+        <input value={knowledge} onChange={(e) => setKnowledge(e.target.value)} spellCheck={false} />
+      </label>
+      <FolderBrowser
+        key={[saved.projectsFolder, ...(saved.browseRoots ?? [])].join('|')}
+        label="Knowledge store folders"
+        selected={knowledge}
+        onPick={setKnowledge}
+      />
+      <button type="submit" disabled={busy}>
+        Save folders
+      </button>
+      {status ? <span role="status">{status}</span> : null}
+      {error ? <p role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
 const plural =(n: number, word: string) => `${n} running ${word}${n === 1 ? '' : 's'}`;
 
 /**
@@ -280,7 +374,7 @@ function RestartWhenIdle() {
   );
 }
 
-/** Admin settings: users and roles, the Org Policy, the scheduler's capacity pools and Restart when idle. */
+/** Admin settings: folders, users and roles, the Org Policy, the scheduler's capacity pools and Restart when idle. */
 export function SettingsPage() {
   const pools = useStore((s) => s.scheduler?.pools ?? []);
   return (
@@ -290,8 +384,10 @@ export function SettingsPage() {
         <a href={SETUP_PATH} onClick={followLink}>
           Run setup again
         </a>{' '}
-        to change the login mode, Knowledge store, Budgets, Agents or the default Workflow's models.
+        to change the login mode, Budgets, Agents or the default Workflow's models.
       </p>
+      <h3>Folders</h3>
+      <FoldersForm />
       <h3>Users and roles</h3>
       <UsersForm />
       <h3>Org Policy</h3>

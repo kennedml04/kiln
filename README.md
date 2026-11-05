@@ -23,6 +23,8 @@ node packages/core/src/cli.ts start
 
 Then open http://localhost:8300. The setup wizard picks the login mode, the Knowledge store, the Budgets and the Agents.
 
+To add a Project, press **+ Project** → Import on the board and pick its folder in the tree, or type its path. The tree shows only the browse roots and the Projects folder an Admin sets in Settings → Folders (a dev instance browses its own data folder). It skips hidden and system folders and never follows junctions. The folder must be the top of a git repo with a commit, on its default branch; otherwise Kiln refuses with the fix. It never switches branches for you. A folder that isn't a git repo yet gets an **Initialise as a git repo** button.
+
 The `kiln` CLI:
 
 | Command | What it does |

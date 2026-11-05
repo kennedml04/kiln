@@ -57,6 +57,10 @@ export interface SetupSettings {
   oldBoardRegistry?: string;
   /** Default Workflow role -> its model. */
   roles?: Record<string, RoleModel>;
+  /** Where New Projects are made. No default. Always a browse root once set. */
+  projectsFolder?: string;
+  /** The folders the folder browser may show (besides the Projects folder). Absolute paths. */
+  browseRoots?: string[];
 }
 
 /** `PUT /api/setup` (Admin): any of the settings; the rest stay as they are. */

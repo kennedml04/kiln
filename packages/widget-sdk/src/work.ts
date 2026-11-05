@@ -96,10 +96,50 @@ export interface Project {
   registeredAt: string;
 }
 
-/** POST /api/projects */
+/**
+ * POST /api/projects. The folder must be the top of a git work tree, on its default branch, with at
+ * least one commit; otherwise it is refused with 409 and the fix, and a `reason`:
+ * `not-a-repo`, `not-repo-top`, `no-commits` or `off-default-branch`. Kiln never switches branches.
+ */
 export interface RegisterProjectRequest {
   path: string;
   name?: string;
+  /**
+   * Initialise as a git repo: for a folder that isn't one (`not-a-repo`), run `git init -b main` and
+   * commit what is there as Kiln, then register it. Ignored for a folder that already is a repo.
+   */
+  init?: boolean;
+}
+
+/** Why `POST /api/projects` refused a folder's git state. */
+export type RepoRefusal = 'not-a-repo' | 'not-repo-top' | 'no-commits' | 'off-default-branch';
+
+/** One folder in the folder browser. */
+export interface FolderEntry {
+  name: string;
+  /** Absolute path. */
+  path: string;
+  /** It has a `.git`: a git repo (or a worktree of one). */
+  git: boolean;
+  /** A Project is registered at this folder. */
+  registered: boolean;
+  /** It has a `.scratch` folder, the markdown Tracker's layout. */
+  tracker: boolean;
+}
+
+/**
+ * `GET /api/fs/folders?path=` (Admin). Without `path`: the browse roots, as `folders`. With one:
+ * its child folders, skipping hidden and system folders and junctions (symlinks). A path outside
+ * the roots, or reached through a junction, is refused with 403.
+ */
+export interface FolderListing {
+  /** The browse roots: the Projects folder (when set) and the roots set in Settings. A dev instance offers only its data folder. */
+  roots: string[];
+  /** The folder listed; absent for the roots. */
+  path?: string;
+  /** The folder one up, while that is still inside a root. */
+  parent?: string;
+  folders: FolderEntry[];
 }
 
 export interface Item {

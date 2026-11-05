@@ -9,9 +9,9 @@ The Knowledge store folder fields in Settings and the setup wizard use the same 
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The folder listing is Admin-only, stays inside the roots, skips hidden and system folders, and doesn't follow junctions (tests on temp folders)
-- [ ] A non-repo, a repo with no commits, and a repo off its default branch each get the right answer (refusal with the fix, or Initialise)
-- [ ] + Project → Import registers a Project picked from the tree or typed, and works at phone width
-- [ ] The Knowledge store fields use the browser
+- [x] The folder listing is Admin-only, stays inside the roots, skips hidden and system folders, and doesn't follow junctions (tests on temp folders)
+- [x] A non-repo, a repo with no commits, and a repo off its default branch each get the right answer (refusal with the fix, or Initialise)
+- [x] + Project → Import registers a Project picked from the tree or typed, and works at phone width
+- [x] The Knowledge store fields use the browser

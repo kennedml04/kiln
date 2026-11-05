@@ -19,13 +19,17 @@ import type { EventBus } from '../events.ts';
 import { DEFAULT_WORKFLOW } from './default-workflow.ts';
 import { createMarkdownTracker } from './markdown-tracker.ts';
 import { readProjectFiles, watchProjectFiles } from './project-files.ts';
+import { initialiseRepo, repoProblem } from './repo-check.ts';
 
 /** A request the caller got wrong; `status` is the HTTP status to answer with. */
 export class WorkError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** A machine-readable reason sent beside the message (e.g. `not-a-repo`, which the Shell offers to initialise). */
+  reason: string | undefined;
+  constructor(status: number, message: string, reason?: string) {
     super(message);
     this.status = status;
+    this.reason = reason;
   }
 }
 
@@ -350,6 +354,17 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
           throw new WorkError(409, `${path} is already registered as "${project.name}"`);
         }
       }
+      // Every Project is a git repo, registered at its top, on its default branch, with a commit.
+      let problem = await repoProblem(path);
+      if (problem?.reason === 'not-a-repo' && request.init === true) {
+        try {
+          await initialiseRepo(path);
+        } catch (err) {
+          throw new WorkError(500, `Kiln could not initialise ${path} as a git repo: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        problem = await repoProblem(path);
+      }
+      if (problem) throw new WorkError(409, problem.message, problem.reason);
       const name = request.name?.trim() || basename(path);
       let id = options?.id ?? slugify(name);
       if (options?.id !== undefined && entries.has(id)) throw new WorkError(409, `A Project with the id "${id}" is already registered`);

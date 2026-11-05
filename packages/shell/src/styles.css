@@ -860,6 +860,73 @@ form [role='alert'],
 
 .register-project label {
   flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.register-project > p,
+.register-project > .folder-tree {
+  flex-basis: 100%;
+}
+
+.add-project {
+  margin-top: 0.5rem;
+}
+
+.add-project > section {
+  margin-top: 0.5rem;
+}
+
+/* ---------- The folder browser ---------- */
+
+.folder-tree,
+.folder-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.folder-tree {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.25rem;
+}
+
+.folder-tree ul {
+  padding-left: 1rem;
+}
+
+.folder-tree button.folder {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.35rem 0.5rem;
+  overflow-wrap: anywhere;
+  color: inherit;
+}
+
+.folder-tree button.folder.selected {
+  background: var(--accent-soft);
+}
+
+.folder-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.folder-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
 }
 
 .new-item label:has(input:not([type='checkbox'])) {

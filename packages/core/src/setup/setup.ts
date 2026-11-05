@@ -261,6 +261,18 @@ export function createSetup(deps: SetupDeps): Setup {
     return folder;
   };
 
+  const checkBrowseRoots = (value: unknown): string[] => {
+    if (!Array.isArray(value)) throw new SetupError(400, 'browseRoots is a list of absolute folder paths');
+    const roots: string[] = [];
+    for (const raw of value) {
+      if (typeof raw !== 'string' || !isAbsolute(raw)) throw new SetupError(400, `A browse root must be an absolute path: ${String(raw)}`);
+      const folder = resolve(raw);
+      if (!existsSync(folder) || !statSync(folder).isDirectory()) throw new SetupError(400, `No folder at ${folder}`);
+      if (!roots.some((r) => r.toLowerCase() === folder.toLowerCase())) roots.push(folder);
+    }
+    return roots;
+  };
+
   const checkRoles = (value: unknown): Record<string, RoleModel> => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new SetupError(400, 'roles maps each role to its model');
     const known = new Set(defaultRoles().map((r) => r.role));
@@ -338,6 +350,19 @@ export function createSetup(deps: SetupDeps): Setup {
         next.oldBoardRegistry = resolve(c.oldBoardRegistry);
       }
       if (c.roles !== undefined) next.roles = checkRoles(c.roles);
+      if (c.projectsFolder !== undefined) {
+        if (typeof c.projectsFolder !== 'string' || !isAbsolute(c.projectsFolder)) {
+          throw new SetupError(400, 'The Projects folder must be an absolute path');
+        }
+        const folder = resolve(c.projectsFolder);
+        try {
+          mkdirSync(folder, { recursive: true });
+        } catch (err) {
+          throw new SetupError(400, `Kiln cannot make ${folder}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        next.projectsFolder = folder;
+      }
+      if (c.browseRoots !== undefined) next.browseRoots = checkBrowseRoots(c.browseRoots);
       let moveTo: string | undefined;
       if (c.knowledgeDir !== undefined) {
         moveTo = checkKnowledgeDir(c.knowledgeDir);

@@ -1,6 +1,7 @@
 // Core API routes for Projects and Items.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CreateItemRequest, RegisterProjectRequest } from '@kiln/widget-sdk';
+import type { FolderBrowser } from './folders.ts';
 import { WorkError, type Work } from './work.ts';
 
 export interface RouteHelpers {
@@ -19,10 +20,15 @@ export async function handleWorkRoute(
   res: ServerResponse,
   url: URL,
   { sendJson, readJson }: RouteHelpers,
+  folders?: FolderBrowser,
 ): Promise<boolean> {
   const path = url.pathname;
   const method = req.method;
   try {
+    // The folder browser (Admin only, see access.ts).
+    if (path === '/api/fs/folders' && method === 'GET' && folders) {
+      return (sendJson(res, 200, folders.list(url.searchParams.get('path') ?? undefined)), true);
+    }
     if (path === '/api/projects') {
       if (method === 'GET') return (sendJson(res, 200, work.projects()), true);
       if (method === 'POST') {
@@ -54,7 +60,9 @@ export async function handleWorkRoute(
     }
     return false;
   } catch (err) {
-    if (err instanceof WorkError) return (sendJson(res, err.status, { error: err.message }), true);
+    if (err instanceof WorkError) {
+      return (sendJson(res, err.status, { error: err.message, ...(err.reason ? { reason: err.reason } : {}) }), true);
+    }
     throw err;
   }
 }

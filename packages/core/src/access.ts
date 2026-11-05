@@ -81,6 +81,8 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'PUT', path: '/api/setup', role: 'admin', action: 'setup.update' },
   { method: 'POST', path: '/api/setup/import', role: 'admin', action: 'setup.import' },
   { method: 'POST', path: '/api/setup/complete', role: 'admin', action: 'setup.complete' },
+  // The folder browser (project-wizard ticket 01): it shows this PC's folders, so only Admins see it.
+  { method: 'GET', path: '/api/fs/folders', role: 'admin' },
   // The demo Project on a dev instance (demo-project Ticket 05): starting it is Admin work.
   { method: 'GET', path: '/api/demo', role: 'admin' },
   { method: 'POST', path: '/api/demo/start', role: 'admin', action: 'demo.start' },

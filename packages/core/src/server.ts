@@ -38,6 +38,7 @@ import { createLoginAdapter } from './login.ts';
 import { createUserStore } from './users.ts';
 import { handleWorkRoute } from './work/routes.ts';
 import { createWork, WorkError } from './work/work.ts';
+import { createFolderBrowser } from './work/folders.ts';
 import { createWidgetHost, WidgetHostError } from './widget-host.ts';
 import { createWidgetLifecycle } from './widgets/lifecycle.ts';
 import { createWidgetBridge } from './widgets/bridge.ts';
@@ -254,6 +255,17 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     demoMode: () => demo.state().mode,
   });
   work.decorateWorkflow(setup.decorate);
+  // The folder browser (project-wizard ticket 01): the Projects folder and the Admin's browse roots.
+  // A dev instance offers only its own data folder, so it never browses the person's real folders.
+  const folders = createFolderBrowser({
+    roots: () => {
+      if (options.devInstance) return [options.dataDir];
+      const { projectsFolder, browseRoots = [] } = setup.settings();
+      const roots = projectsFolder ? [projectsFolder, ...browseRoots] : [...browseRoots];
+      return roots.filter((r, i) => roots.findIndex((o) => o.toLowerCase() === r.toLowerCase()) === i);
+    },
+    registered: () => work.projects().map((p) => p.path),
+  });
   doctor.register(setup.doctorCheck);
   // The demo Project, on a dev instance only (demo-project spec).
   const demo = createDemo({
@@ -499,7 +511,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleLocalModelRoute(localModels, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
-      if (await handleWorkRoute(work, req, res, url, { sendJson, readJson })) return;
+      if (await handleWorkRoute(work, req, res, url, { sendJson, readJson }, folders)) return;
       if (await handleSecretRoute(secrets, req, res, url, panelDeps)) return;
       if (await handlePanelRoute(panels, req, res, url, panelDeps)) return;
       if (url.pathname.startsWith('/api/widget/')) return await widgetRoute(route, req, res, url);

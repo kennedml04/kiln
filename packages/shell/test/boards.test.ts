@@ -55,6 +55,7 @@ test('a person registers a Project and creates a Ticket from the Shell, written 
   seedScratch(kiln.repo);
   const page = await openShell(t, kiln);
 
+  await page.getByRole('button', { name: '+ Project' }).click();
   await page.getByLabel('Repository path').fill(kiln.repo.path);
   await page.getByRole('button', { name: 'Register Project' }).click();
   await card(page, 'Backlog', 'Home board').waitFor();

@@ -3,6 +3,7 @@
 // to mark setup done, which it refuses while a Budget or a role's model is missing.
 import { useEffect, useState, type ReactNode } from 'react';
 import type { BudgetDraft, BudgetInfo, CoreStatus, DemoMode, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
+import { FolderBrowser } from './FolderBrowser.tsx';
 import { suggestRoles } from './role-defaults.ts';
 import { navigate } from './router.ts';
 import { api, useStore } from './store.ts';
@@ -199,6 +200,7 @@ function KnowledgeStep({ setup, folder, setFolder }: { setup: SetupState; folder
         Knowledge store folder
         <input value={folder} onChange={(e) => setFolder(e.target.value)} spellCheck={false} placeholder="C:\path\to\folder" />
       </label>
+      <FolderBrowser label="Knowledge store folders" selected={folder} onPick={setFolder} />
       {setup.obsidian.installed ? (
         <p>
           Obsidian is installed{setup.obsidian.vault ? ', and this folder is already a vault' : '. Open this folder in it as a vault'}.
