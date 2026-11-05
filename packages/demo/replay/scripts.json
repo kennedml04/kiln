@@ -1,0 +1,108 @@
+{
+  "griller": [
+    { "do": "usage", "inputTokens": 400, "outputTokens": 120, "model": "fake-model" },
+    {
+      "do": "ask",
+      "ask": {
+        "type": "decision",
+        "question": "What should slugify do with accented letters?",
+        "why": "It decides whether 'café' becomes 'cafe', stays 'café' or loses the letter, and the tests pin it.",
+        "recommendation": "Strip the accents: 'café' becomes 'cafe'",
+        "options": ["Strip the accents: 'café' becomes 'cafe'", "Keep them: 'café'", "Drop the letter: 'caf'"],
+        "blocking": true
+      }
+    },
+    {
+      "do": "ask",
+      "ask": {
+        "type": "decision",
+        "question": "Is an empty result an error? slugify('!!!') leaves nothing.",
+        "why": "Callers either check for an empty string or catch an error.",
+        "recommendation": "Return ''",
+        "options": ["Return ''", "Throw an error"],
+        "blocking": true
+      }
+    },
+    {
+      "do": "write",
+      "path": ".scratch/slugify/grill.md",
+      "content": "# Grill: Add `slugify(title)`\n\n> Replay: this record is scripted. It holds the recommended answers, whatever was answered in the Asks.\n\n1. **Accented letters?** Strip the accents: `slugify('Café au lait')` is `'cafe-au-lait'`.\n2. **Is an empty result an error?** No: `slugify('!!!')` returns `''`.\n\nAlso settled: a command line, `node src/cli.js <title>`, prints the slug, so the function can be tried from a shell.\n"
+    },
+    { "do": "commit", "message": "Grill record for slugify" },
+    { "do": "finish" }
+  ],
+  "spec-writer": [
+    { "do": "usage", "inputTokens": 500, "outputTokens": 200, "model": "fake-model" },
+    {
+      "do": "write",
+      "path": ".scratch/slugify/spec.md",
+      "content": "# Spec: Add `slugify(title)`\n\n## What it does\n\n`slugify(title)` in `src/slugify.js` turns a title into a slug for a URL or a file name:\n\n- The slug is lowercase.\n- Accents are stripped: `'Café'` becomes `'cafe'`.\n- Spaces and runs of punctuation become a single dash: `slugify('Hello,  World!')` is `'hello-world'`.\n- Leading and trailing dashes are trimmed: `slugify('--Hi--')` is `'hi'`.\n- A title with nothing left returns `''`; it is not an error.\n\n`node src/cli.js <title>` prints the slug of its arguments, joined by spaces.\n\n## Testing\n\n- `test/slugify.test.js` covers each rule above.\n- `test/cli.test.js` runs the command line as a subprocess and checks what it prints.\n"
+    },
+    { "do": "commit", "message": "Spec for slugify" },
+    { "do": "finish" }
+  ],
+  "ticket-writer": [
+    { "do": "usage", "inputTokens": 450, "outputTokens": 160, "model": "fake-model" },
+    { "do": "kiln_tool", "name": "create_child_item", "input": { "title": "Slugify function", "description": "Add slugify(title) in src/slugify.js, with its tests in test/slugify.test.js." } },
+    { "do": "kiln_tool", "name": "create_child_item", "input": { "title": "Slugify CLI", "description": "Add src/cli.js, which prints the slug of its arguments, with a subprocess test in test/cli.test.js." } },
+    {
+      "do": "write",
+      "path": ".scratch/slugify/issues/01-slugify-function.md",
+      "content": "# 01: Slugify function\n\n**What to build:** Add slugify(title) in src/slugify.js, with its tests in test/slugify.test.js.\n\nThe rules are in the spec: lowercase, accents stripped, spaces and runs of punctuation become one dash, leading and trailing dashes trimmed, and an empty result returns `''`.\n\n**Blocked by:** None\n\n**Status:** ready-for-agent\n"
+    },
+    {
+      "do": "write",
+      "path": ".scratch/slugify/issues/02-slugify-cli.md",
+      "content": "# 02: Slugify CLI\n\n**What to build:** Add src/cli.js, which prints the slug of its arguments, with a subprocess test in test/cli.test.js.\n\n`node src/cli.js Hello, World!` prints `hello-world`. With no arguments it prints a usage line and exits with 1.\n\n**Blocked by:** 01\n\n**Status:** ready-for-agent\n"
+    },
+    { "do": "commit", "message": "Tickets for slugify" },
+    { "do": "finish" }
+  ],
+  "implementer@for the ticket \"Slugify function\"": [
+    { "do": "usage", "inputTokens": 600, "outputTokens": 250, "model": "fake-model" },
+    {
+      "do": "write",
+      "path": "src/slugify.js",
+      "content": "/**\n * Turns a title into a slug for a URL or a file name: `slugify('Hello,  World!')` is `'hello-world'`.\n * Accents are stripped; a title with nothing left gives `''`.\n * @param {string} title\n * @returns {string}\n */\nexport function slugify(title) {\n  return title\n    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-+|-+$/g, '');\n}\n"
+    },
+    {
+      "do": "write",
+      "path": "test/slugify.test.js",
+      "content": "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { slugify } from '../src/slugify.js';\n\ntest('slugify lowercases', () => {\n  assert.equal(slugify('Kiln'), 'kiln');\n});\n\ntest('spaces and runs of punctuation become one dash', () => {\n  assert.equal(slugify('Hello,  World!'), 'hello-world');\n});\n\ntest('leading and trailing dashes are trimmed', () => {\n  assert.equal(slugify('--Hi--'), 'hi');\n});\n\ntest('accents are stripped', () => {\n  assert.equal(slugify('Café au lait'), 'cafe-au-lait');\n});\n\ntest('a title with nothing left gives an empty string', () => {\n  assert.equal(slugify('!!!'), '');\n});\n"
+    },
+    { "do": "commit", "message": "Add slugify(title)" },
+    { "do": "finish" }
+  ],
+  "implementer@for the ticket \"Slugify CLI\"": [
+    { "do": "usage", "inputTokens": 550, "outputTokens": 220, "model": "fake-model" },
+    {
+      "do": "write",
+      "path": "src/slugify.js",
+      "content": "/**\n * Turns a title into a slug for a URL or a file name: `slugify('Hello,  World!')` is `'hello-world'`.\n * Accents are stripped; a title with nothing left gives `''`.\n * @param {string} title\n * @returns {string}\n */\nexport function slugify(title) {\n  return title\n    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-+|-+$/g, '');\n}\n"
+    },
+    {
+      "do": "write",
+      "path": "src/cli.js",
+      "content": "// Prints the slug of its arguments: `node src/cli.js Hello, World!` prints `hello-world`.\nimport { slugify } from './slugify.js';\n\nconst title = process.argv.slice(2).join(' ');\nif (!title) {\n  console.error('Usage: node src/cli.js <title>');\n  process.exit(1);\n}\nconsole.log(slugify(title));\n"
+    },
+    {
+      "do": "write",
+      "path": "test/cli.test.js",
+      "content": "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { spawnSync } from 'node:child_process';\nimport { fileURLToPath } from 'node:url';\n\nconst cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));\nconst run = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });\n\ntest('the CLI prints the slug of its arguments', () => {\n  const { status, stdout } = run('Hello,', 'World!');\n  assert.equal(status, 0);\n  assert.equal(stdout, 'hello-world\\n');\n});\n\ntest('the CLI with no title prints its usage and exits with 1', () => {\n  const { status, stderr } = run();\n  assert.equal(status, 1);\n  assert.match(stderr, /Usage/);\n});\n"
+    },
+    { "do": "commit", "message": "Add the slugify command line" },
+    { "do": "finish" }
+  ],
+  "reviewer@for the ticket \"Slugify function\"": [
+    { "do": "usage", "inputTokens": 350, "outputTokens": 90, "model": "fake-model" },
+    { "do": "write", "path": ".scratch/slugify/reviews/01-slugify-function.md", "content": "# Review: 01 Slugify function\n\nNo problems found; scripted review.\n" },
+    { "do": "commit", "message": "Review findings for 01" },
+    { "do": "finish" }
+  ],
+  "reviewer@for the ticket \"Slugify CLI\"": [
+    { "do": "usage", "inputTokens": 350, "outputTokens": 90, "model": "fake-model" },
+    { "do": "write", "path": ".scratch/slugify/reviews/02-slugify-cli.md", "content": "# Review: 02 Slugify CLI\n\nNo problems found; scripted review.\n" },
+    { "do": "commit", "message": "Review findings for 02" },
+    { "do": "finish" }
+  ]
+}

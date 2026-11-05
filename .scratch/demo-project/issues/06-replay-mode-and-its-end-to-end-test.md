@@ -14,14 +14,21 @@ See "Replay: routing every role to the fake Agent" and "The replay scripts" in `
 
 **Blocked by:** 03, 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `packages/core/test/demo-replay.test.ts` passes. On a dev test core it:
+- [x] `packages/core/test/demo-replay.test.ts` passes. On a dev test core it:
   1. starts Replay
   2. answers both grill Asks
   3. approves the Spec and Tickets Gates
   4. approves Ticket 01's Review, then Ticket 02's
   5. asserts that `main` holds `src/slugify.js` and `src/cli.js`, that `node --test` exits 0 there, that the Story is `shipped`, and that no model Budget was drawn on
-- [ ] A template test applies the 01 and 02 implementer writes to a fresh copy and gets `node --test` passing
-- [ ] The wizard's role models never reach Replay Sessions: every Replay Session runs on the fake Agent
-- [ ] A Replay start on an instance where the fake Agent is already installed reuses it, with no second install
+- [x] A template test applies the 01 and 02 implementer writes to a fresh copy and gets `node --test` passing
+- [x] The wizard's role models never reach Replay Sessions: every Replay Session runs on the fake Agent
+- [x] A Replay start on an instance where the fake Agent is already installed reuses it, with no second install
+
+**Notes from the build:**
+- Kiln starts no Session on a model in no Budget, so Replay adds a metered Budget `replay` holding only `fake-model` (unless that model already has one). The fake Agent reports no cost, so its turns are recorded and draw nothing; the wizard's Budgets are never drawn on.
+- Both Tickets start when the Tickets Gate is approved. Ticket 02's implementer writes the same `src/slugify.js` as 01, byte for byte, so its `tests_pass` Exit passes before 01 merges and the two branches merge cleanly.
+- Approving two Ticket Reviews at once can fail the second merge on `.git/index.lock` (Gates serialize merges per Item, not per repo); Kiln re-raises that Review. The test waits for 01 to ship before approving 02.
+- The board shows the Story `shipped` a moment before the Tracker commits its `stage: shipped` line, so the test waits for `main` to come clean.
+- The harness now starts the core without `NODE_TEST_CONTEXT`: with it, a `node --test` the core ran for a `tests_pass` Exit exited 0 even when its tests failed.

@@ -533,6 +533,9 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
+      // The core is not a test file: with the runner's context, a `node --test` it runs (a
+      // `tests_pass` Exit) would report to this runner and exit 0 even when its tests fail.
+      NODE_TEST_CONTEXT: undefined,
       KILN_PORT: undefined,
       KILN_DATA_DIR: undefined,
       KILN_LOGIN: undefined,

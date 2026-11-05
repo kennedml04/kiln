@@ -241,7 +241,20 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   work.decorateWorkflow(setup.decorate);
   doctor.register(setup.doctorCheck);
   // The demo Project, on a dev instance only (demo-project spec).
-  const demo = createDemo({ db, work, dataDir: options.dataDir, devInstance: options.devInstance === true, missingRoles: () => setup.missingRoles() });
+  const demo = createDemo({
+    db,
+    work,
+    dataDir: options.dataDir,
+    devInstance: options.devInstance === true,
+    missingRoles: () => setup.missingRoles(),
+    widgets: installs,
+    budgets: usage,
+  });
+  /** Who started the demo, as Widget approvals record an Admin (`kiln` for the local Admin). */
+  const demoCaller = (req: IncomingMessage) => {
+    const { actor } = access.caller(req);
+    return actor.kind === 'kiln' ? 'kiln' : actor.id;
+  };
   const shellDir = options.shellDir ?? DEFAULT_SHELL_DIR;
   const startedAt = new Date();
   const streams = new Set<ServerResponse>();
@@ -465,7 +478,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handlePolicyRoute(policy, work, access, req, res, url, { sendJson, readJson })) return;
       if (await handleSchedulerRoute(scheduler, req, res, url, { sendJson, readJson })) return;
       if (await handleSetupRoute(setup, req, res, url, { sendJson, readJson })) return;
-      if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson })) return;
+      if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson, caller: demoCaller })) return;
       if (await handleRunawayRoute(runaway, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
