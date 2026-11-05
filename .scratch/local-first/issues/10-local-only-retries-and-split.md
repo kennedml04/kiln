@@ -4,7 +4,9 @@
 
 **Blocked by:** 07
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] A local-only failure retries 2 more variants, each seeded with the earlier failures (harness test)
 - [ ] After the third failure, a blocking Ask shows the attempts and a proposed split
