@@ -49,6 +49,11 @@
       "action": "other_commands",
       "match": "git ls-tree -r --name-only demo-project",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show demo-project:.scratch/demo-project/issues/09-first-live-run-by-hand.md",
+      "decision": "allow"
     }
   ]
 }
