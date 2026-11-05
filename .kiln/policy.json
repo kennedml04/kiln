@@ -434,6 +434,11 @@
       "action": "other_commands",
       "match": "for r in HEAD master kiln/ticket/local-first/07 kiln/ticket/local-first/08 kiln/ticket/local-first/09",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat .scratch/local-first/issues/07-role-modes-and-the-variant-picker.md",
+      "decision": "allow"
     }
   ]
 }
