@@ -284,6 +284,11 @@
       "action": "other_commands",
       "match": "sed -n 133,138p packages/core/src/local/variants.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > /tmp/edit.mjs <<'EOF'",
+      "decision": "allow"
     }
   ]
 }
