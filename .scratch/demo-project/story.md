@@ -1,5 +1,6 @@
 ---
 title: Demo project for dev instances
+epic: projects-and-onboarding
 stage: tickets
 blocked-by: []
 ---

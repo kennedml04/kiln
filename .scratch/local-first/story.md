@@ -1,5 +1,6 @@
 ---
 title: Local-first runs with cloud escalation, and adding local models from Settings
+epic: local-models
 stage: tickets
 blocked-by: []
 ---
