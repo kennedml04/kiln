@@ -13,6 +13,7 @@ import {
   type ProjectSettings,
 } from '@kiln/widget-sdk';
 import { parseModuleCheckId } from '../work/effective-workflow.ts';
+import { expandModuleText, type ToolPaths } from '../work/module-commands.ts';
 import { readProjectFiles } from '../work/project-files.ts';
 import { coAuthoredCommits, coAuthoredFix, commitsAhead, fileAtHead, git, uncommitted } from './git.ts';
 
@@ -90,6 +91,8 @@ export interface ExitContext {
   worktree?: string;
   /** The branch the Stage's branch started from. */
   base?: string;
+  /** The `toolPaths` Setting, for `{tool:<name>}` in a module check's command. */
+  toolPaths?: ToolPaths;
   /** The Item's record (repo-relative), which `artifact_exists` does not count. */
   itemPath?: string;
   /** Where the Item's review findings go (repo-relative), for `findings_exist`. */
@@ -172,7 +175,8 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
       const found = moduleCheckOf(ctx.repo, id);
       if (!found?.check.command) return { met: false, detail: `No module of this Project has the check ${id}` };
       // `{moduleDir}` lets a check run a script its module ships; the env names the same folder and the base.
-      const command = found.check.command.replaceAll('{moduleDir}', found.folder);
+      // `{tool:<name>}` is the tool's path from Settings, else its name on PATH.
+      const command = expandModuleText(found.check.command, found.folder, ctx.toolPaths);
       return commandCheck(command, ctx.worktree, { KILN_MODULE_DIR: found.folder, KILN_BASE: ctx.base });
     }
   }

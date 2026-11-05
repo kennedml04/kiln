@@ -17,9 +17,16 @@ The tools' paths are Settings or found on `PATH`, never hard-coded. In tests, bo
 
 **Blocked by:** 04, 05
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Both validate, and their templates and Stages appear in a Project's effective Workflow
-- [ ] With the CLIs faked, the slice check and the DRC check pass and fail as their output says
-- [ ] "Print it" and "Order parts" show as the person's move on the board
-- [ ] Opt-in real tests exist and are skipped by default
+- [x] Both validate, and their templates and Stages appear in a Project's effective Workflow
+- [x] With the CLIs faked, the slice check and the DRC check pass and fail as their output says
+- [x] "Print it" and "Order parts" show as the person's move on the board
+- [x] Opt-in real tests exist and are skipped by default
+
+**Built:**
+- `modules/3d-print` and `modules/electronics`. Each check is a plain Node script in the module's `checks/`.
+- Module commands and stdio MCP entries may use `{moduleDir}` (the module's folder, as in ticket 06) and `{tool:<name>}`. `{tool:<name>}` is the path in the new `toolPaths` Setting (Settings > Tool paths, or `PUT /api/setup`), else the bare name, found on PATH.
+- The board marks an Item "Your move" when its Stage has no role, isn't a roll-up and isn't the kind's last Stage.
+- The real-tool tests run only with `KILN_REAL_CAD_TOOLS=1`.
+- The module checks sit beside `tests_pass`; they don't replace it. With no `.3mf` or no `.kicad_pcb` in the worktree, the check passes.

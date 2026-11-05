@@ -61,6 +61,11 @@ export interface SetupSettings {
   projectsFolder?: string;
   /** The folders the folder browser may show (besides the Projects folder). Absolute paths. */
   browseRoots?: string[];
+  /**
+   * Where the tools modules run are, by tool name (e.g. `kicad-cli`): absolute paths. A tool not
+   * listed is found on PATH. Sending a tool with an empty path clears it.
+   */
+  toolPaths?: Record<string, string>;
 }
 
 /** `PUT /api/setup` (Admin): any of the settings; the rest stay as they are. */
@@ -124,6 +129,8 @@ export interface SetupState {
   /** The default Workflow's roles, each with the Stages that use it. */
   roles: { role: string; stages: string[] }[];
   agents: FirstPartyAgent[];
+  /** The tools the module repos' modules name (`{tool:<name>}`), sorted: the ones `toolPaths` can set. */
+  tools: string[];
   /** `registry` is absent when no old board was named: Kiln has no default place to look. */
   oldBoard: { registry?: string; found: boolean; error?: string; projects: OldBoardProject[] };
 }

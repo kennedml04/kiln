@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { PROJECT_SETTINGS_FILE, type ModuleMcpServer, type ProjectFileError, type SessionSkill } from '@kiln/widget-sdk';
+import { expandMcpServer, type ToolPaths } from './module-commands.ts';
 import type { LoadedModule } from './modules.ts';
 
 export const SKILL_FILE = 'SKILL.md';
@@ -36,9 +37,13 @@ const moduleSkillFolder = (loaded: LoadedModule, name: string) => skillFolders(j
 /**
  * The skills and MCP servers a Session in a Project with these modules runs with, in module order.
  * When two modules give a skill or server the same name, the earlier module's wins. A skill whose
- * folder is missing is left out (the Project shows the error, see `moduleProblems`).
+ * folder is missing is left out (the Project shows the error, see `moduleProblems`). A server's
+ * `{moduleDir}` and `{tool:<name>}` are filled in from the module's folder and `toolPaths`.
  */
-export function moduleSessionKit(modules: LoadedModule[]): { skills: SessionSkill[]; mcpServers: Record<string, ModuleMcpServer> } {
+export function moduleSessionKit(
+  modules: LoadedModule[],
+  toolPaths?: ToolPaths,
+): { skills: SessionSkill[]; mcpServers: Record<string, ModuleMcpServer> } {
   const skills: SessionSkill[] = [];
   const mcpServers: Record<string, ModuleMcpServer> = {};
   for (const loaded of modules) {
@@ -48,7 +53,7 @@ export function moduleSessionKit(modules: LoadedModule[]): { skills: SessionSkil
       if (folder && !skills.some((s) => s.name === name)) skills.push({ name, source: `module:${module.id}`, commit: null, folder });
     }
     for (const [name, server] of Object.entries(module.mcpServers ?? {})) {
-      if (name !== KILN_MCP_SERVER && !(name in mcpServers)) mcpServers[name] = server;
+      if (name !== KILN_MCP_SERVER && !(name in mcpServers)) mcpServers[name] = expandMcpServer(server, loaded.folder, toolPaths);
     }
   }
   return { skills, mcpServers };

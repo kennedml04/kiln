@@ -1,0 +1,19 @@
+{
+  "id": "3d-print",
+  "name": "3D print",
+  "description": "Slice with Bambu Studio: a slice with no problems before Review, then printing is your move",
+  "presets": ["Printed part"],
+  "mcpServers": {
+    "bambu-studio": { "command": "{tool:bambu-studio-mcp}" }
+  },
+  "exitChecks": [
+    {
+      "id": "slice",
+      "name": "The slice reports no problems",
+      "command": "node \"{moduleDir}/checks/slice.mjs\" \"{tool:bambu-studio}\"",
+      "stages": ["implementing"]
+    }
+  ],
+  "stages": [{ "kind": "ticket", "after": "review", "stage": { "id": "print-it", "name": "Print it" } }],
+  "detect": ["*.3mf", "*.gcode"]
+}

@@ -177,6 +177,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     // Read once the usage service below exists (only when a Session is planned or started).
     budgetOf: (model) => usage.budgets().find((b) => b.models.includes(model))?.id,
     kilnToolsUrl: () => `http://127.0.0.1:${port}${KILN_TOOLS_PATH}`,
+    // `setup` is made below; this is read only when a Session starts or its Exit is checked.
+    toolPaths: () => setup.settings().toolPaths,
   });
   work.onUnregister((project) => sessions.removeProject(project, `the Project "${project.name}" was unregistered`));
   const panels = createWidgetPanels({ bus, host: widgets, widgets: () => installs.list() });

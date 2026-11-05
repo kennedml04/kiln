@@ -277,6 +277,8 @@ export interface SessionManagerDeps {
   budgetOf?: (model: string) => string | undefined;
   /** Holds Items at Gate Stages once their Exit is met, and seeds rework Sessions. */
   gates?: Gates;
+  /** The `toolPaths` Setting, read each time a module check or MCP server names a tool. */
+  toolPaths?: () => Record<string, string> | undefined;
 }
 
 export function createSessionManager({
@@ -295,6 +297,7 @@ export function createSessionManager({
   stageModel,
   budgetOf,
   gates,
+  toolPaths = () => undefined,
 }: SessionManagerDeps): SessionManager {
   const live = new Map<string, Live>();
   /** Why each held Session waits besides its Asks (e.g. a reached Budget cap). */
@@ -543,6 +546,7 @@ export function createSessionManager({
       ...(item.path ? { itemDir: posix.dirname(item.path), itemPath: item.path } : {}),
       children: item.childIds.length,
       openBlockingAsks: asks.list({ itemId: item.id }).filter((a) => a.blocking).map((a) => a.question),
+      toolPaths: toolPaths(),
     });
     info.exit = exit;
     bus.publish('exit.checked', { ...ref(info), exit });
@@ -786,7 +790,7 @@ export function createSessionManager({
       if (!model) throw new WorkError(409, `${item.title}'s ${stage.name} Stage names no model, and neither does its Agent`);
       const sessionPolicy = policy.effective({ project, kind: item.kind, stage: stage.id });
       // The Project's modules as they stand now: the Session keeps these skills and servers to the end.
-      const kit = moduleSessionKit(readProjectFiles(project.path).modules);
+      const kit = moduleSessionKit(readProjectFiles(project.path).modules, toolPaths());
       let worktree: string | null = null;
       let branch: string | null = null;
       let base: string | null = null;

@@ -1150,6 +1150,14 @@ form [role='alert'],
   background: var(--warn-soft);
 }
 
+/* A Stage with no role: the Item waits on the person (ItemCard's isPersonsMove). */
+.item-meta .your-move {
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent-strong);
+}
+
 .item-meta .usage-warned {
   color: var(--warn);
   background: var(--warn-soft);

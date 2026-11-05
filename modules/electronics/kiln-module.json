@@ -1,0 +1,18 @@
+{
+  "id": "electronics",
+  "name": "Electronics",
+  "description": "PCBs in KiCad: DRC passes before Review, a BOM turns into a shopping list, then ordering parts is your move",
+  "presets": ["PCB"],
+  "skills": ["bom-shopping", "kicad"],
+  "exitChecks": [
+    {
+      "id": "drc",
+      "name": "DRC passes",
+      "command": "node \"{moduleDir}/checks/drc.mjs\" \"{tool:kicad-cli}\"",
+      "stages": ["implementing"]
+    }
+  ],
+  "stages": [{ "kind": "ticket", "after": "review", "stage": { "id": "order-parts", "name": "Order parts" } }],
+  "template": { "folder": "template", "ignore": ["out/"] },
+  "detect": ["*.kicad_pro"]
+}

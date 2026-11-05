@@ -315,6 +315,63 @@ function FoldersForm() {
   );
 }
 
+/**
+ * Tool paths: where the command-line tools the modules call live (a slicer, kicad-cli). A tool left
+ * blank is found on PATH; clearing a path sends it back to PATH.
+ */
+function ToolPathsForm() {
+  const [tools, setTools] = useState<string[]>();
+  const [paths, setPaths] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const show = (state: SetupState) => {
+    setTools(state.tools);
+    setPaths(state.settings.toolPaths ?? {});
+  };
+  useEffect(() => {
+    api<SetupState>('GET', '/api/setup').then(show, (err: Error) => setError(err.message));
+  }, []);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    setStatus(undefined);
+    try {
+      const toolPaths = Object.fromEntries((tools ?? []).map((tool) => [tool, (paths[tool] ?? '').trim()]));
+      show(await api<SetupState>('PUT', '/api/setup', { toolPaths }));
+      setStatus('Saved');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!tools) return error ? <p role="alert">{error}</p> : <p>Loading.</p>;
+  if (tools.length === 0) return <p>No module calls a command-line tool.</p>;
+  return (
+    <form aria-label="Tool paths" className="tool-paths" onSubmit={save}>
+      <p>The full path of each tool the modules call. Leave one blank to find it on PATH.</p>
+      {tools.map((tool) => (
+        <label key={tool}>
+          {tool}
+          <input
+            value={paths[tool] ?? ''}
+            onChange={(e) => setPaths({ ...paths, [tool]: e.target.value })}
+            spellCheck={false}
+            placeholder="On PATH"
+          />
+        </label>
+      ))}
+      <button type="submit" disabled={busy}>
+        Save tool paths
+      </button>
+      {status ? <span role="status">{status}</span> : null}
+      {error ? <p role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
 const plural =(n: number, word: string) => `${n} running ${word}${n === 1 ? '' : 's'}`;
 
 /**
@@ -388,6 +445,8 @@ export function SettingsPage() {
       </p>
       <h3>Folders</h3>
       <FoldersForm />
+      <h3>Tool paths</h3>
+      <ToolPathsForm />
       <h3>Users and roles</h3>
       <UsersForm />
       <h3>Org Policy</h3>

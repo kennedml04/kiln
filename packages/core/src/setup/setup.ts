@@ -33,6 +33,8 @@ import {
 import type { EventBus } from '../events.ts';
 import type { DoctorCheck } from '../operations/doctor.ts';
 import { DEFAULT_WORKFLOW } from '../work/default-workflow.ts';
+import { toolsOf } from '../work/module-commands.ts';
+import { DEFAULT_MODULE_REPO, loadModules } from '../work/modules.ts';
 import type { Work } from '../work/work.ts';
 
 export class SetupError extends Error {
@@ -273,6 +275,23 @@ export function createSetup(deps: SetupDeps): Setup {
     return roots;
   };
 
+  /** The saved tool paths with the change applied: an empty path clears the tool (found on PATH again). */
+  const checkToolPaths = (value: unknown, saved: Record<string, string> = {}): Record<string, string> => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new SetupError(400, 'toolPaths maps each tool name to its absolute path');
+    const next = { ...saved };
+    for (const [name, raw] of Object.entries(value)) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new SetupError(400, `A tool is named by lower-case letters, digits and dashes, not ${JSON.stringify(name)}`);
+      if (typeof raw !== 'string') throw new SetupError(400, `The path of ${name} must be a string`);
+      if (!raw.trim()) {
+        delete next[name];
+        continue;
+      }
+      if (!isAbsolute(raw.trim())) throw new SetupError(400, `The path of ${name} must be absolute, or empty to find it on PATH: ${raw}`);
+      next[name] = resolve(raw.trim());
+    }
+    return next;
+  };
+
   const checkRoles = (value: unknown): Record<string, RoleModel> => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new SetupError(400, 'roles maps each role to its model');
     const known = new Set(defaultRoles().map((r) => r.role));
@@ -314,8 +333,15 @@ export function createSetup(deps: SetupDeps): Setup {
       defaults: defaultBudgets(local),
       roles: defaultRoles(),
       agents: FIRST_PARTY_AGENTS.map((a) => ({ ...a, installed: installed.some((w) => w.id === a.id) })),
+      tools: moduleTools(),
       oldBoard: oldBoard(),
     };
+  };
+
+  /** The tools the default module repo's modules name, and any other the Setting already has. */
+  const moduleTools = () => {
+    const modules = [...loadModules([{ folder: DEFAULT_MODULE_REPO, label: 'modules' }]).modules.values()].map((m) => m.module);
+    return [...new Set([...toolsOf(modules), ...Object.keys(settings.toolPaths ?? {})])].sort();
   };
 
   const servesKiln = async () => {
@@ -363,6 +389,7 @@ export function createSetup(deps: SetupDeps): Setup {
         next.projectsFolder = folder;
       }
       if (c.browseRoots !== undefined) next.browseRoots = checkBrowseRoots(c.browseRoots);
+      if (c.toolPaths !== undefined) next.toolPaths = checkToolPaths(c.toolPaths, settings.toolPaths);
       let moveTo: string | undefined;
       if (c.knowledgeDir !== undefined) {
         moveTo = checkKnowledgeDir(c.knowledgeDir);

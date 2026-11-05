@@ -8,7 +8,20 @@ export const ITEM_DRAG_TYPE = 'application/x-kiln-item';
 const stageName = (project: Project | undefined, item: Item) =>
   project?.workflow.kinds.find((k) => k.id === item.kind)?.stages.find((s) => s.id === item.stage)?.name ?? item.stage;
 
-const kindName = (project: Project | undefined, item: Item) =>
+/**
+ * A Stage with no role runs no Session, so an Item there waits on a person (a module's "Print it" or
+ * "Order parts"). Not a roll-up Stage, which waits on children, nor the kind's last Stage: nothing is
+ * left to do there.
+ */
+export const isPersonsMove = (project: Project | undefined, item: Item) => {
+  const stages = project?.workflow.kinds.find((k) => k.id === item.kind)?.stages;
+  const index = stages?.findIndex((s) => s.id === item.stage) ?? -1;
+  if (!stages || index < 0 || index === stages.length - 1) return false;
+  const stage = stages[index]!;
+  return !stage.role && !stage.rollUp;
+};
+
+const kindName =(project: Project | undefined, item: Item) =>
   project?.workflow.kinds.find((k) => k.id === item.kind)?.name ?? item.kind;
 
 interface Props {
@@ -34,6 +47,7 @@ export const ItemCard = memo(function ItemCard({ item, project, showProject }: P
       <p className="item-meta">
         <span className={`kind kind-${item.kind}`}>{kindName(project, item)}</span>
         <span className="stage">{stageName(project, item)}</span>
+        {isPersonsMove(project, item) ? <span className="your-move">Your move</span> : null}
         {item.status ? <span className="status">{item.status}</span> : null}
         {item.run?.state === 'paused' && item.run.stage === item.stage ? <span className="paused">Paused</span> : null}
         {item.run?.usage && item.run.stage === item.stage ? <UsageLine usage={item.run.usage} /> : null}

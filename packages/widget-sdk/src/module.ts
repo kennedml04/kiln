@@ -2,6 +2,11 @@
 // Exit checks, Stages, starter files) and the Widgets it requires. It lives in a module repo
 // folder or under a Project's `.kiln/modules/<id>/` as `kiln-module.json`. A module never runs
 // code inside Kiln: its Exit checks run in the Item's worktree, its MCP servers in the Session.
+//
+// An Exit check's `command` and an MCP server's `command`, `args` and `env` values may name:
+// - `{moduleDir}`: the module's own folder, for scripts that ship with it;
+// - `{tool:<name>}`: the path of a tool from the `toolPaths` Setting, or `<name>` itself when the
+//   Setting has none, so the tool is found on PATH. Tool paths are never written into a module.
 
 import type { ExitCheckId } from './flow.ts';
 import type { Stage } from './work.ts';
