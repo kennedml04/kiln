@@ -159,6 +159,11 @@
       "action": "other_commands",
       "match": "git branch -a",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 195,260p packages/core/src/db.ts",
+      "decision": "allow"
     }
   ]
 }
