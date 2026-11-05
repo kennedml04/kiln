@@ -26,7 +26,12 @@ export type ExitCheckId =
    * No commit on the branch that is not on its base has a Co-Authored-By trailer. Built in: Kiln
    * checks it on every Stage with a worktree, whether or not the Workflow names it.
    */
-  | 'no_coauthor_trailers';
+  | 'no_coauthor_trailers'
+  /** A module's command check: its command runs in the worktree, and a non-zero exit fails it. */
+  | ModuleExitCheckId;
+
+/** `module:<module>/<check>`: the `<check>` Exit check of the `<module>` module. */
+export type ModuleExitCheckId = `module:${string}/${string}`;
 
 export interface ExitCheckResult {
   id: ExitCheckId;

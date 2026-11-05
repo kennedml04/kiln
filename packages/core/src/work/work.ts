@@ -17,6 +17,7 @@ import type {
 } from '@kiln/widget-sdk';
 import type { EventBus } from '../events.ts';
 import { DEFAULT_WORKFLOW } from './default-workflow.ts';
+import { effectiveWorkflow } from './effective-workflow.ts';
 import { createMarkdownTracker } from './markdown-tracker.ts';
 import { readProjectFiles, watchProjectFiles } from './project-files.ts';
 import { initialiseRepo, repoProblem } from './repo-check.ts';
@@ -112,19 +113,29 @@ type ProjectBase = Pick<Project, 'id' | 'name' | 'path' | 'registeredAt'>;
  * The Project as its `.kiln` files make it now. An invalid Workflow file keeps `last` (the last
  * valid one), or the default when it never had one. No Workflow file means the default, as it ships
  * today: a Project never keeps an old copy of it.
+ *
+ * The Workflow in force is the effective one: that Workflow with the Project's modules applied. When
+ * the modules make it invalid, the Project keeps `previous` (the Workflow it had), else runs without them.
  */
-function withFiles(base: ProjectBase, last: Workflow | undefined): Project {
+function withFiles(base: ProjectBase, last: Workflow | undefined, previous?: Workflow): Project {
   const files = readProjectFiles(base.path);
-  const workflow = files.workflow ?? (files.hasWorkflowFile ? last : undefined);
-  return {
+  const own = files.workflow ?? (files.hasWorkflowFile ? last : undefined);
+  const effective = effectiveWorkflow(own ?? DEFAULT_WORKFLOW, files.modules);
+  const failed = Array.isArray(effective);
+  const project: Project = {
     ...base,
     tracker: files.settings.tracker ?? 'markdown',
-    workflow: workflow ?? DEFAULT_WORKFLOW,
-    workflowSource: workflow ? 'file' : 'default',
+    workflow: failed ? (previous ?? own ?? DEFAULT_WORKFLOW) : effective,
+    workflowSource: own ? 'file' : 'default',
     settings: files.settings,
-    errors: files.errors,
+    errors: failed ? [...files.errors, ...effective] : files.errors,
   };
+  if (own) ownWorkflows.set(project, own);
+  return project;
 }
+
+/** Each Project's own Workflow file's Workflow (before its modules), kept as the last valid one. */
+const ownWorkflows = new WeakMap<Project, Workflow>();
 
 const slugify = (text: string) =>
   text
@@ -203,8 +214,10 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   );
   const updateWorkflow = db.prepare('UPDATE projects SET workflow = ?, workflow_from_file = ? WHERE id = ?');
   /** Keeps the last valid Workflow file's Workflow, so a Project keeps it while its file is invalid (even over a restart). */
-  const store = (project: Project) =>
-    updateWorkflow.run(project.workflowSource === 'file' ? JSON.stringify(project.workflow) : '{}', project.workflowSource === 'file' ? 1 : 0, project.id);
+  const store = (project: Project) => {
+    const own = ownWorkflows.get(project);
+    updateWorkflow.run(own ? JSON.stringify(own) : '{}', own ? 1 : 0, project.id);
+  };
   let decorate = (workflow: Workflow) => workflow;
   const view = (project: Project): Project => {
     const workflow = decorate(project.workflow);
@@ -257,8 +270,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
 
   /** Re-reads the Project's `.kiln` files; when they changed it, publishes `project.updated` and re-reads its Items. */
   const reload = (entry: Entry) => {
-    const last = entry.project.workflowSource === 'file' ? entry.project.workflow : undefined;
-    const next = withFiles(entry.project, last);
+    const next = withFiles(entry.project, ownWorkflows.get(entry.project), entry.project.workflow);
     if (JSON.stringify(next) === JSON.stringify(entry.project)) return;
     const trackerChanged = next.tracker !== entry.project.tracker;
     entry.project = next;

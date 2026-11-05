@@ -1,4 +1,4 @@
-// The Exit checker: Kiln checks a Stage's Exit itself, from git and the Project's tests.
+// The Exit checker: Kiln checks a Stage's Exit itself, from git, the Project's tests and its modules' check commands.
 // Nothing an Agent says counts towards it.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -8,14 +8,21 @@ import {
   type ExitCheckId,
   type ExitCheckResult,
   type ExitStatus,
+  type ModuleExitCheck,
+  type ModuleExitCheckId,
   type ProjectSettings,
 } from '@kiln/widget-sdk';
+import { parseModuleCheckId } from '../work/effective-workflow.ts';
+import { readProjectFiles } from '../work/project-files.ts';
 import { coAuthoredCommits, coAuthoredFix, commitsAhead, fileAtHead, git, uncommitted } from './git.ts';
 
 const TEST_TIMEOUT_MS = 10 * 60_000;
 const OUTPUT_TAIL = 4_000;
 
-const NAMES: Record<ExitCheckId, string> = {
+/** The checks Kiln itself knows; a module's `module:<module>/<check>` checks come from its file. */
+type BuiltInExitCheckId = Exclude<ExitCheckId, ModuleExitCheckId>;
+
+const NAMES: Record<BuiltInExitCheckId, string> = {
   branch_has_commits: 'Branch has commits',
   tree_clean: 'Working tree clean',
   tests_pass: 'Tests pass',
@@ -32,7 +39,7 @@ const NAMES: Record<ExitCheckId, string> = {
 export const BUILT_IN_WORKTREE_CHECKS: readonly ExitCheckId[] = ['no_coauthor_trailers'];
 
 /** Every named check a Workflow can combine into an Exit. */
-export const EXIT_CHECK_IDS = Object.keys(NAMES) as ExitCheckId[];
+export const EXIT_CHECK_IDS: readonly ExitCheckId[] = Object.keys(NAMES) as BuiltInExitCheckId[];
 
 /** The checks that read nothing from a worktree: the only ones a Stage without a worktree can use. */
 export const WORKTREE_FREE_CHECKS: readonly ExitCheckId[] = ['children_exist', 'no_open_blocking_asks'];
@@ -134,9 +141,7 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
     case 'tests_pass': {
       const { testCommand } = readProjectSettings(ctx.repo);
       if (!testCommand) return { met: false, detail: `No testCommand in ${PROJECT_SETTINGS_FILE}` };
-      const { code, output } = await runCommand(testCommand, ctx.worktree);
-      const head = `\`${testCommand}\` exited with ${code ?? 'no code'}`;
-      return { met: code === 0, detail: output ? `${head}\n${output}` : head };
+      return commandCheck(testCommand, ctx.worktree);
     }
     case 'findings_exist': {
       if (!ctx.findingsPath) return { met: false, detail: 'This Item has no place for review findings' };
@@ -156,10 +161,31 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
         ? { met: true, detail: artifacts.join('\n') }
         : { met: false, detail: `Write the Item's artifact into ${ctx.itemDir} and commit it` };
     }
-    default:
-      return { met: false, detail: 'This check needs no worktree' };
+    default: {
+      if (!parseModuleCheckId(id)) return { met: false, detail: 'This check needs no worktree' };
+      const found = moduleCheckOf(ctx.repo, id);
+      return found ? commandCheck(found.command, ctx.worktree) : { met: false, detail: `No module of this Project has the check ${id}` };
+    }
   }
 }
+
+/** Runs a check's command in the worktree: exit code 0 meets it, and its output is the detail. */
+async function commandCheck(command: string, worktree: string): Promise<CheckOutcome> {
+  const { code, output } = await runCommand(command, worktree);
+  const head = `\`${command}\` exited with ${code ?? 'no code'}`;
+  return { met: code === 0, detail: output ? `${head}\n${output}` : head };
+}
+
+/** A `module:<module>/<check>` check, from the modules the Project's main checkout pulls in (never the worktree's). */
+function moduleCheckOf(repo: string, id: string): ModuleExitCheck | undefined {
+  const named = parseModuleCheckId(id);
+  if (!named) return undefined;
+  const module = readProjectFiles(repo).modules.find((m) => m.module.id === named.module)?.module;
+  return module?.exitChecks?.find((c) => c.id === named.check);
+}
+
+const nameOf = (id: ExitCheckId, repo: string) =>
+  NAMES[id as BuiltInExitCheckId] ?? moduleCheckOf(repo, id)?.name ?? id;
 
 /**
  * Checks every named check of a Stage's Exit, in order, then (on a Stage with a worktree) the
@@ -168,7 +194,7 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
 export async function checkExit(stage: string, checks: ExitCheckId[], ctx: ExitContext): Promise<ExitStatus> {
   const builtIn = ctx.worktree && ctx.base ? BUILT_IN_WORKTREE_CHECKS.filter((id) => !checks.includes(id)) : [];
   const results: ExitCheckResult[] = [];
-  for (const id of [...checks, ...builtIn]) results.push({ id, name: NAMES[id], ...(await check(id, ctx)) });
+  for (const id of [...checks, ...builtIn]) results.push({ id, name: nameOf(id, ctx.repo), ...(await check(id, ctx)) });
   return { stage, met: results.every((r) => r.met), checks: results, checkedAt: new Date().toISOString() };
 }
 

@@ -14,6 +14,7 @@ import {
   type ProjectSettings,
   type Workflow,
 } from '@kiln/widget-sdk';
+import { moduleCheckIds } from './effective-workflow.ts';
 import { loadModules, moduleSources, type LoadedModule } from './modules.ts';
 import { validateWorkflow } from './workflow-validator.ts';
 
@@ -135,7 +136,7 @@ export function readProjectFiles(root: string): ProjectFiles {
   let workflow: Workflow | undefined;
   if (workflowFile.error) errors.push(workflowFile.error);
   else if (workflowFile.value !== undefined) {
-    const checked = validateWorkflow(workflowFile.value);
+    const checked = validateWorkflow(workflowFile.value, moduleCheckIds(resolved.modules));
     if (Array.isArray(checked)) errors.push(...checked.map((e) => ({ file: PROJECT_WORKFLOW_FILE, ...e })));
     else workflow = checked;
   }

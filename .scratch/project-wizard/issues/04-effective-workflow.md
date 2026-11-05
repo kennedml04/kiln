@@ -6,8 +6,8 @@ Exit checks gain a command kind, `module:<module>/<check>`. It runs the command 
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The effective Workflow is a pure function, with tests: Stages inserted in order, a check added, a check replacing `tests_pass`, an invalid result reported as a Project error
-- [ ] A command Exit check passes and fails on small scripts in a temp worktree, and its output reaches the Thread
-- [ ] A Project with no modules gets exactly its old Workflow
+- [x] The effective Workflow is a pure function, with tests: Stages inserted in order, a check added, a check replacing `tests_pass`, an invalid result reported as a Project error
+- [x] A command Exit check passes and fails on small scripts in a temp worktree, and its output reaches the Thread
+- [x] A Project with no modules gets exactly its old Workflow

@@ -15,8 +15,12 @@ export const STAGE_FIELDS = new Set([
 const BOOLEAN_FIELDS = ['gate', 'worktree', 'mergeOnExit', 'rollUp'] as const;
 const TEXT_FIELDS = ['role', 'agent', 'model', 'fallbackModel', 'status', 'pool'] as const;
 
-/** The Workflow when it is valid, else every problem found. */
-export function validateWorkflow(raw: unknown): Workflow | WorkflowProblem[] {
+/**
+ * The Workflow when it is valid, else every problem found. `moduleChecks` are the
+ * `module:<module>/<check>` Exit checks the Project's modules offer, which its Stages can name too.
+ */
+export function validateWorkflow(raw: unknown, moduleChecks: readonly string[] = []): Workflow | WorkflowProblem[] {
+  const checkIds: readonly string[] = [...EXIT_CHECK_IDS, ...moduleChecks];
   const problems: WorkflowProblem[] = [];
   const problem = (at: string, message: string) => problems.push({ at, message });
   if (!isObject(raw)) return [{ at: '', message: 'A Workflow must be a JSON object' }];
@@ -71,8 +75,8 @@ export function validateWorkflow(raw: unknown): Workflow | WorkflowProblem[] {
         if (!Array.isArray(stage.exit)) problem(`${where}.exit`, 'An Exit is a list of named checks');
         else {
           stage.exit.forEach((check: unknown, c) => {
-            if (!EXIT_CHECK_IDS.includes(check as ExitCheckId)) {
-              problem(`${where}.exit[${c}]`, `${JSON.stringify(check)} is not an Exit check. The checks are: ${EXIT_CHECK_IDS.join(', ')}`);
+            if (typeof check !== 'string' || !checkIds.includes(check)) {
+              problem(`${where}.exit[${c}]`, `${JSON.stringify(check)} is not an Exit check. The checks are: ${checkIds.join(', ')}`);
             } else if (stage.worktree !== true && !WORKTREE_FREE_CHECKS.includes(check as ExitCheckId)) {
               problem(`${where}.exit[${c}]`, `${label} has no worktree, so it cannot check "${String(check)}": give it "worktree": true`);
             }
