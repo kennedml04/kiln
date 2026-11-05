@@ -26,6 +26,8 @@ import type { LocalServer, ServerEntry } from './local-server.ts';
 import { runSmokeTest } from './smoke-test.ts';
 
 const SETTINGS_KEY = 'local-server';
+/** Settings with no default; a PUT of null clears one. */
+const OPTIONAL_SETTINGS = new Set(['configPath', 'url', 'modelsFolder']);
 /** llama.cpp's KV cache types. */
 export const KV_CACHE_TYPES = ['f32', 'f16', 'bf16', 'q8_0', 'q4_0', 'q4_1', 'iq4_nl', 'q5_0', 'q5_1'];
 /** Flags Kiln writes itself, so they can't also be extra flags. */
@@ -63,7 +65,7 @@ const wholeAtLeast = (value: unknown, name: string, min: number) => {
 };
 
 /** A model id or variant id made from free text: lower case, letters, digits, dots, dashes. */
-const slug = (text: string) =>
+export const slug = (text: string) =>
   text.toLowerCase().replace(/\.gguf$/, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'variant';
 
 /** Checks settings from a request. `partial`: an edit, where only what is given changes. */
@@ -140,13 +142,14 @@ export function createVariantService({ db, bus, clock, server: makeServer = crea
     if (!isObject(input)) throw bad('Send the local server settings to change as an object');
     const next: Record<string, unknown> = { ...settings() };
     for (const [key, value] of Object.entries(input)) {
-      if (!(key in LOCAL_SERVER_DEFAULTS) && key !== 'configPath' && key !== 'url') throw bad(`"${key}" is not a local server setting`);
+      if (!(key in LOCAL_SERVER_DEFAULTS) && !OPTIONAL_SETTINGS.has(key)) throw bad(`"${key}" is not a local server setting`);
       if (key === 'kind' && value !== 'llama-swap') throw bad('"kind" must be llama-swap (the only local server Kiln drives so far)');
-      if ((key === 'configPath' || key === 'url') && value === null) {
+      if (OPTIONAL_SETTINGS.has(key) && value === null) {
         delete next[key];
         continue;
       }
       if (key === 'configPath' && (typeof value !== 'string' || !isAbsolute(value))) throw bad('"configPath" must be the full path of the llama-swap config file');
+      if (key === 'modelsFolder' && (typeof value !== 'string' || !isAbsolute(value))) throw bad('"modelsFolder" must be the full path of a folder');
       if (key === 'url') {
         let parsed: URL | undefined;
         try {

@@ -119,6 +119,8 @@ export interface TestKilnOptions {
 
 /** The default `KILN_TAILSCALE_CLI` in tests: a command that is never installed. */
 const NO_TAILSCALE = 'kiln-test-no-tailscale';
+/** The default `KILN_HUGGINGFACE_URL` in tests: a closed local port, so no test reaches huggingface.co. */
+const NO_HUGGING_FACE = 'http://127.0.0.1:9';
 /** Setup's machine checks in tests: no old board, no Obsidian and no local model server, unless a test sets one. */
 const NO_SUCH_FILE = join(tmpdir(), 'kiln-test-nothing-here', 'none');
 
@@ -545,6 +547,7 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
       KILN_OLD_BOARD_REGISTRY: NO_SUCH_FILE,
       KILN_OBSIDIAN_PATHS: NO_SUCH_FILE,
       KILN_LOCAL_MODEL_URLS: '',
+      KILN_HUGGINGFACE_URL: NO_HUGGING_FACE,
       ...(options.setup === 'fresh' ? {} : { KILN_TEST_SETUP_DONE: '1' }),
       ...options.env,
     },

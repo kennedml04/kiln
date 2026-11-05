@@ -11,6 +11,8 @@
     "./agent-lifecycle-contract": "./src/agent-lifecycle-contract.ts",
     "./fake-github": "./src/fake-github.ts",
     "./fake-local-server": "./src/fake-local-server.ts",
+    "./fake-hugging-face": "./src/fake-hugging-face.ts",
+    "./test-gguf": "./src/test-gguf.ts",
     "./tracker-contract": "./src/tracker-contract.ts"
   },
   "dependencies": {

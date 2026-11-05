@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PanelContent, PanelView, WidgetInfo } from '@kiln/widget-sdk';
+import type { ModelInspection, PanelContent, PanelView, WidgetInfo } from '@kiln/widget-sdk';
 import { createTempRepo, startTestKiln, tempDir, type Cleanup, type TestKiln } from '@kiln/testing';
+import { testGguf } from '@kiln/testing/test-gguf';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WIDGET_DIR = resolve(HERE, '..');
@@ -239,6 +240,29 @@ test('each GPU gets its own card, and a reading nvidia-smi has not got shows as 
       },
     ],
   } satisfies PanelContent);
+});
+
+test("Add a model sizes its recommendation to the GPU monitor's reading, using the GPU with the most free VRAM", async (t) => {
+  const kiln = await startTestKiln(t);
+  const gpus = fakeGpus(t, {
+    gpus: [
+      { index: 0, uuid: 'GPU-aaaa', name: 'NVIDIA GeForce RTX 4090', use: 37, used: 12288, total: 24576 },
+      { index: 1, uuid: 'GPU-bbbb', name: 'NVIDIA GeForce RTX 3060', use: 0, used: 4096, total: 12288 },
+    ],
+    apps: [],
+  });
+  await startGpuMonitor(t, kiln, gpus.config);
+  const path = join(tempDir(t, 'kiln-gguf'), 'Tiny-Test-Q4_K_M.gguf');
+  writeFileSync(path, testGguf());
+
+  const info = await kiln.api<ModelInspection>('POST', '/api/local-models/inspect', { path });
+  assert.deepEqual(info.gpu, { source: 'gpu-monitor', name: 'GPU 0: NVIDIA GeForce RTX 4090', memoryUsedMiB: 12288, memoryTotalMiB: 24576 });
+  // 128 KB of f16 cache a token: 64K (8 GB) fits the 10.5 GB left after 12 GB in use and the headroom; 128K doesn't.
+  const r = info.recommended;
+  assert.deepEqual([r.contextSize, r.gpuLayers, r.offloaded], [65536, 33, false]);
+  assert.match(r.reasons.contextSize, /^fits 20 of 24 GB at 64K; 128K would take 28 GB/);
+  assert.equal(r.reasons.gpuLayers, '33 puts all 32 layers and the output layer on the GPU');
+  assert.equal(r.figures.freeBytes, 12 * 1024 ** 3);
 });
 
 // Opt-in, read-only: set KILN_REAL_GPU=1 to have the Widget read this machine's GPUs with the real

@@ -61,7 +61,8 @@ import { createDemo } from './demo/demo.ts';
 import { handleDemoRoute } from './demo/routes.ts';
 import { createRunawayGuard, handleRunawayRoute } from './budgets/runaway.ts';
 import { createVariantService } from './local/variants.ts';
-import { handleVariantRoute } from './local/routes.ts';
+import { handleLocalModelRoute, handleVariantRoute } from './local/routes.ts';
+import { createLocalModels } from './local/models.ts';
 
 /** Where the built Shell lives in the monorepo (`npm run build` writes it). */
 export const DEFAULT_SHELL_DIR = fileURLToPath(new URL('../../shell/dist/', import.meta.url));
@@ -197,6 +198,13 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   const runaway = createRunawayGuard({ db, bus, work, sessions, asks, enqueue: (itemId) => scheduler.enqueue(itemId) });
   // Variants and the local server (local-first Ticket 04).
   const variants = createVariantService({ db, bus, clock });
+  // Add a model (local-first Ticket 06): GGUF facts and recommendations, Hugging Face downloads.
+  const localModels = createLocalModels({
+    clock,
+    settings: () => variants.settings(),
+    panels: () => panels.list(),
+    ...(process.env.KILN_HUGGINGFACE_URL ? { huggingFaceUrl: process.env.KILN_HUGGINGFACE_URL } : {}),
+  });
   const restart = createRestartWhenIdle({
     bus,
     runningSessions: () => sessions.running().length,
@@ -488,6 +496,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson, caller: demoCaller })) return;
       if (await handleRunawayRoute(runaway, req, res, url, { sendJson, readJson })) return;
       if (await handleVariantRoute(variants, req, res, url, { sendJson, readJson })) return;
+      if (await handleLocalModelRoute(localModels, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
       if (await handleWorkRoute(work, req, res, url, { sendJson, readJson })) return;

@@ -10,6 +10,7 @@ import { setTheme, useTheme } from './theme.ts';
 import { WidgetsPage } from './WidgetsPage.tsx';
 import { HomeBoard } from './work/HomeBoard.tsx';
 import { ItemView } from './work/ItemView.tsx';
+import { MODELS_PATH, ModelsPage } from './work/ModelsPage.tsx';
 import { ProjectThreadView } from './work/ProjectThreadView.tsx';
 import { ProjectView } from './work/ProjectView.tsx';
 import { SettingsPage } from './work/SettingsPage.tsx';
@@ -91,6 +92,7 @@ function Page({ isAdmin }: { isAdmin: boolean }) {
   if (path === '/audit' && isAdmin) return <AuditPage />;
   if (path === NEEDS_YOU_PATH) return <NeedsYouPage />;
   if (path === '/settings' && isAdmin) return <SettingsPage />;
+  if (path === MODELS_PATH && isAdmin) return <ModelsPage />;
   if (path === SETUP_PATH && isAdmin) return <SetupWizard />;
   if (path === '/widgets') return <WidgetsPage isAdmin={isAdmin} />;
   const project = PROJECT_ROUTE.exec(path);

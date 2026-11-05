@@ -1405,6 +1405,51 @@ pre {
   width: 5.5rem;
 }
 
+/* Settings → Models */
+
+.models-form {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 42rem;
+}
+
+.models-form input,
+.models-form select,
+.models-hf input,
+.models-add form[aria-label='GGUF file'] input {
+  width: 100%;
+}
+
+.models-reason {
+  color: var(--text-muted, inherit);
+  font-size: 0.8rem;
+}
+
+.models-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.models-source,
+.models-hf,
+.models-confirm,
+.models-download,
+.models-add > form {
+  margin-bottom: 0.75rem;
+}
+
+.models-radio {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.models-download progress {
+  width: min(24rem, 100%);
+}
+
 /* ---------- Audit log ---------- */
 
 .audit h2 {

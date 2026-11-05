@@ -14,6 +14,7 @@ import {
 } from '@kiln/widget-sdk';
 import { followLink } from '../router.ts';
 import { SETUP_PATH } from '../SetupWizard.tsx';
+import { MODELS_PATH } from './ModelsPage.tsx';
 import { api, useStore } from '../store.ts';
 
 function PoolRow({ pool }: { pool: Pool }) {
@@ -295,6 +296,13 @@ export function SettingsPage() {
       <UsersForm />
       <h3>Org Policy</h3>
       <OrgPolicyForm />
+      <h3>Models</h3>
+      <p>
+        <a href={MODELS_PATH} onClick={followLink}>
+          Local models
+        </a>
+        : the local server, its variants and Add a model.
+      </p>
       <h3>Capacity pools</h3>
       <p>How many Sessions each pool runs at once. Changes take effect straight away.</p>
       {pools.map((pool) => (

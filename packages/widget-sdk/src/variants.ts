@@ -17,6 +17,8 @@ export interface LocalServerSettings {
   configPath?: string;
   /** The server's base URL, e.g. `http://127.0.0.1:8080` (it serves `/v1/models` and `/v1/messages`). */
   url?: string;
+  /** Where Hugging Face downloads go (Add a model). No default. */
+  modelsFolder?: string;
   /** The command an entry Kiln writes starts the model with. Default `llama-server`. */
   serverCommand: string;
   /** How long a smoke test waits for the model to load and answer. Default 300. */

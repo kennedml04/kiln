@@ -92,6 +92,10 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'PATCH', path: /^\/api\/variants\/[^/]+$/, role: 'admin', action: 'variant.edit' },
   { method: 'DELETE', path: /^\/api\/variants\/[^/]+$/, role: 'admin', action: 'variant.remove' },
   { method: 'POST', path: /^\/api\/variants\/[^/]+\/(enable|disable|smoke-test)$/, role: 'admin', action: 'variant.change' },
+  // Add a model (local-first Ticket 06): reads files on the core's machine and downloads to it.
+  { method: 'GET', path: /^\/api\/local-models\//, role: 'admin' },
+  { method: 'POST', path: '/api/local-models/inspect', role: 'admin', action: 'local_model.inspect' },
+  { method: 'POST', path: '/api/local-models/downloads', role: 'admin', action: 'local_model.download' },
 ];
 
 export interface Caller {
