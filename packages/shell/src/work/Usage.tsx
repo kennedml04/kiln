@@ -12,6 +12,12 @@ const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 
 export const BUDGET_ROUTE = /^\/budgets\/([^/]+)\/?$/;
 const budgetPath = (id: string) => `/budgets/${encodeURIComponent(id)}`;
 
+/**
+ * The windows to show: all of them, except the 5-hour window while it has no reading. Max plans no
+ * longer have one, and a gauge that is always "unknown" only clutters the header.
+ */
+const shownWindows = (budget: BudgetInfo) => budget.windows!.filter((w) => w.id !== '5h' || w.known);
+
 /** A subscription Budget's windows: one meter each (week with its pace, 5-hour, Fable), unknown ones said so. */
 function WindowGauges({ budget }: { budget: BudgetInfo }) {
   return (
@@ -19,7 +25,7 @@ function WindowGauges({ budget }: { budget: BudgetInfo }) {
       <a href={budgetPath(budget.id)} onClick={followLink}>
         {budget.name}
       </a>
-      {budget.windows!.map((w) => (
+      {shownWindows(budget).map((w) => (
         <span key={w.id} className={`budget-window${w.known ? '' : ' unknown'}${w.atReserve || w.aheadOfPace ? ' warn' : ''}`}>
           <meter
             aria-label={`${budget.name} ${w.name}`}
@@ -125,7 +131,7 @@ export function BudgetPage({ budgetId }: { budgetId: string }) {
       {budget.windows ? (
         <>
           <ul>
-            {budget.windows.map((w) => (
+            {shownWindows(budget).map((w) => (
               <li key={w.id}>{w.label}</li>
             ))}
           </ul>

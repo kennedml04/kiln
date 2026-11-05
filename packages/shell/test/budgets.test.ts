@@ -72,10 +72,12 @@ test("a subscription Budget's header shows each window, and its page shows Fable
   await header.getByRole('meter', { name: 'Home Week' }).waitFor();
   await header.getByText('Week: 45% used, pace 29%, resets in 5d 0h').waitFor();
   await header.getByText('Fable: 26% used, resets in 5d 0h').waitFor();
-  await header.getByText('5-hour window: unknown').waitFor();
+  // No 5-hour reading (Max plans no longer have the window): no 5-hour gauge at all.
+  assert.equal(await header.getByText(/5-hour/).count(), 0);
 
   await header.getByRole('link', { name: 'Home' }).click();
   await page.getByRole('heading', { name: 'Home', level: 2 }).waitFor();
+  assert.equal(await page.getByRole('main').getByText(/5-hour/).count(), 0);
   const fable = page.getByRole('region', { name: 'Fable use' });
   await fable.getByText(/approximate/).waitFor();
   const byKind = fable.getByRole('table', { name: 'By Item kind' });
