@@ -64,6 +64,11 @@
       "action": "other_commands",
       "match": "mkdir -p .scratch/demo-project",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls -a .kiln 2>&1",
+      "decision": "allow"
     }
   ]
 }
