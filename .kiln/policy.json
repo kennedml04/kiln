@@ -19,6 +19,11 @@
       "action": "other_commands",
       "match": "ls packages/core/src/work packages/core/src/flow packages/core/src/knowledge",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"projectThread\\|ProjectThread\\|readOnly\\|read-only\" packages/core/src/flow/session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
