@@ -9,8 +9,10 @@ It picks the largest context from 16K, 32K, 64K, 128K and so on that leaves 1.5 
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests on fixed metadata and VRAM figures cover: fits fully, fits only a smaller context, needs offload, capped by the training context
-- [ ] Every recommendation shows the numbers it came from
-- [ ] GGUF metadata is read from a file header without loading the weights
+**As built:** `packages/core/src/local-models/` (imported as `@kiln/core/local-models`). `gguf.ts` exports `readGgufHeader(path)`, which reads GGUF v2/v3 metadata in 64 KB chunks and stops where the tensor infos begin (arrays over 1024 items, like the vocabulary, are kept only as their size), and `GgufError`. `recommend.ts` exports `modelFacts(header)` (layers, KV heads, key and value lengths, training context; a per-layer KV head array is averaged), `kvBytesPerToken(facts, kvCacheType)`, `recommendSettings({ fileBytes, facts, kvCacheType, gpu, cpuThreads })`, `recommendThreads(logicalCpus)` (half the logical CPUs, at least one) and the constants `HEADROOM_BYTES`, `FIRST_CONTEXT` and `KV_CACHE_BYTES_PER_ELEMENT`. KV bytes per token = layers x KV heads x (key + value length) x bytes per element; the context is the largest step with weights + KV within free VRAM less 1.5 GB. When 16K doesn't fit, the weights are spread over layers + 1 offload slots and as many as fit go on the GPU. `gpu` takes the GPU monitor's `memoryUsedMiB` and `memoryTotalMiB`; when either is null, every layer stays on the CPU. Each recommendation carries `numbers` (bytes) and a one-line `reason`. Tests: `packages/core/test/recommend-settings.test.ts`, on GGUF files built in the test.
+
+- [x] Unit tests on fixed metadata and VRAM figures cover: fits fully, fits only a smaller context, needs offload, capped by the training context
+- [x] Every recommendation shows the numbers it came from
+- [x] GGUF metadata is read from a file header without loading the weights
