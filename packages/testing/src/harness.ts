@@ -416,6 +416,9 @@ function initRepo(path: string): TempRepo {
   // machine may have no global identity.
   git('config', 'user.name', 'Kiln Test');
   git('config', 'user.email', 'test@kiln.invalid');
+  // The machine's global hooks (a global core.hooksPath) stay out of test repos: tests commit what Kiln
+  // must refuse, such as a Co-Authored-By trailer, and a test runs the same on every machine.
+  git('config', 'core.hooksPath', join(path, '.git', 'hooks'));
   writeFileSync(join(path, 'README.md'), '# Test Project\n');
   git('add', '.');
   git('commit', '-q', '-m', 'Initial commit');

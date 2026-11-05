@@ -16,6 +16,7 @@ Node 24 and npm 11, npm workspaces. Node runs the TypeScript directly (type stri
 - Never run `kiln start` or `kiln stop` without `--port` and `--data-dir`: the defaults are the live Kiln (8300, `%LOCALAPPDATA%\Kiln`). Tests must never use 8300, 8195, `%LOCALAPPDATA%\Kiln` or the old board's folder.
 - To try a change against a real core, run `node packages/core/src/cli.ts dev` from this worktree: a dev instance on a free port with a throwaway data folder, beside the live core. Stop it with `kiln stop --data-dir <folder>`. Stopping a dev instance also deletes its data folder (setup, Budgets, Agents, Projects), so never stop one to pick up a code change while a person is testing on it: ask first. Never restart the live core; `kiln restart` (Restart when idle) is the person's call. Tests that touch start at login set `KILN_STARTUP_ENTRY_FILE` so nothing is registered on this PC.
 - Use only erasable TypeScript (no enums, namespaces or parameter properties) and import local files with their `.ts` extension.
+- Publishing to GitHub: `node scripts/publish.ts` from the trunk (dry run; `--push` to publish). The repo is public, so `check-banned` refuses personal paths, control bytes, and the words in the `KILN_PRIVATE_WORDS` env var.
 
 ## Agent skills
 
