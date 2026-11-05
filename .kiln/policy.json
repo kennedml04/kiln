@@ -509,6 +509,11 @@
       "action": "other_commands",
       "match": "git log --oneline --all -i --grep=\"escalat\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for b in 07 08 09 10",
+      "decision": "allow"
     }
   ]
 }
