@@ -424,6 +424,11 @@
       "action": "other_commands",
       "match": "for b in 07 08 09 03",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i \"s/readProjectFiles(project.path).modules/readProjectFiles(project.path).modules/\" packages/core/src/flow/session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
