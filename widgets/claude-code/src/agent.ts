@@ -201,6 +201,8 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       ...(start.model ?? config.model ? { model: start.model ?? config.model } : {}),
       permissionMode: 'default',
       settingSources: [],
+      // Claude Code's preset asks for a Co-Authored-By trailer on commits and PRs; Kiln never wants one.
+      settings: { attribution: { commit: '', pr: '' } },
       hooks: { PreToolUse: [{ hooks: [hook], onFailure: 'block' }] },
       canUseTool,
       mcpServers: start.kilnTools ? { kiln: { type: 'http', url: start.kilnTools.url, headers: start.kilnTools.headers } } : {},

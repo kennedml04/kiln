@@ -371,6 +371,18 @@ test('a running Session reads the quota at an interval, and on stop it closes Cl
   assert.ok(!claude.log().some((e) => e.kind === 'interrupt'));
 });
 
+test('Claude Code runs with no settings files and attribution turned off, so it never asks for a Co-Authored-By trailer', async (t) => {
+  const kiln = await startTestKiln(t);
+  answerProject(kiln);
+  const claude = await installClaudeCode(t, kiln, { turns: [[{ text: 'Done.' }]] });
+  const { events } = await startTicket(kiln);
+  await events.next<ExitCheckedEvent>('exit.checked', { timeoutMs: 20_000 });
+  const started = claude.log().find((e) => e.kind === 'options');
+  assert.ok(started && started.kind === 'options', 'the SDK got its options');
+  assert.deepEqual(started.options.settingSources, []);
+  assert.deepEqual(started.options.settings, { attribution: { commit: '', pr: '' } });
+});
+
 test("the Agent offers setup Claude's models by name, or the ones its config lists", async (t) => {
   const offered = async (config: Record<string, unknown>) => {
     const kiln = await startTestKiln(t);

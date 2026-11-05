@@ -236,9 +236,9 @@ test('artifact_exists is met once a file beside the Item record is committed, an
   await kiln.api<StartResult>('POST', `/api/items/${encodeURIComponent(bug.id)}/start`);
 
   const missing = (await events.next<ExitCheckedEvent>('exit.checked', { timeoutMs: 15_000 })).payload.exit;
-  assert.deepEqual(missing.checks.map((c) => [c.id, c.met]), [['artifact_exists', false]]);
+  assert.deepEqual(missing.checks.map((c) => [c.id, c.met]), [['artifact_exists', false], ['no_coauthor_trailers', true]]);
   const met = (await events.next<ExitCheckedEvent>('exit.checked', { timeoutMs: 15_000 })).payload.exit;
-  assert.deepEqual(met.checks.map((c) => [c.id, c.met, c.detail]), [['artifact_exists', true, notes]]);
+  assert.deepEqual(met.checks.map((c) => [c.id, c.met, c.detail]), [['artifact_exists', true, notes], ['no_coauthor_trailers', true, undefined]]);
 });
 
 test('the Project settings are read from .kiln/settings.json, live, and a bad setting is named', async (t) => {

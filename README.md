@@ -3,7 +3,7 @@
 Kiln is a local board for running coding agents across many projects. It has a small core that owns the work (Projects, Items, Stages, Gates and Sessions), permissions and runaway-cost protection. Everything else, including the agents themselves, is a Widget: a separate process the core installs, starts and supervises.
 
 - **One work model.** Epics, Stories and Tickets move through the Stages of a Workflow. An Item moves forward when Kiln checks that its Stage's Exit is met, or when a person approves a Gate in the Needs you inbox.
-- **A fresh Session per Stage, a worktree per Ticket.** Each Ticket gets its own git worktree and branch. Kiln checks the Exit (commits, clean tree, tests pass) and merges, or opens a pull request.
+- **A fresh Session per Stage, a worktree per Ticket.** Each Ticket gets its own git worktree and branch. Kiln checks the Exit (commits, clean tree, tests pass) and merges, or opens a pull request. Whatever the Workflow says, every Stage with a worktree also checks that no commit on the branch has a `Co-Authored-By:` trailer (the Agent is told to rewrite those messages), and the merge and the pull request refuse such a branch.
 - **Kiln owns the Policy.** One layered Policy (Org → Project → Stage) over abstract actions, translated by each Agent Widget into its tool's own settings. Permission requests become Asks.
 - **Budgets on by default.** Metered (credits or dollars), subscription (plan usage windows) and local (turns and time) Budgets, with per-Session caps, pacing, reserves, a stall rule, a context alarm and Stop all.
 

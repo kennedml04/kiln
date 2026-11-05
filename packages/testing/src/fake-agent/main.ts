@@ -137,7 +137,7 @@ async function perform(run: Run, step: FakeAgentStep, turn: { n: number }): Prom
     case 'commit': {
       const message = fill(run, step.message);
       git(worktree(run), 'add', '-A');
-      git(worktree(run), 'commit', '-q', '-m', message);
+      git(worktree(run), 'commit', '-q', ...(step.amend ? ['--amend'] : []), '-m', message);
       await session.emit({ kind: 'progress', tool: { name: 'commit', input: { message } } });
       return true;
     }

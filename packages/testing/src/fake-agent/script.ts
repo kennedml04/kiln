@@ -8,8 +8,8 @@ import type { FinishReason, QuotaReading } from '@kiln/widget-sdk';
 export type FakeAgentStep =
   /** Writes a file (relative to the Session's worktree). `{session}` in path, content or a commit message is the Session id. */
   | { do: 'write'; path: string; content: string }
-  /** Stages everything in the worktree and commits it. */
-  | { do: 'commit'; message: string }
+  /** Stages everything in the worktree and commits it; with `amend`, rewrites the last commit with this message instead. */
+  | { do: 'commit'; message: string; amend?: boolean }
   /**
    * `{session}`, `{seed}` (the seed's artifact names, comma-separated) and `{artifact:<name>}` (that
    * seed artifact's content) are filled in.

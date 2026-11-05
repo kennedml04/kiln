@@ -44,7 +44,7 @@ import { WidgetHostError, type WidgetHost } from '../widget-host.ts';
 import { WorkError, type Work } from '../work/work.ts';
 import { checkExit, exitFeedback, grillPathOf, specPathOf } from './exit-checker.ts';
 import { findingsPathOf, type Gates } from './gates.ts';
-import { defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
+import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
 import type { KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
 import { digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
 
@@ -511,11 +511,13 @@ export function createSessionManager({
     const item = subjectOf(info.itemId);
     const stage = item ? stageOf(item) : undefined;
     if (!item || !stage || stage.id !== info.stage) return;
-    if (!stage.exit?.length) return end(session, 'finished');
+    // A Stage with a worktree always has the built-in checks (no Co-Authored-By trailers), Exit or not.
+    const named = stage.exit ?? [];
+    if (!named.length && !(info.worktree && session.base)) return end(session, 'finished');
     const project = work.project(info.projectId)!;
     const findingsPath = findingsPathOf(item);
     // A Stage without a worktree has only worktree-free checks (the Workflow validator sees to it).
-    const exit = await checkExit(stage.id, stage.exit, {
+    const exit = await checkExit(stage.id, named, {
       repo: project.path,
       ...(info.worktree ? { worktree: info.worktree } : {}),
       ...(session.base ? { base: session.base } : {}),
@@ -540,6 +542,8 @@ export function createSessionManager({
       session.idleTimer.unref?.();
       return;
     }
+    // A Stage with no Exit of its own ends as before once the built-in checks pass.
+    if (!named.length) return end(session, 'finished');
     await end(session, 'finished');
     if (stage.gate && gates && session.base) await gates.raise(info, session.base);
     else if (stage.mergeOnExit && gates && info.worktree) await gates.mergeOnExit(info);
@@ -608,6 +612,24 @@ export function createSessionManager({
     try {
       const scope = scopeOf(info);
       if (!scope) throw new Error(`the Item "${info.itemId}" is gone`);
+      // Nothing Kiln runs commits a Co-Authored-By trailer, whatever the Policy or an "Always allow"
+      // says: refused before anyone is asked, and the Agent is told how to do it instead.
+      if (CO_AUTHORED_BY.test(detail)) {
+        audit.record({
+          actor: { kind: 'kiln' },
+          action: 'permission.deny',
+          target: auditTarget(info),
+          outcome: 'refused',
+          detail: { sessionId: info.id, action, detail, by: 'no_coauthor_trailers' },
+        });
+        bus.publish('session.message', {
+          ...ref(info),
+          from: 'kiln',
+          text: 'Kiln refused that command: it adds a Co-Authored-By trailer, which Kiln never commits. Run it again without the trailer, and add no attribution lines to any commit or pull request.',
+        });
+        answerPermission(info, requestId, 'deny');
+        return;
+      }
       const known = isPolicyAction(action);
       // A Project Thread Session never leaves anything to a person: what its Policy doesn't name is denied.
       const thread = projectOfThread(info.itemId) !== undefined;

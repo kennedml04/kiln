@@ -138,8 +138,38 @@ export async function mergeConflicts(repo: string, base: string, branch: string)
   }
 }
 
-/** Merges `branch` into the branch checked out at `repo` (a merge commit, as Kiln); returns the new HEAD. */
+/**
+ * A Co-Authored-By trailer: the key, a name and an address in angle brackets, anywhere in the text
+ * (on its own line, or folded into a one-line `git commit -m`). A sentence that only names the
+ * trailer ("a Co-Authored-By: line") has no address and doesn't count.
+ */
+export const CO_AUTHORED_BY = /co-authored-by:[^\n<]*<[^>\n]*>/i;
+
+/**
+ * The commits in `range` (e.g. `main..HEAD`) whose message has a `Co-Authored-By:` trailer, in any
+ * case, anywhere in the message: each as "<short hash> <subject>". Kiln never lets one reach the
+ * default branch.
+ */
+export async function coAuthoredCommits(cwd: string, range: string): Promise<string[]> {
+  const log = await git(cwd, 'log', '--format=%h %s%x00%B%x1e', range);
+  return log
+    .split('\x1e')
+    .map((record) => record.replace(/^\s+/, ''))
+    .filter((record) => CO_AUTHORED_BY.test(record.slice(record.indexOf('\0') + 1)))
+    .map((record) => record.slice(0, record.indexOf('\0')));
+}
+
+/** What to tell whoever made `commits`: drop the trailer by rewriting their messages. */
+export const coAuthoredFix = (commits: string[]) =>
+  `These commits have a Co-Authored-By trailer, which Kiln never lets reach the default branch:\n${commits.map((c) => `- ${c}`).join('\n')}\nRewrite their messages without the trailer, keeping the changes: \`git commit --amend\` for the last commit, a rebase that amends each message for earlier ones.`;
+
+/**
+ * Merges `branch` into the branch checked out at `repo` (a merge commit, as Kiln); returns the new HEAD.
+ * Refuses, leaving the checkout as it was, when a commit it would bring in has a Co-Authored-By trailer.
+ */
 export async function mergeBranch(repo: string, branch: string, message: string): Promise<string> {
+  const coAuthored = await coAuthoredCommits(repo, `HEAD..${branch}`);
+  if (coAuthored.length > 0) throw new Error(`Kiln did not merge ${branch}. ${coAuthoredFix(coAuthored)}`);
   await git(repo, 'merge', '--no-ff', '-m', message, branch);
   return (await git(repo, 'rev-parse', 'HEAD')).trim();
 }

@@ -295,6 +295,19 @@ test('Deny tells the Session it was refused, and is audited', async (t) => {
   );
 });
 
+test('a command that would commit a Co-Authored-By trailer is refused before anyone is asked, and the Agent is told why', async (t) => {
+  const kiln = await startTestKiln(t);
+  const { ticket, events } = await ticketSession(kiln, [
+    { do: 'permission', action: 'other_commands', detail: 'git commit -qm "Implement slugify Co-Authored-By: Some Model <noreply@example.com>"' },
+  ]);
+  assert.equal(await progress(events, /^permission /), 'permission deny');
+  assert.deepEqual(await kiln.api<Ask[]>('GET', '/api/asks'), [], 'nobody is asked');
+  assert.deepEqual(
+    (await permissionAudit(kiln)).map((e) => [e.action, e.actor.kind, e.target, e.outcome]),
+    [['permission.deny', 'kiln', `item:${ticket.id}`, 'refused']],
+  );
+});
+
 test('Always allow commits one narrow rule to the Project Policy file alone, and the same request is allowed from then on', async (t) => {
   const kiln = await startTestKiln(t);
   const script: FakeAgentScript = [

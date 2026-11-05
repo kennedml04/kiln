@@ -10,7 +10,7 @@ import {
   type ExitStatus,
   type ProjectSettings,
 } from '@kiln/widget-sdk';
-import { commitsAhead, fileAtHead, git, uncommitted } from './git.ts';
+import { coAuthoredCommits, coAuthoredFix, commitsAhead, fileAtHead, git, uncommitted } from './git.ts';
 
 const TEST_TIMEOUT_MS = 10 * 60_000;
 const OUTPUT_TAIL = 4_000;
@@ -25,7 +25,11 @@ const NAMES: Record<ExitCheckId, string> = {
   children_exist: 'Child Items created',
   artifact_exists: 'Artifact committed',
   no_open_blocking_asks: 'No open blocking Asks',
+  no_coauthor_trailers: 'No Co-Authored-By trailers',
 };
+
+/** Checked on every Stage with a worktree, after the Workflow's own checks: no Workflow can leave it out. */
+export const BUILT_IN_WORKTREE_CHECKS: readonly ExitCheckId[] = ['no_coauthor_trailers'];
 
 /** Every named check a Workflow can combine into an Exit. */
 export const EXIT_CHECK_IDS = Object.keys(NAMES) as ExitCheckId[];
@@ -119,6 +123,10 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
       const ahead = await commitsAhead(ctx.worktree, ctx.base);
       return ahead > 0 ? { met: true, detail: `${ahead} commit(s) ahead of ${ctx.base}` } : { met: false, detail: `No commits ahead of ${ctx.base}` };
     }
+    case 'no_coauthor_trailers': {
+      const commits = await coAuthoredCommits(ctx.worktree, `${ctx.base}..HEAD`);
+      return commits.length === 0 ? { met: true } : { met: false, detail: coAuthoredFix(commits) };
+    }
     case 'tree_clean': {
       const changes = await uncommitted(ctx.worktree);
       return changes.length === 0 ? { met: true } : { met: false, detail: `Uncommitted changes:\n${changes.join('\n')}` };
@@ -153,10 +161,14 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
   }
 }
 
-/** Checks every named check of a Stage's Exit, in order. */
+/**
+ * Checks every named check of a Stage's Exit, in order, then (on a Stage with a worktree) the
+ * built-in checks the Workflow did not name.
+ */
 export async function checkExit(stage: string, checks: ExitCheckId[], ctx: ExitContext): Promise<ExitStatus> {
+  const builtIn = ctx.worktree && ctx.base ? BUILT_IN_WORKTREE_CHECKS.filter((id) => !checks.includes(id)) : [];
   const results: ExitCheckResult[] = [];
-  for (const id of checks) results.push({ id, name: NAMES[id], ...(await check(id, ctx)) });
+  for (const id of [...checks, ...builtIn]) results.push({ id, name: NAMES[id], ...(await check(id, ctx)) });
   return { stage, met: results.every((r) => r.met), checks: results, checkedAt: new Date().toISOString() };
 }
 

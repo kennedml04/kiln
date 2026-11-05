@@ -27,7 +27,7 @@ import type { PullRequests } from './pull-requests.ts';
 import type { EventBus } from '../events.ts';
 import { WorkError, type Work } from '../work/work.ts';
 import { specPathOf } from './exit-checker.ts';
-import { currentBranch, defaultBranch, diffSummary, fileAtHead, mergeBranch, mergeConflicts, removeWorktree, worktreePath } from './git.ts';
+import { coAuthoredCommits, coAuthoredFix, currentBranch, defaultBranch, diffSummary, fileAtHead, mergeBranch, mergeConflicts, removeWorktree, worktreePath } from './git.ts';
 
 export interface Gates {
   /** The Gate's Stage Session met its Exit: raise the Review Ask and hold the Item until a person answers. */
@@ -212,6 +212,9 @@ export function createGates({ bus, work, asks, dataDir, policy, audit, pullReque
   const openPullRequest = async (item: Item, review: ReviewDetails, by: Actor) => {
     const { project, remote, push, pr } = pullRequestWrites(item, review.branch);
     const target = `item:${item.id}`;
+    // As the local merge does: nothing with a Co-Authored-By trailer is pushed towards the default branch.
+    const coAuthored = await coAuthoredCommits(project.path, `${review.base}..${review.branch}`);
+    if (coAuthored.length > 0) throw new Error(`Kiln did not push ${review.branch}. ${coAuthoredFix(coAuthored)}`);
     try {
       const record = await pullRequests!.open({
         project: { id: project.id, path: project.path, settings: project.settings },

@@ -21,7 +21,12 @@ export type ExitCheckId =
   /** Some artifact of the Item (a file in its record's folder, other than the record) is committed on its branch. */
   | 'artifact_exists'
   /** No blocking Ask on the Item is open (whoever raised it). */
-  | 'no_open_blocking_asks';
+  | 'no_open_blocking_asks'
+  /**
+   * No commit on the branch that is not on its base has a Co-Authored-By trailer. Built in: Kiln
+   * checks it on every Stage with a worktree, whether or not the Workflow names it.
+   */
+  | 'no_coauthor_trailers';
 
 export interface ExitCheckResult {
   id: ExitCheckId;

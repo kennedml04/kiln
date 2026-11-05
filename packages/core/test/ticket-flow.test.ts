@@ -111,6 +111,7 @@ test('failing tests go back to the Session as feedback; once they pass the Ticke
     ['branch_has_commits', true],
     ['tree_clean', true],
     ['tests_pass', false],
+    ['no_coauthor_trailers', true],
   ]);
   assert.match(first.payload.exit.checks[2]!.detail!, /expected 42, got 41/);
   const feedback = await events.next<SessionMessageEvent>('session.message');
@@ -267,6 +268,7 @@ test('an Agent saying it is done does not meet the Exit: Kiln checks commits, a 
       ['branch_has_commits', false],
       ['tree_clean', false],
       ['tests_pass', false],
+      ['no_coauthor_trailers', true],
     ],
   );
   assert.equal(feedback.payload.from, 'kiln');
