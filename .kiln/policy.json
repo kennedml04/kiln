@@ -289,6 +289,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/edit.mjs <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"interface SessionUsage\" -B2 -A25 packages/widget-sdk/src/*.ts",
+      "decision": "allow"
     }
   ]
 }
