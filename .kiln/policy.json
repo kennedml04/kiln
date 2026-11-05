@@ -229,6 +229,11 @@
       "action": "other_commands",
       "match": "cat .kiln/settings.json",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git add -A",
+      "decision": "allow"
     }
   ]
 }
