@@ -34,6 +34,11 @@
       "action": "other_commands",
       "match": "cat packages/widget-sdk/src/project-thread.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git add .scratch/scratch-chat/grill.md",
+      "decision": "allow"
     }
   ]
 }
