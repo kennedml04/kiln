@@ -334,6 +334,11 @@
       "action": "other_commands",
       "match": "sed -i \"s/import { hashSeed, pickVariant, seededRandom, type Pick } from '.\\/picker.ts';/import { hashSeed, pickVariant, seededRandom, type Pick as Picked } from '.\\/picker.ts';/; s/Variant, Picked/&/; s/=> Pick | undefined;/=> Picked | undefined;/\" packages/core/src/local/routing.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline",
+      "decision": "allow"
     }
   ]
 }
