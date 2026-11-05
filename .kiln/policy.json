@@ -534,6 +534,11 @@
       "action": "other_commands",
       "match": "head -3",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "tail -5",
+      "decision": "allow"
     }
   ]
 }
