@@ -84,6 +84,11 @@
       "action": "other_commands",
       "match": "find . -path ./node_modules -prune -o -ipath '*local-first*' -print",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git status -s",
+      "decision": "allow"
     }
   ]
 }
