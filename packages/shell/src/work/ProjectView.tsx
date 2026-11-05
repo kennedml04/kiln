@@ -13,11 +13,15 @@ function NewItemForm({ project, items }: { project: Project; items: Item[] }) {
   const [error, setError] = useState<string>();
   const kind = kinds.find((k) => k.id === kindId);
   const parents = items.filter((i) => kind?.parentKind && i.kind === kind.parentKind);
+  const parentKindName = kinds.find((k) => k.id === kind?.parentKind)?.name ?? kind?.parentKind;
+  // A kind that needs a parent offers no "(none)": the first parent is picked until another is.
+  const chosenParent = parentId || (kind?.parentRequired ? (parents[0]?.id ?? '') : '');
+  const missingParent = Boolean(kind?.parentRequired && parents.length === 0);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(undefined);
-    const body: CreateItemRequest = { kind: kindId, title, description: description || undefined, parentId: parentId || undefined };
+    const body: CreateItemRequest = { kind: kindId, title, description: description || undefined, parentId: chosenParent || undefined };
     try {
       await api<Item>('POST', `/api/projects/${encodeURIComponent(project.id)}/items`, body);
       setTitle('');
@@ -45,17 +49,23 @@ function NewItemForm({ project, items }: { project: Project; items: Item[] }) {
           ))}
         </select>
       </label>
-      <label>
-        Parent
-        <select value={parentId} onChange={(e) => setParentId(e.target.value)} disabled={!kind?.parentKind}>
-          <option value="">(none)</option>
-          {parents.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title}
-            </option>
-          ))}
-        </select>
-      </label>
+      {missingParent ? (
+        <p className="setup-hint" role="note">
+          A {kind?.name} needs a {parentKindName} as its parent. Create a {parentKindName} first.
+        </p>
+      ) : (
+        <label>
+          Parent
+          <select value={chosenParent} onChange={(e) => setParentId(e.target.value)} disabled={!kind?.parentKind}>
+            {kind?.parentRequired ? null : <option value="">(none)</option>}
+            {parents.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         Title
         <input value={title} onChange={(e) => setTitle(e.target.value)} required />
@@ -64,7 +74,9 @@ function NewItemForm({ project, items }: { project: Project; items: Item[] }) {
         Description
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
       </label>
-      <button type="submit">Create</button>
+      <button type="submit" disabled={missingParent}>
+        Create
+      </button>
       {error ? <p role="alert">{error}</p> : null}
     </form>
   );

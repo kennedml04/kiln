@@ -329,6 +329,7 @@ await serveAgent(agent, {
       name: 'Fake Agent',
       cacheLifetimeMs: settings.cacheLifetimeMs ?? 300_000,
       ...(settings.model === null ? {} : { model: settings.model ?? 'fake-model' }),
+      ...(settings.models ? { models: settings.models.map((id) => ({ id, name: id })) } : {}),
     },
   ],
   onAskAnswered(ask) {

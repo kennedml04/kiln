@@ -378,7 +378,10 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       if (parent && parent.kind !== kind.parentKind) {
         throw new WorkError(400, `A ${kind.name} cannot sit under a ${parent.kind}`);
       }
-      if (!parent && kind.id === 'ticket') throw new WorkError(400, 'A Ticket needs a Story as its parent');
+      if (!parent && kind.parentRequired) {
+        const parentName = target.project.workflow.kinds.find((k) => k.id === kind.parentKind)?.name ?? kind.parentKind;
+        throw new WorkError(400, `A ${kind.name} needs a ${parentName} as its parent`);
+      }
       let key: string;
       try {
         // Only the markdown Tracker keeps records in a worktree; a Widget's writes straight to its Tracker.

@@ -59,6 +59,7 @@ export const DEFAULT_WORKFLOW: Workflow = {
       id: 'ticket',
       name: 'Ticket',
       parentKind: 'story',
+      parentRequired: true,
       stages: [
         {
           id: 'implementing',

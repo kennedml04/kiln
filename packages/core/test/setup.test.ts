@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type DoctorReport, type ImportResult, type Item, type Project, type SetupState } from '@kiln/widget-sdk';
+import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type DoctorReport, type ImportResult, type Item, type Project, type SetupState, type StartResult } from '@kiln/widget-sdk';
 import { createTempRepo, onCleanup, startTestKiln, tempDir } from '@kiln/testing';
 import { seedScratch } from '@kiln/testing/scratch';
 
@@ -148,6 +148,21 @@ test("the models chosen for the default Workflow's roles are the ones its Stages
   const stage = (id: string) => ticket.stages.find((s) => s.id === id)!;
   assert.deepEqual([stage('implementing').model, stage('implementing').fallbackModel], ['big-model', 'small-model']);
   assert.equal(stage('review').model, 'small-model');
+});
+
+test('a Stage runs on an Agent that lists its model, even when the Agent names no default model', async (t) => {
+  // The real Agent Widgets list the models they run and name no single default one.
+  const kiln = await startTestKiln(t, { setup: 'fresh' });
+  await kiln.installFakeAgent({ model: null, models: ['big-model', 'small-model'] });
+  await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model', 'small-model'] });
+  await kiln.api('PUT', '/api/setup', { roles: { implementer: { model: 'small-model' } } });
+  seedScratch(kiln.repo);
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const ticket = (await kiln.api<Item[]>('GET', `/api/projects/${project.id}/items`)).find((i) => i.title === 'Draw the columns')!;
+
+  const started = await kiln.api<StartResult>('POST', `/api/items/${encodeURIComponent(ticket.id)}/start`);
+
+  assert.deepEqual([started.session?.agentId, started.session?.model], ['fake', 'small-model']);
 });
 
 test('choosing Tailscale login notes that tailscale serve works, and takes effect when Kiln restarts', async (t) => {

@@ -104,4 +104,6 @@ export interface FakeAgentSettings {
   cacheLifetimeMs?: number;
   /** The model the fake Agent registers with. Default `fake-model`; null registers none. */
   model?: string | null;
+  /** Model ids the fake Agent lists as the ones it can run, as a real Agent Widget does. Default none. */
+  models?: string[];
 }

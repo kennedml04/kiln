@@ -39,6 +39,10 @@ export function validateWorkflow(raw: unknown): Workflow | WorkflowProblem[] {
         problem(`${at}.parentKind`, `${JSON.stringify(kind.parentKind)} is not an Item kind of this Workflow`);
       } else if (parent >= k) problem(`${at}.parentKind`, 'A parent kind comes before its children in the list');
     }
+    if (kind.parentRequired !== undefined) {
+      if (typeof kind.parentRequired !== 'boolean') problem(`${at}.parentRequired`, 'parentRequired must be true or false');
+      else if (kind.parentRequired && kind.parentKind === undefined) problem(`${at}.parentRequired`, 'A kind that needs a parent names its parentKind');
+    }
     if (!Array.isArray(kind.stages) || kind.stages.length < 2) {
       problem(`${at}.stages`, 'An Item kind needs at least two Stages: the last one is where its Items have shipped');
       return;

@@ -154,9 +154,9 @@ export interface TestKiln extends ApiClient {
    * Starts the scripted fake Agent Widget in this core and waits until it is ready.
    * Every Session it starts runs `script`, or its role's script (default: finish at once).
    * `cacheLifetimeMs` is what it registers as its cache lifetime (default 300000), and `model` its
-   * model (default `fake-model`; null: none).
+   * model (default `fake-model`; null: none). `models` are the model ids it lists as runnable.
    */
-  installFakeAgent(options?: { script?: FakeAgentScripts; cacheLifetimeMs?: number; model?: string | null }): Promise<FakeAgent>;
+  installFakeAgent(options?: { script?: FakeAgentScripts; cacheLifetimeMs?: number; model?: string | null; models?: string[] }): Promise<FakeAgent>;
   /** Stops the core process (also done automatically at the end of the test). */
   stop(): Promise<void>;
 }
@@ -604,7 +604,7 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
   };
 
   let fakeAgentScript: string | undefined;
-  const installFakeAgent = async (options?: { script?: FakeAgentScripts; cacheLifetimeMs?: number; model?: string | null }): Promise<FakeAgent> => {
+  const installFakeAgent = async (options?: { script?: FakeAgentScripts; cacheLifetimeMs?: number; model?: string | null; models?: string[] }): Promise<FakeAgent> => {
     // One script file per core: the install's config names it, and a restart keeps that config.
     fakeAgentScript ??= join(tempDir(t, 'kiln-fake-agent'), 'script.json');
     const scriptFile = fakeAgentScript;
@@ -613,6 +613,7 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
     const settings: FakeAgentSettings = {
       ...(options?.cacheLifetimeMs === undefined ? {} : { cacheLifetimeMs: options.cacheLifetimeMs }),
       ...(options?.model === undefined ? {} : { model: options.model }),
+      ...(options?.models === undefined ? {} : { models: options.models }),
     };
     writeFileSync(join(dirname(scriptFile), 'agent.json'), JSON.stringify(settings));
     const config: FakeAgentConfig = { scriptFile };

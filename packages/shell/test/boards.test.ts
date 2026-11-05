@@ -71,6 +71,30 @@ test('a person registers a Project and creates a Ticket from the Shell, written 
   assert.ok(existsSync(join(kiln.repo.path, '.scratch/home-board/issues/03-drag-to-prioritise.md')));
 });
 
+test('in a Project with no Stories, the New Item form says a Ticket needs one first, then offers it as the only parent', async (t) => {
+  const kiln = await startTestKiln(t);
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const page = await openShell(t, kiln, `/projects/${project.id}`);
+  const form = page.getByRole('form', { name: 'New Item' });
+
+  await form.getByLabel('Kind').selectOption({ label: 'Ticket' });
+  await form.getByRole('note').filter({ hasText: 'A Ticket needs a Story as its parent. Create a Story first.' }).waitFor();
+  assert.equal(await form.getByLabel('Parent').count(), 0);
+  assert.equal(await form.getByRole('button', { name: 'Create' }).isDisabled(), true);
+
+  await form.getByLabel('Kind').selectOption({ label: 'Story' });
+  await form.getByLabel('Title').fill('End-to-end test');
+  await form.getByRole('button', { name: 'Create' }).click();
+  await card(page, 'Story Grill', 'End-to-end test').waitFor();
+
+  await form.getByLabel('Kind').selectOption({ label: 'Ticket' });
+  const parent = form.getByLabel('Parent');
+  assert.deepEqual(await parent.locator('option').allTextContents(), ['End-to-end test']);
+  await form.getByLabel('Title').fill('Add a line to the README');
+  await form.getByRole('button', { name: 'Create' }).click();
+  await card(page, 'Ticket Implementing', 'Add a line to the README').waitFor();
+});
+
 test('dragging an Item to another Stage column is refused', async (t) => {
   const kiln = await startTestKiln(t);
   seedScratch(kiln.repo);

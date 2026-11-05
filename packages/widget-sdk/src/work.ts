@@ -49,6 +49,8 @@ export interface ItemKind {
   name: string;
   /** The kind this kind's Items hang under (Story under Epic, Ticket under Story). */
   parentKind?: string;
+  /** Every Item of this kind needs a parent (a Ticket always sits under a Story). */
+  parentRequired?: boolean;
   stages: Stage[];
 }
 

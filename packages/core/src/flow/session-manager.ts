@@ -332,9 +332,14 @@ export function createSessionManager({
       .flatMap((w) => w.agents.filter((a) => !stage.agent || a.id === stage.agent).map((agent) => ({ widgetId: w.id, agent })));
     const wanted = stage.agent ? undefined : stage.model;
     const budget = wanted ? budgetOf?.(wanted) : undefined;
+    // An Agent runs its default model and every model it lists.
+    const runs = (agent: (typeof ready)[number]['agent']) => [
+      ...(agent.model ? [agent.model] : []),
+      ...(agent.models ?? []).map((m) => m.id),
+    ];
     const offers =
-      ready.find((r) => wanted && r.agent.model === wanted) ??
-      ready.find((r) => budget && r.agent.model && budgetOf?.(r.agent.model) === budget);
+      ready.find((r) => wanted && runs(r.agent).includes(wanted)) ??
+      ready.find((r) => budget && runs(r.agent).some((m) => budgetOf?.(m) === budget));
     if (wanted && budget && !offers) {
       throw new WorkError(409, `No Agent is ready to run the model "${wanted}": none that is ready runs a model of its Budget`);
     }
