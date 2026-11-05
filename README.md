@@ -25,6 +25,8 @@ Then open http://localhost:8300. The setup wizard picks the login mode, the Know
 
 To add a Project, press **+ Project** → Import on the board and pick its folder in the tree, or type its path. The tree shows only the browse roots and the Projects folder an Admin sets in Settings → Folders (a dev instance browses its own data folder). It skips hidden and system folders and never follows junctions. The folder must be the top of a git repo with a commit, on its default branch; otherwise Kiln refuses with the fix. It never switches branches for you. A folder that isn't a git repo yet gets an **Initialise as a git repo** button.
 
+To start a Project from nothing, press **+ Project** → New and give it a name and a one-line description. The first time, it asks for the Projects folder and remembers it. Kiln makes `<Projects folder>\<name>` with a README, `.kiln/settings.json` and a `.gitignore`, runs `git init -b main`, and commits them once as Kiln, with no trailer. It registers the Project and opens a "What we're building" Story at Grill, seeded with the description. If a step fails, the error names it and the folder stays, unregistered; Create again carries on from that step.
+
 The `kiln` CLI:
 
 | Command | What it does |

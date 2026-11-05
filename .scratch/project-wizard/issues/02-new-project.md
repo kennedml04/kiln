@@ -11,9 +11,9 @@ A step that fails names itself and leaves the folder in place, unregistered, so 
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] New makes the folder, the first commit and the Project, and opens the "What we're building" Story at grill (test on a temp Projects folder)
-- [ ] The first commit has no attribution trailer and uses the install's git identity
-- [ ] A failure partway names the step, and a retry finishes the job
-- [ ] The Projects folder is asked for once and then remembered
+- [x] New makes the folder, the first commit and the Project, and opens the "What we're building" Story at grill (test on a temp Projects folder)
+- [x] The first commit has no attribution trailer and uses the install's git identity
+- [x] A failure partway names the step, and a retry finishes the job
+- [x] The Projects folder is asked for once and then remembered

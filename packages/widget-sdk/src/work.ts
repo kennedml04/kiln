@@ -111,6 +111,30 @@ export interface RegisterProjectRequest {
   init?: boolean;
 }
 
+/**
+ * `POST /api/projects/new` (Admin): make `<Projects folder>\<name>`, write a README,
+ * `.kiln/settings.json` and a `.gitignore`, `git init -b main` with one commit as Kiln, register the
+ * Project and open a grill-stage Story "What we're building" seeded with the description.
+ * With no Projects folder set it is refused with 409 and the reason `no-projects-folder`.
+ * A step that fails answers with its `step` and leaves the folder in place, unregistered: asking
+ * again carries on from there.
+ */
+export interface NewProjectRequest {
+  /** One folder name. */
+  name: string;
+  /** One line. */
+  description: string;
+}
+
+/** The steps of New, in order, as a failure names them. */
+export type NewProjectStep = 'folder' | 'files' | 'git' | 'register' | 'story';
+
+export interface NewProjectResult {
+  project: Project;
+  /** The "What we're building" Story, at its first Stage (grill). */
+  item: Item;
+}
+
 /** Why `POST /api/projects` refused a folder's git state. */
 export type RepoRefusal = 'not-a-repo' | 'not-repo-top' | 'no-commits' | 'off-default-branch';
 

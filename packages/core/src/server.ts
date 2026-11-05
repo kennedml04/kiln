@@ -39,6 +39,7 @@ import { createUserStore } from './users.ts';
 import { handleWorkRoute } from './work/routes.ts';
 import { createWork, WorkError } from './work/work.ts';
 import { createFolderBrowser } from './work/folders.ts';
+import { createNewProjects, handleNewProjectRoute } from './work/new-project.ts';
 import { createWidgetHost, WidgetHostError } from './widget-host.ts';
 import { createWidgetLifecycle } from './widgets/lifecycle.ts';
 import { createWidgetBridge } from './widgets/bridge.ts';
@@ -266,6 +267,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     },
     registered: () => work.projects().map((p) => p.path),
   });
+  // + Project → New (project-wizard ticket 02): makes each new Project in the Projects folder.
+  const newProjects = createNewProjects({ work, projectsFolder: () => setup.settings().projectsFolder });
   doctor.register(setup.doctorCheck);
   // The demo Project, on a dev instance only (demo-project spec).
   const demo = createDemo({
@@ -511,6 +514,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleLocalModelRoute(localModels, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
+      if (await handleNewProjectRoute(newProjects, req, res, url, { sendJson, readJson })) return;
       if (await handleWorkRoute(work, req, res, url, { sendJson, readJson }, folders)) return;
       if (await handleSecretRoute(secrets, req, res, url, panelDeps)) return;
       if (await handlePanelRoute(panels, req, res, url, panelDeps)) return;

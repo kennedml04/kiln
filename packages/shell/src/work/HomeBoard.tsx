@@ -7,6 +7,7 @@ import { FolderBrowser } from '../FolderBrowser.tsx';
 import { Panels } from '../Panels.tsx';
 import { DemoControls, useDemo } from './Demo.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
+import { NewProject } from './NewProject.tsx';
 
 const RUN_STATES: { id: RunState; name: string }[] = [
   { id: 'backlog', name: 'Backlog' },
@@ -71,7 +72,7 @@ function ImportProject({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** The board's + Project button: Import an existing folder as a Project. */
+/** The board's + Project button: make a New Project, or Import an existing folder as one. */
 function AddProject() {
   const [open, setOpen] = useState(false);
   return (
@@ -81,6 +82,8 @@ function AddProject() {
       </button>
       {open ? (
         <section aria-label="Add a Project">
+          <h3>New</h3>
+          <NewProject onDone={() => setOpen(false)} />
           <h3>Import</h3>
           <ImportProject onDone={() => setOpen(false)} />
         </section>
