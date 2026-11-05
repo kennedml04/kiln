@@ -124,6 +124,11 @@
       "action": "other_commands",
       "match": "git log --oneline -60",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/widget-sdk/src/work.ts",
+      "decision": "allow"
     }
   ]
 }
