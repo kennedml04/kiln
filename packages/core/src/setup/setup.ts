@@ -58,9 +58,6 @@ const DEV_IMPORT_REFUSED = "Dev instances don't import real Projects; add one by
 const LOCAL_SERVER_URLS = ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:1234/v1', 'http://127.0.0.1:8080/v1'];
 const PROBE_MS = 1_000;
 
-/** The old board's Project registry, where it lived on the PC it ran on. */
-const defaultOldBoardRegistry = () => join(homedir(), 'Documents', 'comfyui-mcp', OLD_BOARD_DATA_FOLDER, 'projects.json');
-
 const obsidianPaths = (env: NodeJS.ProcessEnv): string[] => {
   if (env.KILN_OBSIDIAN_PATHS !== undefined) return env.KILN_OBSIDIAN_PATHS.split(delimiter).filter(Boolean);
   if (process.platform === 'win32') {
@@ -192,10 +189,13 @@ export function createSetup(deps: SetupDeps): Setup {
 
   let settings = readSetupSettings(db);
   const completedAt = () => read('setup.completedAt') as string | undefined;
-  const registry = () => settings.oldBoardRegistry ?? env.KILN_OLD_BOARD_REGISTRY ?? defaultOldBoardRegistry();
+  // Kiln has no default place for the old board: the person names its projects.json (in the wizard, a
+  // setting or KILN_OLD_BOARD_REGISTRY), and with none given there is nothing to import.
+  const registry = () => settings.oldBoardRegistry ?? (env.KILN_OLD_BOARD_REGISTRY || undefined);
   const widgetRepo = () => settings.widgetRepo ?? PUBLIC_WIDGET_REPO;
 
   const oldBoard = (path = registry()): SetupState['oldBoard'] => {
+    if (path === undefined) return { found: false, projects: [] };
     if (deps.devInstance || !existsSync(path)) return { registry: path, found: false, projects: [] };
     let entries: RegistryEntry[];
     try {
@@ -356,7 +356,9 @@ export function createSetup(deps: SetupDeps): Setup {
       }
       const wanted = Array.isArray(body.paths) ? new Set(body.paths.filter((p): p is string => typeof p === 'string').map((p) => resolve(p).toLowerCase())) : undefined;
       const board = oldBoard(typeof body.registry === 'string' ? resolve(body.registry) : undefined);
-      if (!board.found) throw new SetupError(404, `No old board registry at ${board.registry}`);
+      if (!board.found) {
+        throw new SetupError(404, board.registry ? `No old board registry at ${board.registry}` : 'No old board is set: give the path of its projects.json');
+      }
       if (board.error) throw new SetupError(400, board.error);
       const result: ImportResult = { imported: [], skipped: [] };
       for (const project of board.projects) {

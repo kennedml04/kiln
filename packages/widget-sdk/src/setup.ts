@@ -120,7 +120,8 @@ export interface SetupState {
   /** The default Workflow's roles, each with the Stages that use it. */
   roles: { role: string; stages: string[] }[];
   agents: FirstPartyAgent[];
-  oldBoard: { registry: string; found: boolean; error?: string; projects: OldBoardProject[] };
+  /** `registry` is absent when no old board was named: Kiln has no default place to look. */
+  oldBoard: { registry?: string; found: boolean; error?: string; projects: OldBoardProject[] };
 }
 
 /** `POST /api/setup/import` (Admin). */

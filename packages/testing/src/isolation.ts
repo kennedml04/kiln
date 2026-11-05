@@ -1,13 +1,19 @@
 import { homedir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { delimiter, join, resolve, sep } from 'node:path';
 
 /** The live Kiln and the old board. No test may touch these. */
 export const FORBIDDEN_PORTS = [8300, 8195];
 
+/**
+ * The live Kiln's data folders, plus any folder named in KILN_TEST_FORBIDDEN_FOLDERS (separated like
+ * PATH). The repo names no other live folder: each PC lists its own (the old board's, say) there.
+ */
 export function forbiddenFolders(env: NodeJS.ProcessEnv = process.env): string[] {
-  const docs = join(homedir(), 'Documents');
-  const folders = [join(docs, 'comfyui-mcp'), join(docs, 'comfyui_mcp'), join(homedir(), '.local', 'share', 'Kiln')];
+  const folders = [join(homedir(), '.local', 'share', 'Kiln')];
   if (env.LOCALAPPDATA) folders.push(join(env.LOCALAPPDATA, 'Kiln'));
+  for (const folder of (env.KILN_TEST_FORBIDDEN_FOLDERS ?? '').split(delimiter)) {
+    if (folder.trim()) folders.push(folder.trim());
+  }
   return folders;
 }
 

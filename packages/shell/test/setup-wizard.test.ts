@@ -22,7 +22,8 @@ function oldBoardCopy(t: Parameters<typeof tempDir>[0]): { registry: string } {
 test('a fresh data folder opens the setup wizard, and finishing it leaves Budgets, Agents and role models set', async (t) => {
   const widgetRepo = createFakeWidgetRepo(t);
   const { registry } = oldBoardCopy(t);
-  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_OLD_BOARD_REGISTRY: registry } });
+  // No old board named: Kiln has no default place to look, so the Import step asks for it.
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_OLD_BOARD_REGISTRY: '' } });
   const page = await openShell(t, kiln, '/');
   const wizard = page.getByRole('region', { name: 'Set up Kiln' });
   const next = () => wizard.getByRole('button', { name: 'Next' }).click();
@@ -90,6 +91,10 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
 
   // The one-time import from the old board.
   await step('Import');
+  await wizard.getByText('No old board named. Nothing to import; this step can be skipped.').waitFor();
+  await wizard.getByLabel("The old board's projects.json").fill(registry);
+  await wizard.getByRole('button', { name: 'Look' }).click();
+  await wizard.getByRole('checkbox', { name: /alpha/ }).waitFor();
   assert.equal(await wizard.getByRole('checkbox', { name: /alpha/ }).isChecked(), true);
   await wizard.getByRole('button', { name: 'Import Projects' }).click();
   await wizard.getByText('Imported alpha').waitFor();

@@ -303,6 +303,26 @@ test("importing from the old board registers its Projects with their .scratch It
   assert.deepEqual(snapshot(board), before);
 });
 
+test('with no old board named, Kiln looks nowhere and imports nothing; naming its projects.json in the settings finds its Projects', async (t) => {
+  const board = tempDir(t, 'kiln-old-board-copy');
+  mkdirSync(join(board, OLD_BOARD_DATA_FOLDER));
+  const alpha = createTempRepo(t);
+  const registry = join(board, OLD_BOARD_DATA_FOLDER, 'projects.json');
+  writeFileSync(registry, JSON.stringify({ projects: [{ name: 'alpha', path: alpha.path }] }));
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_OLD_BOARD_REGISTRY: '' } });
+
+  const state = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.deepEqual(state.oldBoard, { found: false, projects: [] });
+  const refused = await kiln.request<{ error: string }>('POST', '/api/setup/import', {});
+  assert.equal(refused.status, 404);
+  assert.equal(refused.body.error, 'No old board is set: give the path of its projects.json');
+
+  await kiln.api('PUT', '/api/setup', { oldBoardRegistry: registry });
+  const named = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.equal(named.oldBoard.registry, registry);
+  assert.deepEqual(named.oldBoard.projects.map((p) => p.name), ['alpha']);
+});
+
 test("a dev instance does not offer or import the old board's real Projects, but a Project can still be added by hand", async (t) => {
   const board = tempDir(t, 'kiln-old-board-copy');
   mkdirSync(join(board, OLD_BOARD_DATA_FOLDER));

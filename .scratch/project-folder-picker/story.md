@@ -6,7 +6,7 @@ Registering a Project today means typing its folder's full path, and a mistake s
 
 ## Questions for the grill
 
-- Where the browser may go: the whole disk, or only under roots the Admin chooses (for example `C:\Users\Matt\projects`). Hidden and system folders, junctions and other drives.
+- Where the browser may go: the whole disk, or only under roots the Admin chooses (for example `C:\Users\<you>\projects`). Hidden and system folders, junctions and other drives.
 - What the tree shows on each folder: whether it is a git repo, already registered, or has a `.scratch` tracker. Whether a remembered list of recent folders or a typed-path box stays alongside it.
 - New Project: what the first commit holds (empty, a README, `.kiln/settings.json` with a testCommand, `.scratch/`), whether it can also create a GitHub remote, and which git identity it commits as.
 - A folder that's not a repo: offer "Initialise as a git repo" right there, or only refuse with the fix.

@@ -504,22 +504,49 @@ function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () =
   const [result, setResult] = useState<ImportResult>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const run = async () => {
+  const [registry, setRegistry] = useState(setup.oldBoard.registry ?? '');
+  const busyWith = async (work: () => Promise<void>) => {
     setBusy(true);
     setError(undefined);
     try {
-      setResult(await api<ImportResult>('POST', '/api/setup/import', { paths: [...chosen] }));
-      await onImported();
+      await work();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
+  const run = () =>
+    busyWith(async () => {
+      setResult(await api<ImportResult>('POST', '/api/setup/import', { paths: [...chosen] }));
+      await onImported();
+    });
+  // Kiln has no default place for the old board: the person names its projects.json here.
+  const look = () =>
+    busyWith(async () => {
+      await api('PUT', '/api/setup', { oldBoardRegistry: registry.trim() });
+      await onImported();
+    });
   return (
     <Step title="Import">
       <p>Bring the old board's Projects into Kiln, once. The old board is only read: nothing in its folder changes.</p>
-      {!setup.oldBoard.found ? <p>No old board found at {setup.oldBoard.registry}. Nothing to import.</p> : null}
+      <form
+        className="setup-action"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void look();
+        }}
+      >
+        <label>
+          The old board's projects.json
+          <input value={registry} onChange={(e) => setRegistry(e.target.value)} placeholder="Its full path; leave empty if there is none" />
+        </label>
+        <button type="submit" disabled={busy || !registry.trim()}>
+          Look
+        </button>
+      </form>
+      {!setup.oldBoard.registry ? <p>No old board named. Nothing to import; this step can be skipped.</p> : null}
+      {setup.oldBoard.registry && !setup.oldBoard.found ? <p>No old board found at {setup.oldBoard.registry}. Nothing to import.</p> : null}
       {setup.oldBoard.error ? <p role="alert">{setup.oldBoard.error}</p> : null}
       <div className="choices">
         {setup.oldBoard.projects.map((p) => (
@@ -801,7 +828,7 @@ export function SetupWizard() {
         />
       ) : null}
       {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} suggested={suggested} dev={dev} /> : null}
-      {name === 'Import' ? <ImportStep setup={setup} onImported={async () => void (await refresh())} /> : null}
+      {name === 'Import' ? <ImportStep key={setup.oldBoard.registry ?? ''} setup={setup} onImported={async () => void (await refresh())} /> : null}
       {name === 'Demo' ? <DemoStep choice={demo} setChoice={setDemo} /> : null}
           {error ? <p role="alert">{error}</p> : null}
           <div className="setup-buttons">
