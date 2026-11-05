@@ -499,6 +499,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/e6.mjs <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "head -20",
+      "decision": "allow"
     }
   ]
 }
