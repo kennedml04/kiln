@@ -14,5 +14,5 @@ Write down every snag as a Ticket or a retro note. Once Live passes, delete `%TE
 - [ ] Live reaches `shipped`, with `slugify` and its CLI on the demo repo's `main` and `node --test` passing
 - [ ] Permission requests reached Needs you as Asks, and none stalled a Session silently
 - [ ] Every Kiln worktree for the demo was removed after its merge
-- [ ] A hand-run Replay also reaches `shipped`
+- [x] A hand-run Replay also reaches `shipped`
 - [ ] Each snag found is filed; the old scratch repo is deleted
