@@ -1,7 +1,7 @@
 ---
 title: Project wizard (New and Import) and Project modules
 epic: projects-and-onboarding
-stage: spec
+stage: tickets
 blocked-by: []
 ---
 Starting a Project in Kiln today means typing a folder path into a form, and every Project is treated as a software repo. This Story adds a **+ Project** wizard on the board with two paths, **New** and **Import**, and **modules**: small files a Project switches on to pull in the skills, tools, Exit checks, Stages and starter folders its kind of work needs (3D printing, CAD parts, KiCad, writing, software). A Project can mix modules and add more later, and a Project can have no software at all. It replaces the folder-picker Story (`.scratch/project-folder-picker/story.md`). Grilled 2026-11-05; the decisions are below. The spec is `spec.md`.

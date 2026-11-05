@@ -1,6 +1,8 @@
 # Spec: Project wizard (New and Import) and Project modules
 
-Status: needs-triage
+Status: ready-for-agent
+
+Tickets: `issues/01` to `issues/12`. 01 and 03 can start now.
 
 Sources: `.scratch/project-wizard/story.md` (the grill decisions of 2026-11-05), `.scratch/project-folder-picker/story.md` (folded in), `.scratch/skill-and-widget-repos/` (Skill and Widget repos, unbuilt), and the code as of branch `demo-project` (e897f71).
 
