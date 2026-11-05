@@ -299,6 +299,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/edit2.mjs <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"numstat\" -B1 -A3 packages/core/src/flow/session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
