@@ -17,6 +17,7 @@ import {
   TAILSCALE_SERVE_NOTE,
   type BudgetDraft,
   type BudgetInfo,
+  type DemoMode,
   type FirstPartyAgent,
   type ImportResult,
   type InstallKind,
@@ -152,6 +153,8 @@ export interface SetupDeps {
   assumeDone?: boolean;
   /** A dev instance (`kiln dev`): it never offers or imports the old board's real Projects. */
   devInstance?: boolean;
+  /** The current demo run's mode (`GET /api/demo`): on a dev instance, Replay needs no role models to finish. */
+  demoMode?(): DemoMode | undefined;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -233,7 +236,9 @@ export function createSetup(deps: SetupDeps): Setup {
   const missing = (): string[] => {
     const problems: string[] = [];
     if (deps.budgets().length === 0) problems.push('Set up at least one Budget.');
-    for (const role of missingRoles()) problems.push(`Choose a model for the ${role} role.`);
+    // Replay runs every role on the fake Agent; Live, and every live instance, need a model per role.
+    const replay = deps.devInstance === true && deps.demoMode?.() === 'replay';
+    if (!replay) for (const role of missingRoles()) problems.push(`Choose a model for the ${role} role.`);
     return problems;
   };
 

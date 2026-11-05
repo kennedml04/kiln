@@ -237,6 +237,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     moveKnowledge: (root) => knowledge.moveTo(root),
     assumeDone: options.testMode && process.env.KILN_TEST_SETUP_DONE === '1',
     devInstance: options.devInstance === true,
+    // `demo` is made just below; Finish only asks once the core is up.
+    demoMode: () => demo.state().mode,
   });
   work.decorateWorkflow(setup.decorate);
   doctor.register(setup.doctorCheck);

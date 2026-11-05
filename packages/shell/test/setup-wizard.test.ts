@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type Project, type SetupState, type WidgetInfo } from '@kiln/widget-sdk';
+import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type DemoState, type Project, type SetupState, type WidgetInfo } from '@kiln/widget-sdk';
 import { createFakeWidgetRepo, createTempRepo, createWidgetRepoCopy, startTestKiln, tempDir } from '@kiln/testing';
+import type { Locator } from 'playwright';
 import { openShell } from '@kiln/testing/browser';
 import { seedScratch } from '@kiln/testing/scratch';
 
@@ -221,14 +222,71 @@ test('the wizard lets tailscale serve be, but stops on a raw TCP forward that wo
   await tcpPage.getByRole('region', { name: 'Set up Kiln' }).getByRole('alert').filter({ hasText: /raw TCP.*local Admin/ }).waitFor();
 });
 
-test('on a dev instance the wizard has no Import step: it ends after Workflow roles', async (t) => {
+test('on a dev instance the wizard has no Import step: it ends with Demo', async (t) => {
   const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
   const page = await openShell(t, kiln, '/');
   const wizard = page.getByRole('region', { name: 'Set up Kiln' });
   await wizard.getByRole('heading', { name: 'Login', level: 3 }).waitFor();
-  await wizard.getByText('Step 1 of 6').waitFor();
+  await wizard.getByText('Step 1 of 7').waitFor();
   const steps = wizard.getByRole('list', { name: 'Setup steps' }).getByRole('listitem');
-  assert.deepEqual(await steps.allInnerTexts(), ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles']);
+  assert.deepEqual(await steps.allInnerTexts(), ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Demo']);
+});
+
+/** Walks a dev core's wizard to its Demo step, with Work picked and nothing else chosen. */
+async function toDemoStep(t: Parameters<typeof tempDir>[0], kiln: Awaited<ReturnType<typeof startTestKiln>>, onRoles?: (wizard: Locator) => Promise<void>) {
+  const page = await openShell(t, kiln, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  for (const name of ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles']) {
+    await wizard.getByRole('heading', { name, level: 3 }).waitFor();
+    if (name === 'Install') await wizard.getByRole('radio', { name: /Work/ }).check();
+    if (name === 'Workflow roles') {
+      await wizard.getByText('Replay needs no models; set them before running Live').waitFor();
+      await onRoles?.(wizard);
+    }
+    await wizard.getByRole('button', { name: 'Next' }).click();
+  }
+  await wizard.getByRole('heading', { name: 'Demo', level: 3 }).waitFor();
+  return { page, wizard };
+}
+
+test('on a dev instance, Live with no role models shows why and stays on the Demo step; Replay then finishes and opens the demo Story at Grill', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  // No Agent installed and no role given a model: the Agents and Workflow roles steps are left empty.
+  const { page, wizard } = await toDemoStep(t, kiln, async (w) => {
+    assert.equal(await w.getByLabel('implementer model', { exact: true }).inputValue(), '');
+  });
+  await wizard.getByText(/The demo is a small Project/).waitFor();
+  const finish = wizard.getByRole('button', { name: 'Finish' });
+  assert.equal(await finish.isDisabled(), true, 'a choice comes first');
+
+  await wizard.getByRole('radio', { name: /Live/ }).check();
+  await finish.click();
+  await wizard.getByRole('alert').filter({ hasText: /Live runs on your role models: choose a model for the griller role.*the reviewer role/ }).waitFor();
+  await wizard.getByRole('heading', { name: 'Demo', level: 3 }).waitFor();
+  assert.deepEqual(await kiln.api<Project[]>('GET', '/api/projects'), []);
+
+  await wizard.getByRole('radio', { name: /Replay/ }).check();
+  await finish.click();
+  await page.waitForURL(`${kiln.url}/`);
+  assert.equal((await kiln.api<SetupState>('GET', '/api/setup')).completed, true);
+  await page.getByRole('link', { name: 'Demo', exact: true }).first().click();
+  await page.getByRole('region', { name: 'Story Grill', exact: true }).getByRole('article', { name: 'Add `slugify(title)`', exact: true }).waitFor();
+});
+
+test('on a dev instance, Skip finishes with no demo Project', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  // With no Replay demo the roles still need models: this Budget's model is suggested for each.
+  await kiln.api('PUT', '/api/budgets/work-credits', { kind: 'metered', name: 'Work credits', models: ['work-model'] });
+  const { page, wizard } = await toDemoStep(t, kiln, async (w) => {
+    assert.equal(await w.getByLabel('implementer model', { exact: true }).inputValue(), 'work-model');
+  });
+  await wizard.getByRole('radio', { name: /Skip/ }).check();
+  await wizard.getByRole('button', { name: 'Finish' }).click();
+
+  await page.waitForURL(`${kiln.url}/`);
+  assert.equal((await kiln.api<SetupState>('GET', '/api/setup')).completed, true);
+  assert.deepEqual(await kiln.api<Project[]>('GET', '/api/projects'), []);
+  assert.deepEqual(await kiln.api<DemoState>('GET', '/api/demo'), { available: true });
 });
 
 test('a core that has been set up opens on the board, not the wizard', async (t) => {

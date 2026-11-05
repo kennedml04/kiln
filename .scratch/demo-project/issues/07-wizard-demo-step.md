@@ -6,10 +6,10 @@ On a dev instance whose demo mode is Replay, Finish skips the "Choose a model fo
 
 **Blocked by:** 01, 06
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The dev wizard's steps end with Demo; the live wizard's still end with Import
-- [ ] Picking Replay with no Agents and no role models set lets the wizard finish, and the board shows the Demo Project's Story at Grill
-- [ ] Picking Live with a role unset shows the 409's message, naming the missing roles, and stays on the step
-- [ ] Skip finishes with no demo Project; the demo can be added later from the board (08)
-- [ ] Setup tests cover Finish with and without role models on dev+Replay, dev+Live and live
+- [x] The dev wizard's steps end with Demo; the live wizard's still end with Import
+- [x] Picking Replay with no Agents and no role models set lets the wizard finish, and the board shows the Demo Project's Story at Grill
+- [x] Picking Live with a role unset shows the 409's message, naming the missing roles, and stays on the step
+- [x] Skip finishes with no demo Project; the demo can be added later from the board (08)
+- [x] Setup tests cover Finish with and without role models on dev+Replay, dev+Live and live

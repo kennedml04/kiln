@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type DoctorReport, type ImportResult, type Item, type Project, type SetupState, type StartResult } from '@kiln/widget-sdk';
+import { OLD_BOARD_DATA_FOLDER, type BudgetInfo, type DemoState, type DoctorReport, type ImportResult, type Item, type Project, type SetupState, type StartResult } from '@kiln/widget-sdk';
 import { createTempRepo, onCleanup, startTestKiln, tempDir } from '@kiln/testing';
 import { seedScratch } from '@kiln/testing/scratch';
 
@@ -133,6 +133,59 @@ test('setup cannot finish until there is a Budget and every default Workflow rol
   assert.equal(done.completed, true);
   const doctor = await kiln.api<DoctorReport>('GET', '/api/doctor');
   assert.equal(doctor.checks.find((c) => c.id === 'setup')!.status, 'pass');
+});
+
+/** Every default Workflow role on a model of a Budget, as the wizard's Workflow roles step saves them. */
+async function chooseEveryRole(kiln: Awaited<ReturnType<typeof startTestKiln>>) {
+  await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model'] });
+  const roles = ['griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
+  await kiln.api('PUT', '/api/setup', { roles: Object.fromEntries(roles.map((role) => [role, { model: 'big-model' }])) });
+}
+
+test('on a dev instance whose demo is Replay, Finish needs no role models, and no Agent or Budget set up by hand', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  assert.equal((await kiln.api<DemoState>('POST', '/api/demo/start', { mode: 'replay' })).mode, 'replay');
+
+  const done = await kiln.api<SetupState>('POST', '/api/setup/complete');
+  assert.equal(done.completed, true);
+  assert.equal(done.settings.roles, undefined, 'no role was given a model');
+});
+
+test('on a dev instance whose demo is Replay, Finish also takes role models', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  await chooseEveryRole(kiln);
+  await kiln.api<DemoState>('POST', '/api/demo/start', { mode: 'replay' });
+
+  assert.equal((await kiln.api<SetupState>('POST', '/api/setup/complete')).completed, true);
+});
+
+test('on a dev instance with no demo, or a Live one, Finish still needs a model for every role', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model'] });
+  // Skip: no demo started.
+  const skipped = await kiln.request<{ error: string }>('POST', '/api/setup/complete');
+  assert.equal(skipped.status, 409);
+  assert.match(skipped.body.error, /Choose a model for the implementer role/);
+  // Live refuses while a role has no model, so Finish is still refused.
+  const live = await kiln.request<{ error: string }>('POST', '/api/demo/start', { mode: 'live' });
+  assert.equal(live.status, 409);
+  assert.match(live.body.error, /the implementer role/);
+  assert.equal((await kiln.request('POST', '/api/setup/complete')).status, 409);
+
+  await chooseEveryRole(kiln);
+  assert.equal((await kiln.api<DemoState>('POST', '/api/demo/start', { mode: 'live' })).mode, 'live');
+  assert.equal((await kiln.api<SetupState>('POST', '/api/setup/complete')).completed, true);
+});
+
+test('a live instance needs a model for every role to finish, with or without one set', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh' });
+  await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model'] });
+  const without = await kiln.request<{ error: string }>('POST', '/api/setup/complete');
+  assert.equal(without.status, 409);
+  assert.match(without.body.error, /Choose a model for the griller role/);
+
+  await chooseEveryRole(kiln);
+  assert.equal((await kiln.api<SetupState>('POST', '/api/setup/complete')).completed, true);
 });
 
 test("the models chosen for the default Workflow's roles are the ones its Stages run on", async (t) => {

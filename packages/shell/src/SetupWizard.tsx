@@ -2,17 +2,20 @@
 // Each step saves as it goes (PUT /api/setup, the Budget and Widget routes); Finish asks the core
 // to mark setup done, which it refuses while a Budget or a role's model is missing.
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BudgetDraft, BudgetInfo, CoreStatus, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
+import type { BudgetDraft, BudgetInfo, CoreStatus, DemoMode, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
 import { suggestRoles } from './role-defaults.ts';
 import { navigate } from './router.ts';
 import { api, useStore } from './store.ts';
 
 export const SETUP_PATH = '/setup';
 
-const LIVE_STEPS = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Import'] as const;
-type StepName = (typeof LIVE_STEPS)[number];
-/** A dev instance never imports the old board's real Projects, so its wizard has no Import step. */
-const DEV_STEPS: readonly StepName[] = LIVE_STEPS.filter((s) => s !== 'Import');
+type StepName = 'Login' | 'Knowledge store' | 'Install' | 'Agents' | 'Models' | 'Workflow roles' | 'Import' | 'Demo';
+const LIVE_STEPS: readonly StepName[] = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Import'];
+/** A dev instance never imports the old board's real Projects: its wizard ends with the Demo step instead. */
+const DEV_STEPS: readonly StepName[] = [...LIVE_STEPS.filter((s) => s !== 'Import'), 'Demo'];
+
+/** The Demo step's choice: start the demo in one of its modes, or skip it. */
+type DemoChoice = DemoMode | 'skip';
 
 /** The limits each Budget kind offers to change in setup, as paths into its settings. */
 const LIMIT_FIELDS: Record<BudgetDraft['kind'], { label: string; path: string[] }[]> = {
@@ -434,8 +437,10 @@ function RolesStep(props: {
   setRoles: (r: Record<string, RoleModel>) => void;
   /** True when the wizard filled in some roles itself. */
   suggested: boolean;
+  /** A dev instance, whose Demo step can pick Replay. */
+  dev: boolean;
 }) {
-  const { setup, budgets, roles, setRoles, suggested } = props;
+  const { setup, budgets, roles, setRoles, suggested, dev } = props;
   const options = budgets.flatMap((b) => b.models.map((m) => ({ model: m, budget: b.name })));
   const choose = (role: string, change: Partial<RoleModel>) => setRoles({ ...roles, [role]: { ...(roles[role] ?? { model: '' }), ...change } });
   return (
@@ -447,6 +452,7 @@ function RolesStep(props: {
           Budget where there is one. Change any of them.
         </p>
       ) : null}
+      {dev ? <p className="setup-hint">Replay needs no models; set them before running Live.</p> : null}
       <div className="setup-roles">
         <div className="setup-role-head" aria-hidden="true">
           <span>Role</span>
@@ -550,6 +556,36 @@ function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () =
   );
 }
 
+function DemoStep({ choice, setChoice }: { choice: DemoChoice | undefined; setChoice: (c: DemoChoice) => void }) {
+  return (
+    <Step title="Demo">
+      <p>
+        The demo is a small Project whose Story you take from Grill to shipped: answer its Asks, approve its Gates and its Tickets'
+        Reviews.
+      </p>
+      <div className="choices">
+        <Choice
+          type="radio"
+          name="demo"
+          checked={choice === 'replay'}
+          onChange={() => setChoice('replay')}
+          title="Replay"
+          detail="No models: a scripted fake Agent plays every role."
+        />
+        <Choice
+          type="radio"
+          name="demo"
+          checked={choice === 'live'}
+          onChange={() => setChoice('live')}
+          title="Live"
+          detail="Your Agents, on the models chosen for each role."
+        />
+        <Choice type="radio" name="demo" checked={choice === 'skip'} onChange={() => setChoice('skip')} title="Skip" detail="No demo for now; start it later from the board." />
+      </div>
+    </Step>
+  );
+}
+
 export function SetupWizard() {
   const liveBudgets = useStore((s) => s.budgets);
   const [setup, setSetup] = useState<SetupState>();
@@ -570,6 +606,9 @@ export function SetupWizard() {
   const [suggested, setSuggested] = useState(false);
   // The steps depend on the instance (GET /api/status): a dev instance has no Import step.
   const [steps, setSteps] = useState<readonly StepName[]>();
+  const [demo, setDemo] = useState<DemoChoice>();
+  // The mode this wizard started the demo in, so a second Finish doesn't throw that run away again.
+  const [demoStarted, setDemoStarted] = useState<DemoMode>();
 
   const refresh = async () => {
     const [state, list] = await Promise.all([api<SetupState>('GET', '/api/setup'), api<BudgetInfo[]>('GET', '/api/budgets')]);
@@ -633,7 +672,9 @@ export function SetupWizard() {
     setDrafts(setup.defaults[kind].map((d) => draftFor(d, budgets)));
   };
 
-  const rolesChosen = setup.roles.every(({ role }) => roles[role]?.model);
+  const dev = steps.includes('Demo');
+  // A dev instance may leave roles empty: Replay needs none, and Live refuses until they are set.
+  const rolesChosen = dev || setup.roles.every(({ role }) => roles[role]?.model);
   // The Budgets the Models step offers: this install's, then any others already set up.
   const entries: BudgetDraft[] = [
     ...drafts,
@@ -641,7 +682,7 @@ export function SetupWizard() {
   ];
   const rows = modelRows(widgets, setup, entries, budgets, added);
   const budgetOf = (row: ModelRow) => budgetFor(row, entries, picked);
-  const needed: Partial<Record<StepName, boolean>> = { 'Knowledge store': folder.trim() !== '', Install: Boolean(install), 'Workflow roles': rolesChosen };
+  const needed: Partial<Record<StepName, boolean>> = { 'Knowledge store': folder.trim() !== '', Install: Boolean(install), 'Workflow roles': rolesChosen, Demo: demo !== undefined };
   const canGoOn = needed[steps[step]!] ?? true;
 
   /** Saves what this step chose; returns false to stay on it. */
@@ -669,12 +710,15 @@ export function SetupWizard() {
         await api('PUT', `/api/budgets/${encodeURIComponent(entry.id)}`, { ...withoutId(entry), models });
       }
       const { list } = await refresh();
-      if (list.length === 0) throw new Error('Give at least one Budget its models.');
+      // A dev instance may go on with no Budget: Replay brings its own.
+      if (list.length === 0 && !dev) throw new Error('Give at least one Budget its models.');
       return;
     }
     if (name === 'Workflow roles') {
       const widgets = await api<WidgetInfo[]>('GET', '/api/widgets');
-      await api('PUT', '/api/setup', { roles: withAgents(roles, budgets, widgets) });
+      // Only roles given a model are saved: on a dev instance the rest may stay empty.
+      const chosen = Object.fromEntries(Object.entries(roles).filter(([, r]) => r.model));
+      await api('PUT', '/api/setup', { roles: withAgents(chosen, budgets, widgets) });
     }
     await refresh();
   };
@@ -696,6 +740,11 @@ export function SetupWizard() {
     setBusy(true);
     setError(undefined);
     try {
+      // The demo starts first: Finish skips the role models only once the demo mode is Replay.
+      if ((demo === 'replay' || demo === 'live') && demoStarted !== demo) {
+        await api('POST', '/api/demo/start', { mode: demo });
+        setDemoStarted(demo);
+      }
       await api('POST', '/api/setup/complete');
       navigate('/');
     } catch (err) {
@@ -751,8 +800,9 @@ export function SetupWizard() {
           add={(model) => setAdded(added.includes(model) ? added : [...added, model])}
         />
       ) : null}
-      {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} suggested={suggested} /> : null}
+      {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} suggested={suggested} dev={dev} /> : null}
       {name === 'Import' ? <ImportStep setup={setup} onImported={async () => void (await refresh())} /> : null}
+      {name === 'Demo' ? <DemoStep choice={demo} setChoice={setDemo} /> : null}
           {error ? <p role="alert">{error}</p> : null}
           <div className="setup-buttons">
             {step > 0 ? (
@@ -766,7 +816,7 @@ export function SetupWizard() {
                 Next
               </button>
             ) : (
-              <button type="button" className="primary" onClick={() => void finish()} disabled={busy}>
+              <button type="button" className="primary" onClick={() => void finish()} disabled={busy || !canGoOn}>
                 Finish
               </button>
             )}
