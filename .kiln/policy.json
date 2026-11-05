@@ -14,6 +14,11 @@
       "action": "other_commands",
       "match": "ls .scratch/*",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src/work packages/core/src/flow packages/core/src/knowledge",
+      "decision": "allow"
     }
   ]
 }
