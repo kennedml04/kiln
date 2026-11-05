@@ -113,6 +113,8 @@ export interface TestKilnOptions {
    * board. `fresh`: a data folder that has never been set up, so the Shell opens the setup wizard.
    */
   setup?: 'done' | 'fresh';
+  /** Starts the core as a dev instance (`--dev-instance`, as `kiln dev` does): `GET /api/status` reports `instance: 'dev'`. */
+  devInstance?: boolean;
 }
 
 /** The default `KILN_TAILSCALE_CLI` in tests: a command that is never installed. */
@@ -521,6 +523,7 @@ export async function startTestKiln(t: Cleanup, options: TestKilnOptions = {}): 
   const repo = initRepo(repoDir);
   const restartMs = String(options.widgetRestartMs ?? 50);
   const args = [CORE_MAIN, '--port', '0', '--data-dir', dataDir, '--login', login, '--test-mode', '--widget-restart-ms', restartMs];
+  if (options.devInstance) args.push('--dev-instance');
   const child = spawn(process.execPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {

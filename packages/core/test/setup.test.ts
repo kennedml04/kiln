@@ -250,6 +250,27 @@ test("importing from the old board registers its Projects with their .scratch It
   assert.deepEqual(snapshot(board), before);
 });
 
+test("a dev instance does not offer or import the old board's real Projects, but a Project can still be added by hand", async (t) => {
+  const board = tempDir(t, 'kiln-old-board-copy');
+  mkdirSync(join(board, OLD_BOARD_DATA_FOLDER));
+  const alpha = createTempRepo(t);
+  const registry = join(board, OLD_BOARD_DATA_FOLDER, 'projects.json');
+  writeFileSync(registry, JSON.stringify({ projects: [{ name: 'alpha', path: alpha.path }] }));
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true, env: { KILN_OLD_BOARD_REGISTRY: registry } });
+  assert.equal((await kiln.api<{ instance: string }>('GET', '/api/status')).instance, 'dev');
+
+  const state = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.deepEqual(state.oldBoard.projects, []);
+
+  const refused = await kiln.request<{ error: string }>('POST', '/api/setup/import', {});
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.error, "Dev instances don't import real Projects; add one by hand if you mean to");
+  assert.deepEqual(await kiln.api<Project[]>('GET', '/api/projects'), []);
+
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path, name: 'by hand' });
+  assert.deepEqual((await kiln.api<Project[]>('GET', '/api/projects')).map((p) => p.id), [project.id]);
+});
+
 test('setup is Admin work', async (t) => {
   const kiln = await startTestKiln(t, { setup: 'fresh', login: 'tailscale' });
   await kiln.api('PUT', '/api/users/sam@example.com', { role: 'member' });

@@ -2,14 +2,17 @@
 // Each step saves as it goes (PUT /api/setup, the Budget and Widget routes); Finish asks the core
 // to mark setup done, which it refuses while a Budget or a role's model is missing.
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BudgetDraft, BudgetInfo, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
+import type { BudgetDraft, BudgetInfo, CoreStatus, ImportResult, InstallKind, LoginMode, RoleModel, SetupState, TailscaleServe, WidgetInfo } from '@kiln/widget-sdk';
 import { suggestRoles } from './role-defaults.ts';
 import { navigate } from './router.ts';
 import { api, useStore } from './store.ts';
 
 export const SETUP_PATH = '/setup';
 
-const STEPS = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Import'] as const;
+const LIVE_STEPS = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Import'] as const;
+type StepName = (typeof LIVE_STEPS)[number];
+/** A dev instance never imports the old board's real Projects, so its wizard has no Import step. */
+const DEV_STEPS: readonly StepName[] = LIVE_STEPS.filter((s) => s !== 'Import');
 
 /** The limits each Budget kind offers to change in setup, as paths into its settings. */
 const LIMIT_FIELDS: Record<BudgetDraft['kind'], { label: string; path: string[] }[]> = {
@@ -565,6 +568,8 @@ export function SetupWizard() {
   const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
   const [roles, setRoles] = useState<Record<string, RoleModel>>({});
   const [suggested, setSuggested] = useState(false);
+  // The steps depend on the instance (GET /api/status): a dev instance has no Import step.
+  const [steps, setSteps] = useState<readonly StepName[]>();
 
   const refresh = async () => {
     const [state, list] = await Promise.all([api<SetupState>('GET', '/api/setup'), api<BudgetInfo[]>('GET', '/api/budgets')]);
@@ -573,6 +578,10 @@ export function SetupWizard() {
     return { state, list };
   };
   useEffect(() => {
+    api<CoreStatus>('GET', '/api/status').then(
+      (status) => setSteps(status.instance === 'dev' ? DEV_STEPS : LIVE_STEPS),
+      (err: Error) => setError(err.message),
+    );
     refresh().then(
       ({ state, list }) => {
         setLogin(state.settings.login ?? state.running.login);
@@ -592,7 +601,7 @@ export function SetupWizard() {
   }, [liveBudgets]);
   // An Agent reports its models when its Widget registers, which can be just after it's installed.
   useEffect(() => {
-    if (STEPS[step] !== 'Models') return;
+    if (steps?.[step] !== 'Models') return;
     let live = true;
     const load = () => api<WidgetInfo[]>('GET', '/api/widgets').then((w) => live && setWidgets(w), () => undefined);
     void load();
@@ -601,11 +610,11 @@ export function SetupWizard() {
       live = false;
       clearInterval(timer);
     };
-  }, [step]);
+  }, [step, steps]);
 
   // The roles step opens with a model suggested for every role that has none yet.
   useEffect(() => {
-    if (STEPS[step] !== 'Workflow roles' || !setup) return;
+    if (steps?.[step] !== 'Workflow roles' || !setup) return;
     const filled = suggestRoles(
       setup.roles.map((r) => r.role),
       budgets,
@@ -617,7 +626,7 @@ export function SetupWizard() {
     }
   }, [step, budgets, setup]);
 
-  if (!setup) return <section aria-label="Set up Kiln">{error ? <p role="alert">{error}</p> : <p>Loading setup.</p>}</section>;
+  if (!setup || !steps) return <section aria-label="Set up Kiln">{error ? <p role="alert">{error}</p> : <p>Loading setup.</p>}</section>;
 
   const setInstall = (kind: InstallKind) => {
     setInstallKind(kind);
@@ -632,11 +641,12 @@ export function SetupWizard() {
   ];
   const rows = modelRows(widgets, setup, entries, budgets, added);
   const budgetOf = (row: ModelRow) => budgetFor(row, entries, picked);
-  const canGoOn = [true, folder.trim() !== '', Boolean(install), true, true, rolesChosen, true][step];
+  const needed: Partial<Record<StepName, boolean>> = { 'Knowledge store': folder.trim() !== '', Install: Boolean(install), 'Workflow roles': rolesChosen };
+  const canGoOn = needed[steps[step]!] ?? true;
 
   /** Saves what this step chose; returns false to stay on it. */
   const save = async () => {
-    const name = STEPS[step];
+    const name = steps[step];
     if (name === 'Login') await api('PUT', '/api/setup', { login });
     if (name === 'Knowledge store') await api('PUT', '/api/setup', { knowledgeDir: folder.trim() });
     if (name === 'Install') {
@@ -695,23 +705,23 @@ export function SetupWizard() {
     }
   };
 
-  const name = STEPS[step];
+  const name = steps[step];
   return (
     <section aria-label="Set up Kiln" className="setup">
       <div className="setup-head">
         <h2>Set up Kiln</h2>
         <p>
-          Step {step + 1} of {STEPS.length}
+          Step {step + 1} of {steps.length}
           {setup.completed ? '. Kiln is set up already: change anything you like.' : ''}
         </p>
         <div className="setup-progress" aria-hidden="true">
-          <span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+          <span style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
         </div>
       </div>
       <div className="setup-layout">
         {/* Steps already passed can be revisited; later ones open only through Next, which saves. */}
         <ol className="setup-steps" aria-label="Setup steps">
-          {STEPS.map((title, i) => (
+          {steps.map((title, i) => (
             <li key={title} className={i < step ? 'done' : undefined} aria-current={i === step ? 'step' : undefined}>
               {i < step ? (
                 <button type="button" onClick={() => void go(i)} disabled={busy} aria-label={`Revisit ${title}`}>
@@ -751,7 +761,7 @@ export function SetupWizard() {
               </button>
             ) : null}
             <span className="spacer" />
-            {step < STEPS.length - 1 ? (
+            {step < steps.length - 1 ? (
               <button type="button" className="primary" onClick={() => void go(step + 1)} disabled={busy || !canGoOn}>
                 Next
               </button>

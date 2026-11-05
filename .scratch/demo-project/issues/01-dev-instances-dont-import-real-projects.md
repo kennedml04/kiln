@@ -4,9 +4,9 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `POST /api/setup/import` returns 409 with that message on a dev core, and imports as before on a live core (extend `packages/core/test/setup.test.ts`)
-- [ ] `GET /api/setup` on a dev core does not list old-board Projects to import
-- [ ] The dev wizard has no Import step; the live wizard still has it
-- [ ] Registering a Project by hand still works on a dev core
+- [x] `POST /api/setup/import` returns 409 with that message on a dev core, and imports as before on a live core (extend `packages/core/test/setup.test.ts`)
+- [x] `GET /api/setup` on a dev core does not list old-board Projects to import
+- [x] The dev wizard has no Import step; the live wizard still has it
+- [x] Registering a Project by hand still works on a dev core

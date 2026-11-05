@@ -52,6 +52,8 @@ const OBSIDIAN_SUGGESTION =
   'Obsidian is not installed. It is optional: Kiln writes plain markdown either way, but Obsidian makes the ' +
   'Knowledge store easy to browse and link. Get it from https://obsidian.md and open the Knowledge store folder as a vault.';
 
+const DEV_IMPORT_REFUSED = "Dev instances don't import real Projects; add one by hand if you mean to";
+
 const LOCAL_SERVER_URLS = ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:1234/v1', 'http://127.0.0.1:8080/v1'];
 const PROBE_MS = 1_000;
 
@@ -148,6 +150,8 @@ export interface SetupDeps {
   moveKnowledge(root: string): void;
   /** Test mode with `KILN_TEST_SETUP_DONE`: start as if setup had been finished. */
   assumeDone?: boolean;
+  /** A dev instance (`kiln dev`): it never offers or imports the old board's real Projects. */
+  devInstance?: boolean;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -187,7 +191,7 @@ export function createSetup(deps: SetupDeps): Setup {
   const widgetRepo = () => settings.widgetRepo ?? PUBLIC_WIDGET_REPO;
 
   const oldBoard = (path = registry()): SetupState['oldBoard'] => {
-    if (!existsSync(path)) return { registry: path, found: false, projects: [] };
+    if (deps.devInstance || !existsSync(path)) return { registry: path, found: false, projects: [] };
     let entries: RegistryEntry[];
     try {
       entries = readRegistry(path);
@@ -338,6 +342,7 @@ export function createSetup(deps: SetupDeps): Setup {
       return state();
     },
     async importOldBoard(request) {
+      if (deps.devInstance) throw new SetupError(409, DEV_IMPORT_REFUSED);
       const body = (request ?? {}) as { registry?: unknown; paths?: unknown };
       if (body.registry !== undefined && (typeof body.registry !== 'string' || !isAbsolute(body.registry))) {
         throw new SetupError(400, "registry is the absolute path of the old board's projects.json");

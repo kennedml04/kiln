@@ -233,6 +233,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     running: { login: loginMode, knowledgeDir: () => knowledge.root },
     moveKnowledge: (root) => knowledge.moveTo(root),
     assumeDone: options.testMode && process.env.KILN_TEST_SETUP_DONE === '1',
+    devInstance: options.devInstance === true,
   });
   work.decorateWorkflow(setup.decorate);
   doctor.register(setup.doctorCheck);

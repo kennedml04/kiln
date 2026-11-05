@@ -221,6 +221,16 @@ test('the wizard lets tailscale serve be, but stops on a raw TCP forward that wo
   await tcpPage.getByRole('region', { name: 'Set up Kiln' }).getByRole('alert').filter({ hasText: /raw TCP.*local Admin/ }).waitFor();
 });
 
+test('on a dev instance the wizard has no Import step: it ends after Workflow roles', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
+  const page = await openShell(t, kiln, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  await wizard.getByRole('heading', { name: 'Login', level: 3 }).waitFor();
+  await wizard.getByText('Step 1 of 6').waitFor();
+  const steps = wizard.getByRole('list', { name: 'Setup steps' }).getByRole('listitem');
+  assert.deepEqual(await steps.allInnerTexts(), ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles']);
+});
+
 test('a core that has been set up opens on the board, not the wizard', async (t) => {
   const kiln = await startTestKiln(t);
   const page = await openShell(t, kiln, '/');
