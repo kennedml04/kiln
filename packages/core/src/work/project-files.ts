@@ -3,15 +3,18 @@
 //   .kiln/workflow.json   the Project's own Workflow (optional: the default applies without it)
 //   .kiln/settings.json   Project settings (test command, known commands, local-only, merge mode, Tracker)
 //   .kiln/policy.json     the Project Policy (read by the Policy engine)
+//   .kiln/modules/<id>/   the Project's own modules (`kiln-module.json`), ahead of the module repos
 import { existsSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 import {
+  PROJECT_MODULES_DIR,
   PROJECT_SETTINGS_FILE,
   PROJECT_WORKFLOW_FILE,
   type ProjectFileError,
   type ProjectSettings,
   type Workflow,
 } from '@kiln/widget-sdk';
+import { loadModules, moduleSources, type LoadedModule } from './modules.ts';
 import { validateWorkflow } from './workflow-validator.ts';
 
 const KILN_DIR = '.kiln';
@@ -23,6 +26,8 @@ export interface ProjectFiles {
   /** Whether a Workflow file is there at all (valid or not). */
   hasWorkflowFile: boolean;
   settings: ProjectSettings;
+  /** The modules `settings.modules` names that resolved, in that order. */
+  modules: LoadedModule[];
   errors: ProjectFileError[];
 }
 
@@ -47,7 +52,7 @@ export function validateSettings(raw: unknown): { settings: ProjectSettings; err
   const errors: Omit<ProjectFileError, 'file'>[] = [];
   const settings: ProjectSettings = {};
   if (!isObject(raw)) return { settings, errors: [{ at: '', message: 'The settings must be a JSON object' }] };
-  const { testCommand, knownCommands, localOnly, mergeMode, tracker, github } = raw;
+  const { testCommand, knownCommands, localOnly, mergeMode, tracker, github, modules } = raw;
   if (testCommand !== undefined) {
     if (typeof testCommand === 'string' && testCommand.trim()) settings.testCommand = testCommand;
     else errors.push({ at: 'testCommand', message: 'testCommand must be a command line' });
@@ -78,10 +83,37 @@ export function validateSettings(raw: unknown): { settings: ProjectSettings; err
       errors.push({ at: 'github.remote', message: 'github.remote must name a git remote' });
     } else settings.github = { repo, ...(remote ? { remote } : {}) };
   }
+  if (modules !== undefined) {
+    if (Array.isArray(modules) && modules.every((m) => typeof m === 'string' && m.trim())) settings.modules = modules as string[];
+    else errors.push({ at: 'modules', message: 'modules must be a list of module ids' });
+  }
   if (settings.tracker === 'github' && !settings.github) {
     errors.push({ at: 'github', message: 'The github Tracker needs github.repo, the "owner/name" its issues are on' });
   }
   return { settings, errors };
+}
+
+/**
+ * Resolves `settings.modules`: an id no source has is an error on the setting, and the Project's
+ * own module files are checked. Problems in a module repo are not the Project's, so only the ids
+ * they leave unresolved show.
+ */
+function resolveModules(root: string, settings: ProjectSettings): { modules: LoadedModule[]; errors: ProjectFileError[] } {
+  const { modules: known, problems } = loadModules(moduleSources(root));
+  const errors: ProjectFileError[] = [];
+  const modules: LoadedModule[] = [];
+  const available = [...known.keys()].sort();
+  (settings.modules ?? []).forEach((id, i) => {
+    const found = known.get(id);
+    if (found) return modules.push(found);
+    const broken = problems.find((p) => p.folderName === id);
+    const listed = available.length ? `The modules are: ${available.join(', ')}` : 'No modules are available';
+    const message = broken ? `The ${JSON.stringify(id)} module did not load: see ${broken.file}` : `${JSON.stringify(id)} is not a module. ${listed}`;
+    errors.push({ file: PROJECT_SETTINGS_FILE, at: `modules[${i}]`, message });
+  });
+  if (settings.modules) settings.modules = modules.map((m) => m.module.id);
+  for (const { source, file, at, message } of problems) if (source === PROJECT_MODULES_DIR) errors.push({ file, at, message });
+  return { modules, errors };
 }
 
 /** Reads and checks the Project's Kiln files in the checkout at `root`. */
@@ -95,6 +127,8 @@ export function readProjectFiles(root: string): ProjectFiles {
     settings = checked.settings;
     errors.push(...checked.errors.map((e) => ({ file: PROJECT_SETTINGS_FILE, ...e })));
   }
+  const resolved = resolveModules(root, settings);
+  errors.push(...resolved.errors);
 
   const workflowFile = readJson(root, PROJECT_WORKFLOW_FILE);
   const hasWorkflowFile = workflowFile.error !== undefined || workflowFile.value !== undefined;
@@ -105,7 +139,7 @@ export function readProjectFiles(root: string): ProjectFiles {
     if (Array.isArray(checked)) errors.push(...checked.map((e) => ({ file: PROJECT_WORKFLOW_FILE, ...e })));
     else workflow = checked;
   }
-  return { workflow, hasWorkflowFile, settings, errors };
+  return { workflow, hasWorkflowFile, settings, modules: resolved.modules, errors };
 }
 
 const isDir = (path: string) => existsSync(path) && statSync(path).isDirectory();
@@ -121,7 +155,8 @@ export function watchProjectFiles(root: string, onChange: () => void): () => voi
   const attach = () => {
     const dir = join(root, KILN_DIR);
     if (dirWatcher || !isDir(dir)) return;
-    dirWatcher = watch(dir, changed);
+    // Recursive, so a change to a module under `.kiln/modules` is seen too.
+    dirWatcher = watch(dir, { recursive: true }, changed);
     dirWatcher.on('error', () => {
       dirWatcher?.close();
       dirWatcher = undefined;

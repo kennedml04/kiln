@@ -10,9 +10,9 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Valid and invalid module files are accepted and rejected with clear messages (unit tests)
-- [ ] A Project's `.kiln/modules/` module and an in-tree module both resolve, and the earlier source wins a clash
-- [ ] An unknown module id in settings shows as a Project error; no `modules` field changes nothing
-- [ ] The glossary entry and the ADR exist
+- [x] Valid and invalid module files are accepted and rejected with clear messages (unit tests)
+- [x] A Project's `.kiln/modules/` module and an in-tree module both resolve, and the earlier source wins a clash
+- [x] An unknown module id in settings shows as a Project error; no `modules` field changes nothing
+- [x] The glossary entry and the ADR exist

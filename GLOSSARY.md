@@ -120,7 +120,11 @@ _Avoid_: model (one model has many variants), profile, preset
 
 **Widget**:
 A separately installed feature that plugs into the core: anything that is not Shell, Work or Platform. It comes from either the public widget repo or a private local one.
-_Avoid_: module, plugin, card type
+_Avoid_: module (a Module is something else), plugin, card type
+
+**Module**:
+A small declarative file (`kiln-module.json`) for one kind of work, such as CAD part, 3D print or Electronics: the skills, MCP servers, Exit checks, Stages and starter files it brings, and the Widgets it needs. A Project lists its modules in `.kiln/settings.json` and can mix them. Modules come from module repos (Kiln ships one, `modules/`) or the Project's own `.kiln/modules/`. A Module is not a Widget: it runs no code inside Kiln. Its Exit checks run as commands in the Item's worktree and its MCP servers inside the Session, under the Session's Policy.
+_Avoid_: project type (a type is only a wizard preset that ticks modules), plugin, Widget
 
 **Widget source**:
 A git repo or local folder that Widgets are installed from: the public repo (alongside the core) or a private one. Installs are pinned to an exact version, and the Org Policy can limit which sources are allowed.

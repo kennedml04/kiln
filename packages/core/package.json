@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./local-models": "./src/local-models/index.ts"
+    "./local-models": "./src/local-models/index.ts",
+    "./modules": "./src/work/modules.ts"
   },
   "dependencies": {
     "@kiln/widget-sdk": "*",

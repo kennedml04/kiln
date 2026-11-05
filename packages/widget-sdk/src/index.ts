@@ -3,6 +3,7 @@
 import type { AgentEvent, AgentRegistration } from './agent.ts';
 
 export * from './manifest.ts';
+export * from './module.ts';
 export * from './panel.ts';
 export * from './widget-events.ts';
 export * from './agent.ts';

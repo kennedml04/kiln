@@ -267,3 +267,51 @@ test('the Project settings are read from .kiln/settings.json, live, and a bad se
   assert.match(updated.errors[0]!.message, /"merge" or "pr"/);
   assert.deepEqual(updated.settings, { testCommand: 'npm test', knownCommands: ['npm run lint'], localOnly: true });
 });
+
+test('modules in .kiln/settings.json resolve from the Project own .kiln/modules folder; an unknown id is a Project error', async (t) => {
+  const kiln = await startTestKiln(t);
+  commitKilnFile(kiln, 'modules/cad-part/kiln-module.json', { id: 'cad-part', name: 'CAD part', description: 'A printed part' });
+  commitKilnFile(kiln, 'settings.json', { modules: ['cad-part'] });
+
+  const project = await register(kiln);
+  assert.deepEqual(project.errors, []);
+  assert.deepEqual(project.settings, { modules: ['cad-part'] });
+  assert.equal(project.workflowSource, 'default');
+
+  const events = await kiln.events();
+  commitKilnFile(kiln, 'settings.json', { modules: ['cad-part', 'pcb'] });
+  const updated = await projectUpdated(events);
+  assert.deepEqual(updated.errors, [
+    { file: '.kiln/settings.json', at: 'modules[1]', message: '"pcb" is not a module. The modules are: cad-part' },
+  ]);
+  assert.deepEqual(updated.settings, { modules: ['cad-part'] });
+
+  // A broken module file in the Project is named, and the setting points at it.
+  commitKilnFile(kiln, 'modules/cad-part/kiln-module.json', { id: 'cad-part', name: 'CAD part' });
+  const broken = await projectUpdated(events);
+  assert.deepEqual(broken.errors.map((e) => [e.file, e.at]), [
+    ['.kiln/settings.json', 'modules[0]'],
+    ['.kiln/settings.json', 'modules[1]'],
+    ['.kiln/modules/cad-part/kiln-module.json', 'description'],
+  ]);
+  assert.equal(broken.errors[0]!.message, 'The "cad-part" module did not load: see .kiln/modules/cad-part/kiln-module.json');
+  assert.equal(broken.errors[1]!.message, '"pcb" is not a module. No modules are available');
+  assert.deepEqual(broken.settings, { modules: [] });
+
+  commitKilnFile(kiln, 'settings.json', { modules: 'cad-part' });
+  const shapeless = await projectUpdated(events);
+  assert.deepEqual(shapeless.errors.map((e) => [e.file, e.at, e.message]).slice(0, 1), [
+    ['.kiln/settings.json', 'modules', 'modules must be a list of module ids'],
+  ]);
+});
+
+test('a Project with no modules field behaves as before: the default Workflow, no errors, no modules setting', async (t) => {
+  const kiln = await startTestKiln(t);
+  commitKilnFile(kiln, 'settings.json', { testCommand: 'npm test' });
+
+  const project = await register(kiln);
+  assert.deepEqual(project.errors, []);
+  assert.deepEqual(project.settings, { testCommand: 'npm test' });
+  assert.equal(project.workflowSource, 'default');
+  assert.deepEqual(project.workflow.kinds.map((k) => k.id), ['epic', 'story', 'ticket']);
+});

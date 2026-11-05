@@ -104,6 +104,8 @@ export interface ProjectSettings {
   tracker?: TrackerId;
   /** The GitHub repo the Project's issues and pull requests are on (the `github` Tracker, PR mode). */
   github?: GitHubSettings;
+  /** The ids of the modules the Project pulls in, in order. Unset: none, today's Workflow. */
+  modules?: string[];
 }
 
 export type TrackerId = 'markdown' | 'github';

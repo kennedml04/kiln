@@ -9,7 +9,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const isText = (value: unknown): value is string => typeof value === 'string' && value.trim() !== '';
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 
-const STAGE_FIELDS = new Set([
+export const STAGE_FIELDS = new Set([
   'id', 'name', 'gate', 'role', 'agent', 'model', 'fallbackModel', 'worktree', 'exit', 'status', 'pool', 'policy', 'mergeOnExit', 'rework', 'rollUp',
 ]);
 const BOOLEAN_FIELDS = ['gate', 'worktree', 'mergeOnExit', 'rollUp'] as const;
