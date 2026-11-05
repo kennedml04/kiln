@@ -269,6 +269,11 @@
       "action": "other_commands",
       "match": "node -e \"\nconst fs=require('fs');\nlet p='packages/core/src/db.ts', s=fs.readFileSync(p,'utf8');\ns=s.replace(/(   record TEXT NOT NULL\\n   \\)\\`,\\n)(\\];)/, (m,a,b)=>a+\\\"  // Results (local-first Ticket 07): every local Stage attempt against its variant, and the pins.\\n  \\`CREATE TABLE variant_results (\\n     id TEXT PRIMARY KEY,\\n     variant_id TEXT NOT NULL,\\n     role TEXT NOT NULL,\\n     size TEXT NOT NULL,\\n     passed INTEGER NOT NULL,\\n     reason TEXT,\\n     wall_ms INTEGER NOT NULL,\\n     tokens_per_second REAL,\\n     item_id TEXT,\\n     session_id TEXT,\\n     diff_lines INTEGER,\\n     files INTEGER,\\n     at TEXT NOT NULL,\\n     seq INTEGER NOT NULL\\n   )\\`,\\n  \\`CREATE TABLE variant_pins (\\n     scope TEXT PRIMARY KEY,\\n     variant_id TEXT NOT NULL\\n   )\\`,\\n\\\"+b);\nfs.writeFileSync(p,s);\n\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git worktree list",
+      "decision": "allow"
     }
   ]
 }
