@@ -274,6 +274,11 @@
       "action": "other_commands",
       "match": "git worktree list",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src/local",
+      "decision": "allow"
     }
   ]
 }
