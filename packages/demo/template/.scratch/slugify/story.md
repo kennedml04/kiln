@@ -2,7 +2,7 @@
 title: Add `slugify(title)`
 stage: grill
 ---
-Add `slugify(title)` to `src/index.js`: it turns a title into a slug for a URL or a file name.
+Add `slugify(title)` in a new `src/slugify.js`, with its tests in `test/slugify.test.js`: it turns a title into a slug for a URL or a file name.
 
 - The slug is lowercase.
 - Spaces and runs of punctuation become a single dash: `slugify('Hello,  World!')` is `'hello-world'`.
