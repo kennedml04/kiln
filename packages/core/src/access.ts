@@ -86,6 +86,12 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'POST', path: '/api/demo/start', role: 'admin', action: 'demo.start' },
   // Runaway guards (ticket 16). The stall and context-alarm thresholds are Admin settings.
   { method: 'PUT', path: '/api/runaway', role: 'admin', action: 'runaway.set' },
+  // Variants and the local server (local-first Ticket 04): Admin settings, like Budgets.
+  { method: 'PUT', path: '/api/local-server', role: 'admin', action: 'local_server.set' },
+  { method: 'POST', path: '/api/variants', role: 'admin', action: 'variant.add' },
+  { method: 'PATCH', path: /^\/api\/variants\/[^/]+$/, role: 'admin', action: 'variant.edit' },
+  { method: 'DELETE', path: /^\/api\/variants\/[^/]+$/, role: 'admin', action: 'variant.remove' },
+  { method: 'POST', path: /^\/api\/variants\/[^/]+\/(enable|disable|smoke-test)$/, role: 'admin', action: 'variant.change' },
 ];
 
 export interface Caller {

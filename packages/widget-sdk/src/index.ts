@@ -153,6 +153,7 @@ export * from './policy.ts';
 export * from './scheduler.ts';
 export * from './budgets.ts';
 export * from './runaway.ts';
+export * from './variants.ts';
 export * from './threads.ts';
 export * from './project-thread.ts';
 export * from './setup.ts';

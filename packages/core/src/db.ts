@@ -212,6 +212,12 @@ const MIGRATIONS: string[] = [
    )`,
   // A pull request closed on GitHub without merging sends its Item back to rework (state 'closed').
   `ALTER TABLE pull_requests ADD COLUMN closed_at TEXT`,
+  // Variants (local-first Ticket 04): one model + quant + settings served by the local server.
+  // `record` is the Variant as JSON. A removed variant's row stays, with its results.
+  `CREATE TABLE variants (
+     id TEXT PRIMARY KEY,
+     record TEXT NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

@@ -60,6 +60,8 @@ import { handleSetupRoute } from './setup/routes.ts';
 import { createDemo } from './demo/demo.ts';
 import { handleDemoRoute } from './demo/routes.ts';
 import { createRunawayGuard, handleRunawayRoute } from './budgets/runaway.ts';
+import { createVariantService } from './local/variants.ts';
+import { handleVariantRoute } from './local/routes.ts';
 
 /** Where the built Shell lives in the monorepo (`npm run build` writes it). */
 export const DEFAULT_SHELL_DIR = fileURLToPath(new URL('../../shell/dist/', import.meta.url));
@@ -193,6 +195,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   scheduler.addPoolClaim(usage.poolsFor);
   // Runaway guards for every Budget kind: the stall rule and the context alarm.
   const runaway = createRunawayGuard({ db, bus, work, sessions, asks, enqueue: (itemId) => scheduler.enqueue(itemId) });
+  // Variants and the local server (local-first Ticket 04).
+  const variants = createVariantService({ db, bus, clock });
   const restart = createRestartWhenIdle({
     bus,
     runningSessions: () => sessions.running().length,
@@ -483,6 +487,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleSetupRoute(setup, req, res, url, { sendJson, readJson })) return;
       if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson, caller: demoCaller })) return;
       if (await handleRunawayRoute(runaway, req, res, url, { sendJson, readJson })) return;
+      if (await handleVariantRoute(variants, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
       if (await handleWorkRoute(work, req, res, url, { sendJson, readJson })) return;

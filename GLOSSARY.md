@@ -112,6 +112,10 @@ _Avoid_: loop, runaway cost
 A Session that has gone several turns (8 by default) with no new commit and no artifact change, or that repeats the same tool call with the same arguments. Kiln pauses it and raises an Ask. A Session that keeps finishing with its Exit unmet is bounded by this rule too: each unmet Exit round with nothing new made counts as a turn. There is no separate cap on Exit rounds.
 _Avoid_: hang, stuck (a stalled Session is still running)
 
+**Variant**:
+One model + quant + settings combination (context size, GPU layers, KV cache type, threads) that the local model server runs. Kiln keeps a record of each: enabled, disabled with a reason, or removed (its results stay), and its last smoke test. Kiln writes a variant's own entry in the server's config; an entry written there by hand shows up as a variant that can be enabled.
+_Avoid_: model (one model has many variants), profile, preset
+
 ## Extension
 
 **Widget**:

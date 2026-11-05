@@ -11,6 +11,7 @@
     "./local-models": "./src/local-models/index.ts"
   },
   "dependencies": {
-    "@kiln/widget-sdk": "*"
+    "@kiln/widget-sdk": "*",
+    "yaml": "^2.9.1"
   }
 }
