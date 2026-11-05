@@ -404,6 +404,11 @@
       "action": "other_commands",
       "match": "grep -n \"export function readProjectSettings\\|export function readProjectFiles\" -A6 packages/core/src/work/project-files.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git branch --contains 004a178",
+      "decision": "allow"
     }
   ]
 }
