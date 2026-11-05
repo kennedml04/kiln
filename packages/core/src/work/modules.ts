@@ -96,7 +96,11 @@ function checkExitChecks(checks: unknown, problem: Problem) {
     if (!isText(check.id) || !ID.test(check.id)) problem(`${at}.id`, 'An Exit check needs an id of lower-case letters, digits and dashes');
     else if (ids.indexOf(check.id) !== i) problem(`${at}.id`, `Another Exit check of this module is also "${check.id}"`);
     if (!isText(check.name)) problem(`${at}.name`, 'An Exit check needs a name');
-    if (!isText(check.command)) problem(`${at}.command`, 'An Exit check runs a command line in the worktree');
+    if (check.command === undefined) {
+      if (check.replaces === undefined) {
+        problem(`${at}.command`, 'An Exit check runs a command line in the worktree, or has no command and replaces a check it takes away');
+      }
+    } else if (!isText(check.command)) problem(`${at}.command`, 'An Exit check runs a command line in the worktree');
     if (!Array.isArray(check.stages) || check.stages.length === 0 || !check.stages.every((s) => isText(s) && ID.test(s))) {
       problem(`${at}.stages`, 'An Exit check lists the Stage ids it is checked on');
     }

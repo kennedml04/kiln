@@ -53,8 +53,8 @@ const rules: Rule[] = [
   },
 ];
 
-// Everything that is published: the code, the tracker, the docs and the files at the root.
-const roots = ['packages', 'widgets', 'scripts', '.scratch', 'docs'];
+// Everything that is published: the code, the modules, the tracker, the docs and the files at the root.
+const roots = ['packages', 'widgets', 'modules', 'scripts', '.scratch', 'docs'];
 const skip = new Set(['node_modules', 'dist', '.git']);
 
 function* files(dir: string): Generator<string> {

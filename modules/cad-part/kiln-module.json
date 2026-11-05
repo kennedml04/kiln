@@ -1,0 +1,17 @@
+{
+  "id": "cad-part",
+  "name": "CAD part",
+  "description": "A 3D-printable part designed in code (OpenSCAD, CadQuery, build123d) and exported as STL",
+  "presets": ["Printed part"],
+  "skills": ["cad-part", "heatset-insert", "visualize"],
+  "exitChecks": [
+    {
+      "id": "watertight",
+      "name": "Every STL in the diff is watertight",
+      "command": "node \"{moduleDir}/checks/watertight.mjs\"",
+      "stages": ["implementing"]
+    }
+  ],
+  "template": { "folder": "template", "ignore": ["out/"] },
+  "detect": ["*.scad", "*.stl", "*.3mf", "*.step"]
+}

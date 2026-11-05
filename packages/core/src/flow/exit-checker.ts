@@ -58,9 +58,15 @@ export function readProjectSettings(repo: string): ProjectSettings {
 }
 
 /** Runs a shell command in `cwd`; resolves with its exit code and the tail of its output. */
-function runCommand(command: string, cwd: string): Promise<{ code: number | null; output: string }> {
+function runCommand(command: string, cwd: string, env?: Record<string, string>): Promise<{ code: number | null; output: string }> {
   return new Promise((done) => {
-    const child = spawn(command, { cwd, shell: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, {
+      cwd,
+      shell: true,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(env ? { env: { ...process.env, ...env } } : {}),
+    });
     let output = '';
     const collect = (chunk: Buffer) => (output = (output + chunk.toString()).slice(-OUTPUT_TAIL));
     child.stdout.on('data', collect);
@@ -164,28 +170,32 @@ async function checkWorktree(id: ExitCheckId, ctx: ExitContext & { worktree: str
     default: {
       if (!parseModuleCheckId(id)) return { met: false, detail: 'This check needs no worktree' };
       const found = moduleCheckOf(ctx.repo, id);
-      return found ? commandCheck(found.command, ctx.worktree) : { met: false, detail: `No module of this Project has the check ${id}` };
+      if (!found?.check.command) return { met: false, detail: `No module of this Project has the check ${id}` };
+      // `{moduleDir}` lets a check run a script its module ships; the env names the same folder and the base.
+      const command = found.check.command.replaceAll('{moduleDir}', found.folder);
+      return commandCheck(command, ctx.worktree, { KILN_MODULE_DIR: found.folder, KILN_BASE: ctx.base });
     }
   }
 }
 
 /** Runs a check's command in the worktree: exit code 0 meets it, and its output is the detail. */
-async function commandCheck(command: string, worktree: string): Promise<CheckOutcome> {
-  const { code, output } = await runCommand(command, worktree);
+async function commandCheck(command: string, worktree: string, env?: Record<string, string>): Promise<CheckOutcome> {
+  const { code, output } = await runCommand(command, worktree, env);
   const head = `\`${command}\` exited with ${code ?? 'no code'}`;
   return { met: code === 0, detail: output ? `${head}\n${output}` : head };
 }
 
-/** A `module:<module>/<check>` check, from the modules the Project's main checkout pulls in (never the worktree's). */
-function moduleCheckOf(repo: string, id: string): ModuleExitCheck | undefined {
+/** A `module:<module>/<check>` check and its module's folder, from the modules the Project's main checkout pulls in (never the worktree's). */
+function moduleCheckOf(repo: string, id: string): { check: ModuleExitCheck; folder: string } | undefined {
   const named = parseModuleCheckId(id);
   if (!named) return undefined;
-  const module = readProjectFiles(repo).modules.find((m) => m.module.id === named.module)?.module;
-  return module?.exitChecks?.find((c) => c.id === named.check);
+  const loaded = readProjectFiles(repo).modules.find((m) => m.module.id === named.module);
+  const check = loaded?.module.exitChecks?.find((c) => c.id === named.check);
+  return loaded && check ? { check, folder: loaded.folder } : undefined;
 }
 
 const nameOf = (id: ExitCheckId, repo: string) =>
-  NAMES[id as BuiltInExitCheckId] ?? moduleCheckOf(repo, id)?.name ?? id;
+  NAMES[id as BuiltInExitCheckId] ?? moduleCheckOf(repo, id)?.check.name ?? id;
 
 /**
  * Checks every named check of a Stage's Exit, in order, then (on a Stage with a worktree) the

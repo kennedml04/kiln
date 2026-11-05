@@ -16,12 +16,18 @@ export type ModuleMcpServer =
   | { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
   | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> };
 
-/** A named command check, run in the Item's worktree like `testCommand`; a non-zero exit fails it. */
+/**
+ * A named command check, run in the Item's worktree like `testCommand`; a non-zero exit fails it.
+ * `{moduleDir}` in the command is the module's own folder, so a check can run a script it ships, and
+ * the command's environment has `KILN_MODULE_DIR` (the same folder) and `KILN_BASE` (the branch the
+ * Item's branch started from). A check with no command only takes away the check it `replaces`.
+ */
 export interface ModuleExitCheck {
   /** Unique within the module; the check is `module:<module>/<id>` in a Workflow. */
   id: string;
   name: string;
-  command: string;
+  /** Unset: the check adds nothing and only takes `replaces` off its Stages. */
+  command?: string;
   /** The Stage ids it is checked on. */
   stages: string[];
   /** A built-in check it takes the place of on those Stages, e.g. `tests_pass`. Unset: it sits beside them. */

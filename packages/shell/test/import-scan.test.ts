@@ -24,7 +24,7 @@ function sampleRepo(t: Cleanup) {
     'package.json': JSON.stringify({ scripts: { test: 'node --test' } }),
     'AGENTS.md': '# Agents\n',
     'parts/bracket.scad': 'cube(10);\n',
-    '.kiln/modules/cad/kiln-module.json': JSON.stringify({ id: 'cad', name: 'CAD part', description: 'Printable parts', detect: ['*.scad'] }),
+    '.kiln/modules/cad/kiln-module.json': JSON.stringify({ id: 'cad', name: 'Bracket CAD', description: 'Printable parts', detect: ['*.scad'] }),
   };
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
@@ -50,7 +50,7 @@ test('Import shows the scan, and the confirmed test command, ticked module and B
   await found.getByText('AGENTS.md / CLAUDE.md: found').waitFor();
 
   await found.getByRole('radio', { name: /npm test/ }).check();
-  await found.getByRole('checkbox', { name: /CAD part \(suggested: parts\/bracket\.scad\)/ }).check();
+  await found.getByRole('checkbox', { name: /Bracket CAD \(suggested: parts\/bracket\.scad\)/ }).check();
   await found.getByRole('checkbox', { name: /Bring it up to date/ }).check();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   await form.getByRole('button', { name: 'Register Project' }).click();

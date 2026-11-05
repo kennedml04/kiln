@@ -270,35 +270,37 @@ test('the Project settings are read from .kiln/settings.json, live, and a bad se
 
 test('modules in .kiln/settings.json resolve from the Project own .kiln/modules folder; an unknown id is a Project error', async (t) => {
   const kiln = await startTestKiln(t);
-  commitKilnFile(kiln, 'modules/cad-part/kiln-module.json', { id: 'cad-part', name: 'CAD part', description: 'A printed part' });
-  commitKilnFile(kiln, 'settings.json', { modules: ['cad-part'] });
+  // `my-part` is no in-tree module, so only the Project's own folder has it.
+  commitKilnFile(kiln, 'modules/my-part/kiln-module.json', { id: 'my-part', name: 'My part', description: 'A printed part' });
+  commitKilnFile(kiln, 'settings.json', { modules: ['my-part'] });
 
   const project = await register(kiln);
   assert.deepEqual(project.errors, []);
-  assert.deepEqual(project.settings, { modules: ['cad-part'] });
+  assert.deepEqual(project.settings, { modules: ['my-part'] });
   assert.equal(project.workflowSource, 'default');
 
   const events = await kiln.events();
-  commitKilnFile(kiln, 'settings.json', { modules: ['cad-part', 'pcb'] });
+  commitKilnFile(kiln, 'settings.json', { modules: ['my-part', 'pcb'] });
   const updated = await projectUpdated(events);
-  assert.deepEqual(updated.errors, [
-    { file: '.kiln/settings.json', at: 'modules[1]', message: '"pcb" is not a module. The modules are: cad-part' },
-  ]);
-  assert.deepEqual(updated.settings, { modules: ['cad-part'] });
+  assert.deepEqual(updated.errors.map((e) => [e.file, e.at]), [['.kiln/settings.json', 'modules[1]']]);
+  // The list also names the in-tree modules.
+  assert.match(updated.errors[0]!.message, /^"pcb" is not a module\. The modules are: (.+, )?my-part(,|$)/);
+  assert.deepEqual(updated.settings, { modules: ['my-part'] });
 
   // A broken module file in the Project is named, and the setting points at it.
-  commitKilnFile(kiln, 'modules/cad-part/kiln-module.json', { id: 'cad-part', name: 'CAD part' });
+  commitKilnFile(kiln, 'modules/my-part/kiln-module.json', { id: 'my-part', name: 'My part' });
   const broken = await projectUpdated(events);
   assert.deepEqual(broken.errors.map((e) => [e.file, e.at]), [
     ['.kiln/settings.json', 'modules[0]'],
     ['.kiln/settings.json', 'modules[1]'],
-    ['.kiln/modules/cad-part/kiln-module.json', 'description'],
+    ['.kiln/modules/my-part/kiln-module.json', 'description'],
   ]);
-  assert.equal(broken.errors[0]!.message, 'The "cad-part" module did not load: see .kiln/modules/cad-part/kiln-module.json');
-  assert.equal(broken.errors[1]!.message, '"pcb" is not a module. No modules are available');
+  assert.equal(broken.errors[0]!.message, 'The "my-part" module did not load: see .kiln/modules/my-part/kiln-module.json');
+  assert.match(broken.errors[1]!.message, /^"pcb" is not a module\. /);
+  assert.doesNotMatch(broken.errors[1]!.message, /my-part/);
   assert.deepEqual(broken.settings, { modules: [] });
 
-  commitKilnFile(kiln, 'settings.json', { modules: 'cad-part' });
+  commitKilnFile(kiln, 'settings.json', { modules: 'my-part' });
   const shapeless = await projectUpdated(events);
   assert.deepEqual(shapeless.errors.map((e) => [e.file, e.at, e.message]).slice(0, 1), [
     ['.kiln/settings.json', 'modules', 'modules must be a list of module ids'],

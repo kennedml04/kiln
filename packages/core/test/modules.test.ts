@@ -92,6 +92,14 @@ test('Exit checks need an id, a name, a command and Stages, and can replace only
   );
 });
 
+test('an Exit check with no command only takes away the check it replaces, so it must name one', () => {
+  const drop = { id: 'no-tests', name: 'No test check', stages: ['implementing'], replaces: 'tests_pass' };
+  assert.ok(!Array.isArray(validateModule({ ...CAD, exitChecks: [drop] })));
+  assert.deepEqual(problems({ ...CAD, exitChecks: [{ ...drop, replaces: undefined }] }), [
+    ['exitChecks[0].command', 'An Exit check runs a command line in the worktree, or has no command and replaces a check it takes away'],
+  ]);
+});
+
 test('added Stages name their kind and the Stage they follow, and carry a Stage with an id and a name', () => {
   assert.deepEqual(
     problems({ ...CAD, stages: [{ kind: 'ticket', stage: { id: 'print-it', name: 'Print it', colour: 'red' } }, { kind: 'ticket', after: 'review', stage: { id: 'Print' } }] }),

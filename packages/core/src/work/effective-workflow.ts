@@ -1,5 +1,6 @@
 // The effective Workflow: the Project's Workflow with its modules' Stages inserted, in module order,
-// and their Exit checks applied (beside a Stage's checks, or in place of the one they replace).
+// and their Exit checks applied (beside a Stage's checks, in place of the one they replace, or, with
+// no command, just taking the replaced one away).
 // Pure: the Workflow passed in is never changed.
 import {
   MODULE_FILE,
@@ -26,7 +27,7 @@ export const moduleFileOf = (loaded: LoadedModule) => `${loaded.source}/${loaded
 
 /** Every `module:<module>/<check>` id the modules offer. */
 export const moduleCheckIds = (modules: LoadedModule[]): ModuleExitCheckId[] =>
-  modules.flatMap(({ module }) => (module.exitChecks ?? []).map((c) => moduleCheckId(module.id, c.id)));
+  modules.flatMap(({ module }) => (module.exitChecks ?? []).filter((c) => c.command !== undefined).map((c) => moduleCheckId(module.id, c.id)));
 
 interface Where {
   file: string;
@@ -84,7 +85,9 @@ export function effectiveWorkflow(workflow: Workflow, modules: LoadedModule[]): 
     });
     (module.exitChecks ?? []).forEach((check, j) => {
       const id = moduleCheckId(module.id, check.id);
-      checks.set(id, { file, at: `exitChecks[${j}].stages` });
+      // A check with no command only takes away the one it replaces.
+      const removes = check.command === undefined;
+      if (!removes) checks.set(id, { file, at: `exitChecks[${j}].stages` });
       check.stages.forEach((stageId, n) => {
         const targets = result.kinds.flatMap((k) => k.stages.filter((s) => s.id === stageId));
         if (!targets.length) {
@@ -92,6 +95,10 @@ export function effectiveWorkflow(workflow: Workflow, modules: LoadedModule[]): 
         }
         for (const stage of targets) {
           const exit = stage.exit ?? [];
+          if (removes) {
+            if (check.replaces && exit.includes(check.replaces)) stage.exit = exit.filter((c) => c !== check.replaces);
+            continue;
+          }
           if (exit.includes(id)) continue;
           const replaced = check.replaces ? exit.indexOf(check.replaces) : -1;
           stage.exit = replaced === -1 ? [...exit, id] : [...exit.slice(0, replaced), id, ...exit.slice(replaced + 1)];

@@ -13,8 +13,8 @@ Each module has its preset, and its skill folders are in generic form, with no p
 
 **Blocked by:** 04, 05
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] All three validate, and their templates make the expected folders
-- [ ] The watertight check passes a closed mesh and fails an open one (test meshes made in the test)
-- [ ] A Writing Project's Ticket can ship with no test command
+- [x] All three validate, and their templates make the expected folders
+- [x] The watertight check passes a closed mesh and fails an open one (test meshes made in the test)
+- [x] A Writing Project's Ticket can ship with no test command

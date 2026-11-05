@@ -1,0 +1,9 @@
+{
+  "id": "writing",
+  "name": "Writing",
+  "description": "Docs and plans with no code: no test check, and a person reviews each Ticket at its Gate",
+  "presets": ["Writing"],
+  "exitChecks": [
+    { "id": "no-tests", "name": "No test check", "stages": ["implementing"], "replaces": "tests_pass" }
+  ]
+}

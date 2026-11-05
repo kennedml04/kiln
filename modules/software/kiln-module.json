@@ -1,0 +1,7 @@
+{
+  "id": "software",
+  "name": "Software",
+  "description": "Code with a test suite: the shipped Workflow, with tests_pass running the Project's testCommand",
+  "presets": ["Software"],
+  "detect": ["package.json", "pyproject.toml", "Cargo.toml", "go.mod"]
+}

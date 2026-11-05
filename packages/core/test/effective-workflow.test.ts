@@ -62,6 +62,13 @@ test('a module Exit check sits beside the Stage\'s checks, or replaces the one i
   assert.equal(stages[2]!.exit, undefined);
 });
 
+test('a module Exit check with no command takes the check it replaces off its Stages, and adds nothing', () => {
+  const writing = mod('writing', { exitChecks: [{ id: 'no-tests', name: 'No test check', stages: ['implementing'], replaces: 'tests_pass' }] });
+  const stages = stagesOf(effectiveWorkflow(BASE, [loaded(writing)]));
+  assert.deepEqual(stages[0]!.exit, ['branch_has_commits', 'tree_clean']);
+  assert.deepEqual(stages[1]!.exit, ['findings_exist']);
+});
+
 test("a module's Exit check can go on a Stage the same module adds", () => {
   const print = mod('print', {
     stages: [{ kind: 'ticket', after: 'review', stage: { id: 'slice', name: 'Slice', worktree: true } }],

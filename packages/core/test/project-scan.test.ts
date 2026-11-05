@@ -94,9 +94,11 @@ test('the scan finds docs, test commands and modules in a sample folder, and run
       ['make test', 'Makefile'],
     ],
   );
-  // node_modules is never walked, so the .kicad_pro in it does not suggest Electronics.
+  // node_modules is never walked, so the .kicad_pro in it does not suggest Electronics. The folder's
+  // own modules win over in-tree ones of the same id; the other in-tree modules are left out here.
+  const own = ['cad', 'writing', 'electronics'];
   assert.deepEqual(
-    found.modules.map((m) => [m.id, m.suggested, m.matches]),
+    found.modules.filter((m) => own.includes(m.id)).map((m) => [m.id, m.suggested, m.matches]),
     [
       ['cad', true, ['parts/bracket.scad']],
       ['writing', true, ['docs/adr/0001-first.md']],
