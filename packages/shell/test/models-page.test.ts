@@ -203,3 +203,51 @@ test('Add a model from Hugging Face: pick a quant, see its size, confirm, and an
   await page.getByRole('status').filter({ hasText: /Tiny Coder Q8_0 is enabled\. Smoke test passed/ }).waitFor(UI);
   assert.ok(configHas(fake, join(models, 'Tiny-Coder-Q8_0.gguf').replace(/\\/g, '/')), fake.config());
 });
+
+test('a split GGUF from Hugging Face is one choice; all its parts download, a stalled part resumes, and the variant runs part 1', async (t) => {
+  const hf = await startFakeHuggingFace(t, { chunkBytes: 8 * 1024 });
+  const repo = 'test-org/Big-Coder-GGUF';
+  const parts = [1, 2, 3].map((i) => `Big-Coder-Q4_K_M-0000${i}-of-00003.gguf`);
+  const bytes = [testGguf({ name: 'Big Coder', weightBytes: 100 * 1024 }), Buffer.alloc(150 * 1024, 0xaa), Buffer.alloc(120 * 1024, 0xbb)];
+  hf.addRepo(repo, parts.map((path, i) => ({ path, bytes: bytes[i]! })));
+  const kiln = await startTestKiln(t, { env: { KILN_HUGGINGFACE_URL: hf.url, KILN_DOWNLOAD_STALL_MS: '400' } });
+  const fake = await startFakeLocalServer(t, { loadMs: 30 });
+  const models = tempDir(t, 'kiln-models');
+
+  const page = await openModels(t, kiln);
+  await saveLocalServer(page, { configPath: fake.configPath, url: fake.url, modelsFolder: models });
+  await page.getByRole('radio', { name: /A Hugging Face repo/ }).check();
+  const picker = page.getByRole('form', { name: 'Hugging Face repo' });
+  await picker.getByRole('textbox').fill(repo);
+  await picker.getByRole('button', { name: 'List files' }).click();
+
+  // One choice for the three parts, with their total size.
+  const choices = page.getByRole('group', { name: 'Quant' }).getByRole('radio');
+  await page.getByRole('radio', { name: /^Big-Coder-Q4_K_M-00001-of-00003\.gguf \(\d+ KB in 3 parts\)$/ }).check(UI);
+  assert.equal(await choices.count(), 1);
+  const confirm = page.getByRole('group', { name: 'Confirm the download' });
+  await confirm.getByText(/Download Big-Coder-Q4_K_M-00001-of-00003\.gguf \(\d+ KB, all 3 parts\) from/).waitFor();
+
+  // Part 3 stalls part-way: after the timeout the page says so, and Resume picks it up.
+  hf.stallNext(repo, parts[2]!, 40 * 1024);
+  await confirm.getByRole('button', { name: /^Download \d+ KB$/ }).click();
+  await page.getByRole('alert').filter({ hasText: /^The download stalled: no data for 0\.4 seconds, at .* Start it again to resume from there\.$/ }).waitFor(UI);
+  await page.getByRole('button', { name: 'Resume the download' }).click();
+  await page.getByRole('status').filter({ hasText: /Downloaded Big-Coder-Q4_K_M-00001-of-00003\.gguf \(\d+ KB in 3 parts\)/ }).waitFor(UI);
+  const ranges = hf.requests().filter((r) => r.path.startsWith('/cdn/')).map((r) => [r.path.split('/').pop(), r.range ?? null]);
+  assert.deepEqual(ranges.slice(0, 3), [[parts[0], null], [parts[1], null], [parts[2], null]]);
+  assert.equal(ranges.length, 4);
+  assert.match(String(ranges[3]![1]), /^bytes=\d+-$/, 'the resume asks only for the rest of part 3');
+
+  // The variant is part 1 under the model's name, and it keeps --jinja.
+  const form = settingsForm(page);
+  await form.waitFor(UI);
+  assert.equal(await form.getByLabel('Name', { exact: true }).inputValue(), 'Big Coder Q4_K_M');
+  assert.equal(await form.getByLabel('Server model id').inputValue(), 'big-coder-q4_k_m');
+  assert.equal(await form.getByLabel('Extra flags').inputValue(), '--jinja');
+  await form.getByRole('button', { name: 'Save and smoke-test' }).click();
+  await page.getByRole('status').filter({ hasText: /Big Coder Q4_K_M is enabled\. Smoke test passed/ }).waitFor(UI);
+  assert.ok(configHas(fake, join(models, parts[0]!).replace(/\\/g, '/')), fake.config());
+  assert.ok(!configHas(fake, '00002-of-00003'), 'only part 1 is named; llama-server finds the rest');
+  assert.ok(configHas(fake, '--jinja'), fake.config());
+});

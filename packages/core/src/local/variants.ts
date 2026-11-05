@@ -24,6 +24,7 @@ import { ConfigError, quantOf } from './llama-swap-config.ts';
 import { createLlamaSwap } from './llama-swap.ts';
 import type { LocalServer, ServerEntry } from './local-server.ts';
 import { runSmokeTest } from './smoke-test.ts';
+import { modelBytes } from './split-gguf.ts';
 
 const SETTINGS_KEY = 'local-server';
 /** Settings with no default; a PUT of null clears one. */
@@ -117,14 +118,15 @@ async function readGguf(input: unknown): Promise<GgufFile> {
   }
   if (input.quant !== undefined && typeof input.quant !== 'string') throw bad('"file.quant" must be text');
   const quant = (input.quant as string | undefined) || quantOf(path);
-  return { path, sizeBytes: size, ...(quant ? { quant } : {}) };
+  // Part 1 of a split GGUF counts every part.
+  return { path, sizeBytes: (await modelBytes(path)) ?? size, ...(quant ? { quant } : {}) };
 }
 
 /** What Kiln can tell about a hand-written entry's file without failing on it. */
 async function describeFile(path: string | undefined): Promise<GgufFile | undefined> {
   if (!path) return undefined;
   const quant = quantOf(path);
-  const size = await stat(path).then((s) => (s.isFile() ? s.size : undefined), () => undefined);
+  const size = await modelBytes(path);
   return { path, ...(size !== undefined ? { sizeBytes: size } : {}), ...(quant ? { quant } : {}) };
 }
 

@@ -11,6 +11,8 @@ function gpuCard(gpu: Gpu): CardBlock {
     kind: 'card',
     id,
     title: `GPU ${gpu.index}: ${gpu.name}`,
+    // The VRAM reading as numbers, for Add a model's recommendation: the VRAM stat is display text only.
+    data: { memoryUsedMiB: gpu.memoryUsedMiB, memoryTotalMiB: gpu.memoryTotalMiB },
     blocks: [
       gpu.utilizationPercent === null
         ? { kind: 'stat', id: `${id}-use`, label: 'Use', value: 'n/a' }

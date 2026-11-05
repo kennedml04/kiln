@@ -100,6 +100,8 @@ test('a Widget can only publish panels and buttons its Manifest declares', async
   const badButton = { blocks: [{ kind: 'button', label: 'Wipe', action: 'wipe' }] };
   assert.equal((await widget.call('PUT', '/api/widget/panels/gpus', badButton)).status, 400);
   assert.equal((await widget.call('PUT', '/api/widget/panels/gpus', { blocks: [{ kind: 'script' }] })).status, 400);
+  const nestedData = { blocks: [{ kind: 'card', title: 'GPU 0', data: { memory: { used: 1 } } }] };
+  assert.equal((await widget.call('PUT', '/api/widget/panels/gpus', nestedData)).status, 400, 'card data holds plain values only');
   assert.equal((await kiln.request('PUT', '/api/widget/panels/gpus', content(1))).status, 401, 'only the Widget itself publishes');
   assert.equal((await kiln.api<PanelView[]>('GET', '/api/panels'))[0]?.content, null);
 });

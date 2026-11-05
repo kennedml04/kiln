@@ -43,6 +43,11 @@ export interface CardBlock {
   title: string;
   text?: string;
   blocks?: PanelBlock[];
+  /**
+   * Machine-readable values beside the display text, for other parts of Kiln to read; the Shell
+   * doesn't draw them. E.g. the GPU monitor's `{ memoryUsedMiB, memoryTotalMiB }` for each GPU.
+   */
+  data?: Record<string, string | number | boolean | null>;
 }
 
 export interface TableBlock {

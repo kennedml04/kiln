@@ -74,8 +74,14 @@ export interface ModelInspection {
 export interface HuggingFaceFile {
   /** Its path in the repo, e.g. `Qwen3-8B-Q4_K_M.gguf` or `Q8_0/model-Q8_0.gguf`. */
   path: string;
+  /** For a split GGUF, every part's size added up. */
   sizeBytes: number;
   quant?: string;
+  /**
+   * A split GGUF (`<name>-00001-of-0000N.gguf`): every part's path in the repo, in order. `path` is
+   * part 1, which is what a download and a variant name; llama-server loads the rest beside it.
+   */
+  parts?: string[];
 }
 
 /** GET /api/local-models/huggingface?repo=owner/name (Admin): the repo's GGUF files on its main branch. */
@@ -93,14 +99,17 @@ export interface StartDownloadRequest {
 
 /**
  * A download into the models folder. It writes `<file>.part` and renames it when complete; starting
- * the same file again after a failure resumes from the part file (an HTTP Range request).
+ * the same file again after a failure resumes from the part file (an HTTP Range request). A
+ * download that gets no bytes for a minute fails as stalled, and resumes the same way.
  */
 export interface ModelDownload {
   id: string;
   repo: string;
   file: string;
-  /** Where the finished file goes. */
+  /** Where the finished file goes (part 1, for a split GGUF; the other parts go beside it). */
   path: string;
+  /** A split GGUF: every part's path in the repo, in order. Bytes count across all of them. */
+  parts?: string[];
   totalBytes: number;
   receivedBytes: number;
   state: 'running' | 'done' | 'failed';

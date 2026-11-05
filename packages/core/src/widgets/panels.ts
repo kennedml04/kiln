@@ -61,6 +61,13 @@ function checkBlocks(blocks: unknown, actions: Set<string>, where: string): void
         if (!isText(block.title)) fail(`${at} needs a title`);
         if (block.text !== undefined && !isText(block.text)) fail(`${at}.text must be text`);
         if (block.blocks !== undefined) checkBlocks(block.blocks, actions, `${at}.blocks`);
+        if (
+          block.data !== undefined &&
+          (!block.data || typeof block.data !== 'object' || Array.isArray(block.data) ||
+            !Object.values(block.data).every((v) => v === null || ['string', 'number', 'boolean'].includes(typeof v)))
+        ) {
+          fail(`${at}.data must be an object of plain values (text, numbers, true/false or null)`);
+        }
         break;
       case 'table':
         if (!Array.isArray(block.columns) || !block.columns.every(isText)) fail(`${at} needs columns`);

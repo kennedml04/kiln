@@ -290,7 +290,7 @@ function HuggingFacePicker({ modelsFolder, onDownloaded }: { modelsFolder?: stri
           {files.files.map((f) => (
             <label key={f.path} className="models-radio">
               <input type="radio" name="hf-file" checked={chosen?.path === f.path} onChange={() => (setChosen(f), setDownload(undefined))} />
-              {f.path} ({size(f.sizeBytes)})
+              {f.path} ({size(f.sizeBytes)}{f.parts ? ` in ${f.parts.length} parts` : ''})
             </label>
           ))}
         </fieldset>
@@ -300,8 +300,9 @@ function HuggingFacePicker({ modelsFolder, onDownloaded }: { modelsFolder?: stri
           {modelsFolder ? (
             <>
               <p>
-                Download <strong>{baseName(chosen.path)}</strong> ({size(chosen.sizeBytes)}) from {files?.repo} to {modelsFolder}? Nothing
-                downloads until you say so.
+                Download <strong>{baseName(chosen.path)}</strong> ({size(chosen.sizeBytes)}
+                {chosen.parts ? `, all ${chosen.parts.length} parts` : ''}) from {files?.repo} to {modelsFolder}? Nothing downloads until you
+                say so.
               </p>
               <button type="button" className="primary" onClick={() => void start()}>
                 Download {size(chosen.sizeBytes)}
@@ -317,7 +318,7 @@ function HuggingFacePicker({ modelsFolder, onDownloaded }: { modelsFolder?: stri
           <progress aria-label="Download progress" value={download.receivedBytes} max={download.totalBytes} />{' '}
           <span role="status">
             {download.state === 'done'
-              ? `Downloaded ${baseName(download.path)} (${size(download.totalBytes)}) to ${download.path}`
+              ? `Downloaded ${baseName(download.path)} (${size(download.totalBytes)}${download.parts ? ` in ${download.parts.length} parts` : ''}) to ${download.path}`
               : `${baseName(download.path)}: ${size(download.receivedBytes)} of ${size(download.totalBytes)} (${Math.floor((download.receivedBytes / download.totalBytes) * 100)}%)${download.resumedFromBytes ? `, resumed from ${size(download.resumedFromBytes)}` : ''}`}
           </span>
           {download.state === 'failed' ? (

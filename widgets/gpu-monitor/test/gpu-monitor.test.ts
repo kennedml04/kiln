@@ -87,6 +87,7 @@ test('installed from the public repo, the GPU monitor waits for approval, then s
         kind: 'card',
         id: 'gpu-0',
         title: 'GPU 0: NVIDIA GeForce RTX 4090',
+        data: { memoryUsedMiB: 12288, memoryTotalMiB: 24576 },
         blocks: [
           { kind: 'stat', id: 'gpu-0-use', label: 'Use', value: 37, unit: '%' },
           { kind: 'stat', id: 'gpu-0-vram', label: 'VRAM', value: '12.0 / 24.0', unit: 'GB' },
@@ -213,6 +214,7 @@ test('each GPU gets its own card, and a reading nvidia-smi has not got shows as 
         kind: 'card',
         id: 'gpu-0',
         title: 'GPU 0: NVIDIA GeForce RTX 4090',
+        data: { memoryUsedMiB: 12288, memoryTotalMiB: 24576 },
         blocks: [
           { kind: 'stat', id: 'gpu-0-use', label: 'Use', value: 37, unit: '%' },
           { kind: 'stat', id: 'gpu-0-vram', label: 'VRAM', value: '12.0 / 24.0', unit: 'GB' },
@@ -232,6 +234,7 @@ test('each GPU gets its own card, and a reading nvidia-smi has not got shows as 
         kind: 'card',
         id: 'gpu-1',
         title: 'GPU 1: NVIDIA GeForce RTX 3060',
+        data: { memoryUsedMiB: 0, memoryTotalMiB: 12288 },
         blocks: [
           { kind: 'stat', id: 'gpu-1-use', label: 'Use', value: 'n/a' },
           { kind: 'stat', id: 'gpu-1-vram', label: 'VRAM', value: '0.0 / 12.0', unit: 'GB' },

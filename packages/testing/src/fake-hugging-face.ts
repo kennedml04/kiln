@@ -1,6 +1,6 @@
 // A fake Hugging Face for tests: the public tree API (`/api/models/<repo>/tree/main`) and file
 // downloads (`/<repo>/resolve/main/<path>`, redirected to a "CDN" path as the real one does) with
-// HTTP Range support. A download can be cut part-way, to test resuming. Served on 127.0.0.1 on a
+// HTTP Range support. A download can be cut part-way or stall, to test resuming. Served on 127.0.0.1 on a
 // free port, so no test ever reaches huggingface.co.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -26,6 +26,8 @@ export interface FakeHuggingFace {
   addRepo(repo: string, files: FakeHuggingFaceFile[]): void;
   /** The next download of this file sends only its first `afterBytes` bytes, then drops the connection. */
   cutNext(repo: string, path: string, afterBytes: number): void;
+  /** The next download of this file sends only its first `afterBytes` bytes, then sends nothing more but keeps the connection open. */
+  stallNext(repo: string, path: string, afterBytes: number): void;
   /** Every request it was sent, oldest first. */
   requests(): FakeHuggingFaceRequest[];
 }
@@ -42,6 +44,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function startFakeHuggingFace(t: Cleanup, options: FakeHuggingFaceOptions = {}): Promise<FakeHuggingFace> {
   const repos = new Map<string, FakeHuggingFaceFile[]>();
   const cuts = new Map<string, number>();
+  const stalls = new Map<string, number>();
   const log: FakeHuggingFaceRequest[] = [];
   const chunkBytes = options.chunkBytes ?? 16 * 1024;
 
@@ -68,11 +71,19 @@ export async function startFakeHuggingFace(t: Cleanup, options: FakeHuggingFaceO
     const key = `${repo}/${file.path}`;
     const cut = cuts.get(key);
     cuts.delete(key);
-    const end = cut === undefined ? body.length : Math.min(body.length, cut);
+    const stall = stalls.get(key);
+    stalls.delete(key);
+    const stop = cut ?? stall;
+    const end = stop === undefined ? body.length : Math.min(body.length, stop);
     for (let at = 0; at < end; at += chunkBytes) {
       const chunk = body.subarray(at, Math.min(end, at + chunkBytes));
       await new Promise<void>((done) => res.write(chunk, () => done()));
       if (options.chunkDelayMs) await sleep(options.chunkDelayMs);
+    }
+    if (stall !== undefined) {
+      // Hold the connection open, sending nothing, until the client gives up.
+      await new Promise<void>((done) => res.once('close', () => done()));
+      return;
     }
     if (cut !== undefined) {
       await sleep(50);
@@ -131,6 +142,7 @@ export async function startFakeHuggingFace(t: Cleanup, options: FakeHuggingFaceO
     url: `http://127.0.0.1:${port}`,
     addRepo: (repo, files) => void repos.set(repo, files),
     cutNext: (repo, path, afterBytes) => void cuts.set(`${repo}/${path}`, afterBytes),
+    stallNext: (repo, path, afterBytes) => void stalls.set(`${repo}/${path}`, afterBytes),
     requests: () => [...log],
   };
 }

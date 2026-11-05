@@ -209,6 +209,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     settings: () => variants.settings(),
     panels: () => panels.list(),
     ...(process.env.KILN_HUGGINGFACE_URL ? { huggingFaceUrl: process.env.KILN_HUGGINGFACE_URL } : {}),
+    // Tests shorten the 60-second stall timeout.
+    ...(Number(process.env.KILN_DOWNLOAD_STALL_MS) > 0 ? { stallMs: Number(process.env.KILN_DOWNLOAD_STALL_MS) } : {}),
   });
   const restart = createRestartWhenIdle({
     bus,
