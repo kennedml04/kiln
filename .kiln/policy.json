@@ -9,6 +9,11 @@
       "action": "other_commands",
       "match": "ls .scratch/ .scratch/scratch-chat .scratch/board-ux 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls .scratch/*",
+      "decision": "allow"
     }
   ]
 }
