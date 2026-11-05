@@ -484,6 +484,11 @@
       "action": "other_commands",
       "match": "f=.scratch/local-first/issues/10-local-only-retries-and-split.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "npm test > /tmp/t.out 2>&1",
+      "decision": "allow"
     }
   ]
 }
