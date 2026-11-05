@@ -244,6 +244,11 @@
       "action": "other_commands",
       "match": "cat >> packages/widget-sdk/src/variants.ts <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git add .kiln/settings.json",
+      "decision": "allow"
     }
   ]
 }
