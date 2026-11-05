@@ -394,6 +394,11 @@
       "action": "other_commands",
       "match": "git status --short",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src/local packages/core/src/flow",
+      "decision": "allow"
     }
   ]
 }
