@@ -429,6 +429,11 @@
       "action": "other_commands",
       "match": "sed -i \"s/readProjectFiles(project.path).modules/readProjectFiles(project.path).modules/\" packages/core/src/flow/session-manager.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for r in HEAD master kiln/ticket/local-first/07 kiln/ticket/local-first/08 kiln/ticket/local-first/09",
+      "decision": "allow"
     }
   ]
 }
