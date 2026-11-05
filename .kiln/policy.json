@@ -149,6 +149,11 @@
       "action": "other_commands",
       "match": "git log --oneline -3 -- widgets/claude-code",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"THREAD_TYPES\" -A6 packages/core/src/flow/session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
