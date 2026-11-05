@@ -99,6 +99,11 @@
       "action": "other_commands",
       "match": "git log --oneline -8",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/core/src/work/workflow-validator.ts",
+      "decision": "allow"
     }
   ]
 }
