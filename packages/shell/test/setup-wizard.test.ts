@@ -194,13 +194,16 @@ test("the Agents step installs the real first-party Agent Widgets from a clone o
 
   await step('Agents');
   await wizard.getByLabel('Widget repo').fill(widgetRepo.path);
-  for (const name of ['Claude Code', 'OpenCode']) await wizard.getByRole('checkbox', { name: new RegExp(name) }).check();
+  // Claude Code is the only first-party Agent offered: local models run through it too (ADR 0012).
+  const agentChoices = wizard.getByRole('checkbox');
+  await agentChoices.first().waitFor();
+  assert.equal(await agentChoices.count(), 1);
+  await wizard.getByRole('checkbox', { name: /Claude Code/ }).check();
   await wizard.getByRole('button', { name: 'Install Agents' }).click();
   await wizard.getByText('Claude Code: ready').waitFor({ timeout: 90_000 });
-  await wizard.getByText('OpenCode: ready').waitFor({ timeout: 30_000 });
 
   const widgets = await kiln.api<WidgetInfo[]>('GET', '/api/widgets');
-  assert.deepEqual(widgets.map((w) => [w.id, w.state, w.pin.kind]).sort(), [['claude-code', 'ready', 'git'], ['opencode', 'ready', 'git']]);
+  assert.deepEqual(widgets.map((w) => [w.id, w.state, w.pin.kind]).sort(), [['claude-code', 'ready', 'git']]);
 });
 
 /** Starts a fresh core whose fake `tailscale` reports `serve(port)` as its serve config. */

@@ -42,7 +42,6 @@ A Widget is a folder with a `kiln-widget.json` Manifest that says what it provid
 First-party Widgets in `widgets/`:
 
 - `claude-code`: the Claude Code Agent, through the Claude Agent SDK, with subscription quota readings.
-- `opencode`: the OpenCode Agent, for metered providers and local models.
 - `github`: a GitHub Issues Tracker.
 - `gpu-monitor`: a read-only NVIDIA GPU panel.
 

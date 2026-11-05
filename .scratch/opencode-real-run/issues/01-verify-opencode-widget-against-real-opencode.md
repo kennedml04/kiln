@@ -12,7 +12,9 @@ The Widget refuses OpenCode 2.x; check `opencode --version` first.
 
 **Blocked by:** kiln-v1 23 (merged)
 
-**Status:** ready-for-human
+**Status:** wontfix
+
+The OpenCode Widget was removed: local models run through the Claude Code Agent instead. See "Removing OpenCode" in `.scratch/local-first/spec.md` and `docs/adr/0012-local-models-through-claude-code.md`.
 
 - [ ] A real Ticket runs through Implementing with OpenCode and passes the Exit check
 - [ ] The Policy translation and Permission Asks behave exactly as they do for the Claude Code Widget

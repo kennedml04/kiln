@@ -4,10 +4,10 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `widgets/opencode/` is gone, and nothing outside `.scratch/` and `docs/adr/` names OpenCode
-- [ ] The setup wizard offers no OpenCode Agent, and its test says so
-- [ ] A new ADR records that local models run through the Claude Code Agent; ADRs 0004 and 0009 are unchanged
-- [ ] `.scratch/opencode-real-run/issues/01` is wontfix with a pointer to this spec
-- [ ] `npm test` passes
+- [x] `widgets/opencode/` is gone, and nothing outside `.scratch/` and `docs/adr/` names OpenCode
+- [x] The setup wizard offers no OpenCode Agent, and its test says so
+- [x] A new ADR records that local models run through the Claude Code Agent; ADRs 0004 and 0009 are unchanged
+- [x] `.scratch/opencode-real-run/issues/01` is wontfix with a pointer to this spec
+- [x] `npm test` passes

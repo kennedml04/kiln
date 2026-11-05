@@ -1,7 +1,0 @@
-{
-  "name": "@kiln/opencode",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Kiln Agent Widget: runs Sessions with OpenCode (opencode serve), on metered or local models."
-}

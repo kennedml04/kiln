@@ -351,13 +351,12 @@ export interface FakeAgentWidget {
 
 /**
  * A stand-in for the public Widget repo: a temp git repo with the first-party Agent Widgets'
- * folders (`widgets/claude-code`, `widgets/opencode`), each the test Widget registering one Agent.
+ * folders (today only `widgets/claude-code`), each the test Widget registering one Agent.
  */
 export function createFakeWidgetRepo(t: Cleanup, widgets?: FakeAgentWidget[]): TempRepo {
   const repo = initRepo(tempDir(t, 'kiln-widget-repo'));
   for (const widget of widgets ?? [
     { id: 'claude-code', name: 'Claude Code', agent: { id: 'claude', name: 'Claude Code', model: 'claude-test-model', models: [{ id: 'claude-test-model', name: 'Claude Test' }] } },
-    { id: 'opencode', name: 'OpenCode', agent: { id: 'opencode', name: 'OpenCode', model: 'local-test-model' } },
   ]) {
     const folder = join(repo.path, 'widgets', widget.id);
     mkdirSync(folder, { recursive: true });
@@ -383,7 +382,7 @@ export function createFakeWidgetRepo(t: Cleanup, widgets?: FakeAgentWidget[]): T
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 /** The first-party Agent Widgets, as the Widget repo holds them. */
-export const FIRST_PARTY_AGENT_WIDGETS = ['claude-code', 'opencode'];
+export const FIRST_PARTY_AGENT_WIDGETS = ['claude-code'];
 
 /**
  * A stand-in for a clone of this repo: a temp git repo holding this checkout's `widgets/<id>`

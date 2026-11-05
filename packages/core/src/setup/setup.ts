@@ -46,7 +46,6 @@ export class SetupError extends Error {
 /** The first-party Agent Widgets, each a folder of the Widget repo. */
 const FIRST_PARTY_AGENTS: Omit<FirstPartyAgent, 'installed'>[] = [
   { id: 'claude-code', name: 'Claude Code', path: 'widgets/claude-code', about: 'Runs Claude models (a Claude Max subscription or metered credits).', suggested: ['work', 'home'] },
-  { id: 'opencode', name: 'OpenCode', path: 'widgets/opencode', about: 'Runs local and other models through OpenCode.', suggested: ['home'] },
 ];
 
 const OBSIDIAN_SUGGESTION =

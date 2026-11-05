@@ -87,7 +87,7 @@ Where Kiln keeps what people and Agents read: Digests, decisions, retros and not
 _Avoid_: vault (the vault is one possible Knowledge store), brain, memory
 
 **Agent**:
-A coding agent tool (for example Claude Code or OpenCode) that runs Sessions. The core knows Agents only through one interface; each Agent is added by a Widget.
+A coding agent tool (for example Claude Code) that runs Sessions. The core knows Agents only through one interface; each Agent is added by a Widget.
 _Avoid_: model, bot, worker
 
 **Scheduler**:
