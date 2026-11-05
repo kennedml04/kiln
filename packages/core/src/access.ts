@@ -81,6 +81,9 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'PUT', path: '/api/setup', role: 'admin', action: 'setup.update' },
   { method: 'POST', path: '/api/setup/import', role: 'admin', action: 'setup.import' },
   { method: 'POST', path: '/api/setup/complete', role: 'admin', action: 'setup.complete' },
+  // The demo Project on a dev instance (demo-project Ticket 05): starting it is Admin work.
+  { method: 'GET', path: '/api/demo', role: 'admin' },
+  { method: 'POST', path: '/api/demo/start', role: 'admin', action: 'demo.start' },
   // Runaway guards (ticket 16). The stall and context-alarm thresholds are Admin settings.
   { method: 'PUT', path: '/api/runaway', role: 'admin', action: 'runaway.set' },
 ];

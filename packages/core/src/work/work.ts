@@ -30,7 +30,12 @@ export class WorkError extends Error {
 }
 
 export interface Work {
-  register(request: RegisterProjectRequest): Promise<Project>;
+  /**
+   * The id is the name's slug (`-2`, `-3`... when taken) unless the core gives one in `options`
+   * (the demo, so each run is a new Project whose old Threads don't come back). It is not offered
+   * through the route.
+   */
+  register(request: RegisterProjectRequest, options?: { id?: string }): Promise<Project>;
   /** Runs before a newly registered Project opens (e.g. writing its Project Policy template). */
   onRegister(hook: (project: Project) => void | Promise<void>): void;
   /**
@@ -334,7 +339,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   };
 
   return {
-    async register(request) {
+    async register(request, options) {
       if (!request || typeof request.path !== 'string' || !request.path) {
         throw new WorkError(400, 'A Project needs the path of its repository');
       }
@@ -346,7 +351,8 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
         }
       }
       const name = request.name?.trim() || basename(path);
-      let id = slugify(name);
+      let id = options?.id ?? slugify(name);
+      if (options?.id !== undefined && entries.has(id)) throw new WorkError(409, `A Project with the id "${id}" is already registered`);
       for (let n = 2; entries.has(id); n++) id = `${slugify(name)}-${n}`;
       const base = { id, name, path, registeredAt: new Date().toISOString() };
       for (const hook of registerHooks) await hook(withFiles(base, undefined));

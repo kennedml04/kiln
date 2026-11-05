@@ -156,6 +156,7 @@ export * from './runaway.ts';
 export * from './threads.ts';
 export * from './project-thread.ts';
 export * from './setup.ts';
+export * from './demo.ts';
 export * from './tracker-widget.ts';
 export type WidgetStartedEvent = KilnEvent<'widget.started', { widgetId: string; pid: number | null }>;
 export type WidgetRegisteredEvent = KilnEvent<

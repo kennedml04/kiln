@@ -57,6 +57,8 @@ import { handleBudgetRoute } from './budgets/routes.ts';
 import { createStageModels } from './budgets/stage-models.ts';
 import { createSetup, readSetupSettings } from './setup/setup.ts';
 import { handleSetupRoute } from './setup/routes.ts';
+import { createDemo } from './demo/demo.ts';
+import { handleDemoRoute } from './demo/routes.ts';
 import { createRunawayGuard, handleRunawayRoute } from './budgets/runaway.ts';
 
 /** Where the built Shell lives in the monorepo (`npm run build` writes it). */
@@ -238,6 +240,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   });
   work.decorateWorkflow(setup.decorate);
   doctor.register(setup.doctorCheck);
+  // The demo Project, on a dev instance only (demo-project spec).
+  const demo = createDemo({ db, work, dataDir: options.dataDir, devInstance: options.devInstance === true, missingRoles: () => setup.missingRoles() });
   const shellDir = options.shellDir ?? DEFAULT_SHELL_DIR;
   const startedAt = new Date();
   const streams = new Set<ServerResponse>();
@@ -461,6 +465,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handlePolicyRoute(policy, work, access, req, res, url, { sendJson, readJson })) return;
       if (await handleSchedulerRoute(scheduler, req, res, url, { sendJson, readJson })) return;
       if (await handleSetupRoute(setup, req, res, url, { sendJson, readJson })) return;
+      if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson })) return;
       if (await handleRunawayRoute(runaway, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;

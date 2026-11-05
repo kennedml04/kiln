@@ -164,6 +164,8 @@ export interface Setup {
   complete(): Promise<SetupState>;
   /** Fills in the models chosen for the default Workflow's roles. */
   decorate(workflow: Workflow): Workflow;
+  /** The default Workflow's roles that have no model chosen yet. */
+  missingRoles(): string[];
   doctorCheck: DoctorCheck;
 }
 
@@ -226,12 +228,12 @@ export function createSetup(deps: SetupDeps): Setup {
     return found ? { installed: true, path: found, vault } : { installed: false, vault, suggestion: OBSIDIAN_SUGGESTION };
   };
 
+  const missingRoles = (): string[] => defaultRoles().map((r) => r.role).filter((role) => !settings.roles?.[role]?.model);
+
   const missing = (): string[] => {
     const problems: string[] = [];
     if (deps.budgets().length === 0) problems.push('Set up at least one Budget.');
-    for (const { role } of defaultRoles()) {
-      if (!settings.roles?.[role]?.model) problems.push(`Choose a model for the ${role} role.`);
-    }
+    for (const role of missingRoles()) problems.push(`Choose a model for the ${role} role.`);
     return problems;
   };
 
@@ -396,6 +398,7 @@ export function createSetup(deps: SetupDeps): Setup {
         })),
       };
     },
+    missingRoles,
     doctorCheck: {
       id: 'setup',
       name: 'Setup',

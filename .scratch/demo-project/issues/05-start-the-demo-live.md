@@ -11,10 +11,12 @@ Live writes no `.kiln/workflow.json`, so the default Workflow and the wizard's r
 
 **Blocked by:** 02, 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `POST /api/demo/start {mode:'live'}` on a dev core creates `<dataDir>/demo-project` as a git repo with one commit, and registers it as "Demo"
-- [ ] `GET /api/demo` returns `{available, mode, projectId}`; on a live core both routes refuse, and `available` is false
-- [ ] Live refuses with 409 naming the roles that have no model
-- [ ] Calling start twice leaves exactly one demo Project: a fresh repo whose only commit is "Demo project", with no Sessions or worktrees left from the first run
-- [ ] Other Projects, Budgets, Agents and settings are untouched by a restart
+Per-run folder: each run goes in `<dataDir>/demo/<run>/` with its own Project id `demo-<run>` (name "Demo"), because a reused id brings the old run's Threads and events back; the previous run's folder is deleted after it is unregistered.
+
+- [x] `POST /api/demo/start {mode:'live'}` on a dev core creates `<dataDir>/demo-project` as a git repo with one commit, and registers it as "Demo"
+- [x] `GET /api/demo` returns `{available, mode, projectId}`; on a live core both routes refuse, and `available` is false
+- [x] Live refuses with 409 naming the roles that have no model
+- [x] Calling start twice leaves exactly one demo Project: a fresh repo whose only commit is "Demo project", with no Sessions or worktrees left from the first run
+- [x] Other Projects, Budgets, Agents and settings are untouched by a restart
