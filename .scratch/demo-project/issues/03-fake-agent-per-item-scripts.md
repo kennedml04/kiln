@@ -4,9 +4,9 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `"implementer@Add slugify"` is used for a Session whose prompt names that title, and `"implementer"` for any other implementer Session
-- [ ] When two `@` keys both match, the longer `<text>` wins
-- [ ] The fallback order is `role@text`, then `role`, then `*`, then finish at once; the doc comment on `FakeAgentScripts` says so
-- [ ] A core test pins the prompt's Item-title wording
+- [x] `"implementer@Add slugify"` is used for a Session whose prompt names that title, and `"implementer"` for any other implementer Session
+- [x] When two `@` keys both match, the longer `<text>` wins
+- [x] The fallback order is `role@text`, then `role`, then `*`, then finish at once; the doc comment on `FakeAgentScripts` says so
+- [x] A core test pins the prompt's Item-title wording

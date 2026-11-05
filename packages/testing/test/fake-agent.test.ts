@@ -82,6 +82,42 @@ test('a looping fake Agent can be interrupted, resumed and stopped', async (t) =
   assert.equal((await events2.next<AgentKilnEvent<'finished'>>('agent.finished')).payload.reason, 'stopped');
 });
 
+test('a "<role>@<text>" script runs for a Session whose prompt holds the text; the longest match wins, then the role, then "*"', async (t) => {
+  const kiln = await startTestKiln(t);
+  const says = (text: string) => [{ do: 'progress', text } as const];
+  const agent = await kiln.installFakeAgent({
+    script: {
+      'implementer@Add slugify': says('slugify'),
+      'implementer@Add slugify CLI': says('slugify CLI'),
+      implementer: says('any implementer'),
+      '*': says('anyone'),
+    },
+  });
+  const events = await kiln.events();
+  const heard = async (role: string, prompt: string) => {
+    const sessionId = await agent.startSession({ role, prompt });
+    const progress = await events.next<AgentKilnEvent<'progress'>>('agent.progress');
+    assert.equal(progress.payload.sessionId, sessionId);
+    return progress.payload.text;
+  };
+
+  assert.equal(await heard('implementer', 'You are the implementer for the ticket "Add slugify", in its Implementing Stage.'), 'slugify');
+  assert.equal(await heard('implementer', 'You are the implementer for the ticket "Add slugify CLI", in its Implementing Stage.'), 'slugify CLI');
+  assert.equal(await heard('implementer', 'You are the implementer for the ticket "Draw the columns", in its Implementing Stage.'), 'any implementer');
+  assert.equal(await heard('reviewer', 'You are the reviewer for the ticket "Add slugify", in its Review Stage.'), 'anyone');
+});
+
+test('a role with no script of its own and no "*" finishes at once', async (t) => {
+  const kiln = await startTestKiln(t);
+  const agent = await kiln.installFakeAgent({ script: { 'implementer@Add slugify': [{ do: 'progress', text: 'slugify' }] } });
+  const events = await kiln.events();
+
+  const sessionId = await agent.startSession({ role: 'implementer', prompt: 'for the ticket "Draw the columns"' });
+
+  const finished = await events.next<AgentKilnEvent<'finished'>>('agent.finished');
+  assert.deepEqual([finished.payload.sessionId, finished.payload.reason], [sessionId, 'completed']);
+});
+
 test('a script change applies to the next Session', async (t) => {
   const kiln = await startTestKiln(t);
   const agent = await kiln.installFakeAgent();

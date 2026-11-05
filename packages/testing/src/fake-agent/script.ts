@@ -85,8 +85,10 @@ export type FakeAgentScript = FakeAgentStep[];
 
 /**
  * What the fake Agent runs: one script for every Session, or a script per Session role
- * (e.g. `{ implementer: [...], reviewer: [...] }`). A role with no script of its own runs `*`,
- * or finishes at once.
+ * (e.g. `{ implementer: [...], reviewer: [...] }`). A key may also be `"<role>@<text>"`, used when
+ * `<text>` appears in the Session's prompt, which names the Item's title (`for the ticket "Add slugify"`),
+ * so Items that share a role can run different scripts. A Session runs, in order: the matching
+ * `<role>@<text>` with the longest text, the plain `<role>`, `*`, or else finishes at once.
  */
 export type FakeAgentScripts = FakeAgentScript | Record<string, FakeAgentScript>;
 

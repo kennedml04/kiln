@@ -70,11 +70,17 @@ async function callTool(run: Run, name: string, args: unknown) {
   return { text: result.content.map((c) => c.text).join('\n'), structured: result.structuredContent, isError: result.isError === true };
 }
 
-/** The script for a Session's role: the one script, or the role's own (else `*`, else finish at once). */
-const readScript = (role: string): FakeAgentScript => {
+/**
+ * The script for a Session: the one script, or the longest-matching `<role>@<text>` whose text is
+ * in the prompt, else the role's own, else `*`, else finish at once.
+ */
+const readScript = (role: string, prompt: string): FakeAgentScript => {
   const scripts = JSON.parse(readFileSync(config.scriptFile, 'utf8')) as FakeAgentScripts;
   if (Array.isArray(scripts)) return scripts;
-  return scripts[role] ?? scripts['*'] ?? [];
+  const [byItem] = Object.keys(scripts)
+    .filter((key) => key.startsWith(`${role}@`) && prompt.includes(key.slice(role.length + 1)))
+    .sort((a, b) => b.length - a.length);
+  return scripts[byItem ?? role] ?? scripts['*'] ?? [];
 };
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
@@ -245,7 +251,7 @@ async function perform(run: Run, step: FakeAgentStep, turn: { n: number }): Prom
 async function runSession(run: Run) {
   const turn = { n: 0 };
   try {
-    const steps = readScript(run.session.start.role);
+    const steps = readScript(run.session.start.role, run.session.start.prompt);
     for (const [i, step] of steps.entries()) {
       if (!(await checkpoint(run))) return;
       const reason = step.do === 'finish' ? (step.reason ?? 'completed') : undefined;

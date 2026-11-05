@@ -6,6 +6,7 @@ import type {
   ExitCheckedEvent,
   Item,
   ItemStageChangedEvent,
+  KilnEvent,
   Project,
   SessionInfo,
   SessionMessageEvent,
@@ -205,6 +206,27 @@ test('the Session is seeded with the Ticket and its Story\'s spec, and the Item\
   assert.equal(
     thread[1]!.payload.text,
     'seeded with .scratch/home-board/issues/01-draw-the-columns.md, .scratch/home-board/story.md, .scratch/home-board/spec.md',
+  );
+});
+
+// The fake Agent's "<role>@<text>" scripts (the demo's Replay) pick a Ticket by this wording.
+test('a Session\'s prompt names its role, the Item\'s kind and title, and its Stage', async (t) => {
+  const kiln = await startTestKiln(t);
+  await kiln.installFakeAgent({ script: [{ do: 'report_seed' }] });
+  const { items } = await registerSeeded(kiln);
+  const ticket = byTitle(items, 'Draw the columns');
+  const events = await kiln.events();
+
+  const session = await start(kiln, ticket);
+  const seed = await events.next<KilnEvent<'session.progress', { sessionId: string; text: string }>>('session.progress', {
+    timeoutMs: 15_000,
+  });
+
+  assert.equal(seed.payload.sessionId, session.id);
+  const { prompt } = JSON.parse(seed.payload.text.replace(/^seed: /, '')) as { prompt: string };
+  assert.ok(
+    prompt.startsWith('You are the implementer for the ticket "Draw the columns", in its Implementing Stage.'),
+    prompt,
   );
 });
 
