@@ -6,11 +6,11 @@ While the mode is Replay, a short note on the demo Project says what to do: answ
 
 **Blocked by:** 06
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The button appears only on the demo Project, and only on a dev instance
-- [ ] Confirming starts a fresh demo in the chosen mode, and the view shows the new Story at Grill without a page reload
-- [ ] A start error (Live with a role unset, a refused Widget source) is shown next to the button
-- [ ] The Replay note shows in Replay and not in Live
-- [ ] "Add the demo" appears on a dev instance with no demo Project and disappears once it is added
-- [ ] Shell tests in `packages/shell/test/boards.test.ts`
+- [x] The button appears only on the demo Project, and only on a dev instance
+- [x] Confirming starts a fresh demo in the chosen mode, and the view shows the new Story at Grill without a page reload
+- [x] A start error (Live with a role unset, a refused Widget source) is shown next to the button
+- [x] The Replay note shows in Replay and not in Live
+- [x] "Add the demo" appears on a dev instance with no demo Project and disappears once it is added
+- [x] Shell tests in `packages/shell/test/boards.test.ts`

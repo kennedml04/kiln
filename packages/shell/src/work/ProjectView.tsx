@@ -2,6 +2,7 @@ import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import type { CreateItemRequest, Item, ItemKind, Project, Stage } from '@kiln/widget-sdk';
 import { followLink, projectThreadPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
+import { DemoControls, ReplayNote, useDemo } from './Demo.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 
 function NewItemForm({ project, items }: { project: Project; items: Item[] }) {
@@ -123,6 +124,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const project = useStore((s) => s.projects[projectId]);
   const allItems = useStore((s) => s.items);
   const [notice, setNotice] = useState<string>();
+  const demo = useDemo();
   const items = useMemo(() => Object.values(allItems).filter((i) => i.projectId === projectId), [allItems, projectId]);
 
   if (!project) return <p>Loading Project…</p>;
@@ -133,6 +135,12 @@ export function ProjectView({ projectId }: { projectId: string }) {
       <a href={projectThreadPath(project.id)} onClick={followLink}>
         Project Thread
       </a>
+      {demo?.available && demo.projectId === project.id ? (
+        <>
+          <DemoControls key={project.id} state={demo} action="Start demo" />
+          {demo.mode === 'replay' ? <ReplayNote /> : null}
+        </>
+      ) : null}
       {project.errors?.length ? (
         <div role="alert" className="notice project-errors">
           <p>

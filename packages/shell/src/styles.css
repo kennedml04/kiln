@@ -807,6 +807,24 @@ div[role='alert'] {
   margin-top: 1.25rem;
 }
 
+/* The demo Project's controls and Replay note (dev instance only) */
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.demo-controls [role='alert'] {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.demo-note ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.4rem;
+}
+
 /* Forms laid out in a row (register a Project, new Item, filters) */
 form {
   display: flex;

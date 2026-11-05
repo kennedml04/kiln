@@ -3,6 +3,7 @@ import type { Item, Project, RunState } from '@kiln/widget-sdk';
 import { followLink, projectPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { Panels } from '../Panels.tsx';
+import { DemoControls, useDemo } from './Demo.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 
 const RUN_STATES: { id: RunState; name: string }[] = [
@@ -85,6 +86,7 @@ export function HomeBoard() {
   const projects = useStore((s) => s.projects);
   const items = useStore((s) => s.items);
   const queue = useStore((s) => s.scheduler?.queue);
+  const demo = useDemo();
   const columns = useMemo(() => {
     const grouped = new Map<RunState, Item[]>(RUN_STATES.map((r) => [r.id, []]));
     for (const item of Object.values(items)) grouped.get(item.runState)?.push(item);
@@ -114,6 +116,7 @@ export function HomeBoard() {
           <p>No Projects yet. Register a repository to see its Items.</p>
         )}
         <RegisterProject />
+        {demo?.available && !demo.projectId ? <DemoControls state={demo} action="Add the demo" /> : null}
       </section>
       <div className="board">
         {RUN_STATES.map((runState) =>
