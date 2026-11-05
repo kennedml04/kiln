@@ -89,6 +89,11 @@
       "action": "other_commands",
       "match": "git status -s",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline -3",
+      "decision": "allow"
     }
   ]
 }
