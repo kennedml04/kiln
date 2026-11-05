@@ -54,6 +54,11 @@
       "action": "other_commands",
       "match": "git show demo-project:.scratch/demo-project/issues/09-first-live-run-by-hand.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls -d \"$TEMP\"/kiln-scratch-repo 2>&1",
+      "decision": "allow"
     }
   ]
 }
