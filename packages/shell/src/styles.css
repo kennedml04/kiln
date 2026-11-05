@@ -868,6 +868,43 @@ form [role='alert'],
   flex-basis: 100%;
 }
 
+/* The Import scan: what the picked folder holds, and the person's choices from it. */
+.register-project > .import-scan {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.import-scan h4 {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.import-scan ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.import-scan fieldset {
+  margin: 0.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.import-scan label {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.import-scan input[type='text'],
+.import-scan label > input:not([type]) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.import-why {
+  color: var(--text-muted);
+}
+
 .add-project {
   margin-top: 0.5rem;
 }

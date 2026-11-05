@@ -1,11 +1,12 @@
 import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
-import type { Item, Project, RunState } from '@kiln/widget-sdk';
+import type { ImportOptions, Item, Project, RunState } from '@kiln/widget-sdk';
 import { followLink, projectPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { ApiError } from '../api.ts';
 import { FolderBrowser } from '../FolderBrowser.tsx';
 import { Panels } from '../Panels.tsx';
 import { DemoControls, useDemo } from './Demo.tsx';
+import { ImportScan } from './ImportScan.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 import { NewProject } from './NewProject.tsx';
 
@@ -20,19 +21,21 @@ const RUN_STATES: { id: RunState; name: string }[] = [
 /**
  * + Project → Import: pick a folder in the tree or type its path, and register it where it is.
  * A folder that isn't a git repo is offered Initialise as a git repo; any other git problem is
- * refused with its fix (Kiln never switches branches).
+ * refused with its fix (Kiln never switches branches). The scan shows what the folder holds; the
+ * person confirms a test command, ticks modules and, when docs are missing, Bring it up to date.
  */
 function ImportProject({ onDone }: { onDone: () => void }) {
   const [path, setPath] = useState('');
   const [error, setError] = useState<string>();
   const [canInitialise, setCanInitialise] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [choices, setChoices] = useState<ImportOptions>({});
   const register = async (init: boolean) => {
     setBusy(true);
     setError(undefined);
     setCanInitialise(false);
     try {
-      await api<Project>('POST', '/api/projects', { path: path.trim(), ...(init ? { init: true } : {}) });
+      await api<Project>('POST', '/api/projects', { path: path.trim(), ...(init ? { init: true } : {}), ...choices });
       setPath('');
       onDone();
     } catch (err) {
@@ -59,6 +62,7 @@ function ImportProject({ onDone }: { onDone: () => void }) {
         Repository path
         <input value={path} onChange={(e) => pick(e.target.value)} required spellCheck={false} placeholder="C:\path\to\repo" />
       </label>
+      <ImportScan path={path} onChange={setChoices} />
       <button type="submit" disabled={busy || !path.trim()}>
         Register Project
       </button>

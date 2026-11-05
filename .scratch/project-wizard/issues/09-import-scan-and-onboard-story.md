@@ -10,9 +10,17 @@ Import shows all of this; the person confirms the test command and ticks modules
 
 **Blocked by:** 01, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The scan finds docs, test commands and modules in sample folders, and runs no commands
-- [ ] Import writes the confirmed test command and modules in one commit
-- [ ] Bring it up to date creates an Onboard Story listing exactly what's missing
-- [ ] An import with nothing ticked registers the Project and writes nothing else
+- [x] The scan finds docs, test commands and modules in sample folders, and runs no commands
+- [x] Import writes the confirmed test command and modules in one commit
+- [x] Bring it up to date creates an Onboard Story listing exactly what's missing
+- [x] An import with nothing ticked registers the Project and writes nothing else
+
+**Built:** the scan and Import's writes are `packages/core/src/work/import-scan.ts`; the types are
+`packages/widget-sdk/src/project-scan.ts`; the Shell part is `packages/shell/src/work/ImportScan.tsx`.
+Import's choices ride on `POST /api/projects` (`testCommand`, `modules`, `onboard`). The git state is
+read from the `.git` folder, so the scan starts no process at all. A `detect` glob with no `/` matches
+a file name at any depth; one with a `/` matches the repo-relative path. `.git`, `.kiln`,
+`node_modules` and Python caches are not walked. Bring it up to date is offered only when a doc is
+missing, and the Onboard Story lists only missing docs.

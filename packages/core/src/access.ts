@@ -85,6 +85,8 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'GET', path: '/api/fs/folders', role: 'admin' },
   // + Project → New (project-wizard ticket 02): it makes a folder and a repo on this PC.
   { method: 'POST', path: '/api/projects/new', role: 'admin', action: 'project.new' },
+  // The Import scan (project-wizard ticket 09): it reads this PC's files, so it is Admin work too.
+  { method: 'POST', path: '/api/projects/scan', role: 'admin', action: 'project.scan' },
   // The demo Project on a dev instance (demo-project Ticket 05): starting it is Admin work.
   { method: 'GET', path: '/api/demo', role: 'admin' },
   { method: 'POST', path: '/api/demo/start', role: 'admin', action: 'demo.start' },

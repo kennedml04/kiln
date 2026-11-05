@@ -2,6 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CreateItemRequest, RegisterProjectRequest } from '@kiln/widget-sdk';
 import type { FolderBrowser } from './folders.ts';
+import { registerProject, scanFolder } from './import-scan.ts';
 import { WorkError, type Work } from './work.ts';
 
 export interface RouteHelpers {
@@ -32,8 +33,12 @@ export async function handleWorkRoute(
     if (path === '/api/projects') {
       if (method === 'GET') return (sendJson(res, 200, work.projects()), true);
       if (method === 'POST') {
-        return (sendJson(res, 201, await work.register((await readJson(req)) as RegisterProjectRequest)), true);
+        return (sendJson(res, 201, await registerProject(work, (await readJson(req)) as RegisterProjectRequest)), true);
       }
+    }
+    // The Import scan (Admin only): reads the folder's files, never runs anything.
+    if (path === '/api/projects/scan' && method === 'POST') {
+      return (sendJson(res, 200, scanFolder(((await readJson(req)) as { path?: unknown } | null)?.path)), true);
     }
     if (path === '/api/items' && method === 'GET') {
       return (sendJson(res, 200, work.items(url.searchParams.get('project') ?? undefined)), true);

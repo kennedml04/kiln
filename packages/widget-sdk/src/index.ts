@@ -148,6 +148,7 @@ export type CoreHelloEvent = KilnEvent<'core.hello', { startedAt: string }>;
 export type TestEchoEvent = KilnEvent<'test.echo', unknown>;
 
 export * from './work.ts';
+export * from './project-scan.ts';
 export * from './flow.ts';
 export * from './asks.ts';
 export * from './policy.ts';
