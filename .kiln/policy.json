@@ -1809,6 +1809,11 @@
       "action": "other_commands",
       "match": "grep -i chat",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git branch -a --list '*story*'",
+      "decision": "allow"
     }
   ]
 }
