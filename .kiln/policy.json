@@ -1149,6 +1149,11 @@
       "action": "other_commands",
       "match": "git checkout --theirs .kiln/policy.json",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 8,24p .scratch/local-first/issues/03-local-sessions-in-claude-code.md",
+      "decision": "allow"
     }
   ]
 }
