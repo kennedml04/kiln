@@ -1869,6 +1869,11 @@
       "action": "other_commands",
       "match": "sed -i 's/const sweepChats = () => void chats.sweep(clock.now()).catch((e) => console.error(\"SWEEPERR\", e))/const sweepChats = () => void chats.sweep(clock.now()).then((r) => console.error(\"SWEEP\", clock.now().toISOString(), JSON.stringify(r))).catch((e) => console.error(\"SWEEPERR\", e))/' packages/core/src/server.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's/console.error(\"SWEEP\", /require(\"node:fs\").appendFileSync(\"C:\\/tmp\\/sweep.log\", /' packages/core/src/server.ts",
+      "decision": "allow"
     }
   ]
 }
