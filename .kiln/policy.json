@@ -759,6 +759,11 @@
       "action": "other_commands",
       "match": "cat > packages/shell/src/work/Scoreboard.tsx <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git add .scratch/local-first/reviews/11-gpu-queue-and-cutoff.md",
+      "decision": "allow"
     }
   ]
 }
