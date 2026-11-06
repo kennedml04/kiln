@@ -599,6 +599,11 @@
       "action": "other_commands",
       "match": "grep -v \"always allow\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "head -30",
+      "decision": "allow"
     }
   ]
 }
