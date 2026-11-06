@@ -1199,6 +1199,11 @@
       "action": "other_commands",
       "match": "git log --oneline -6",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show 31fe9d2 9207ebf -- . ':!packages/shell/src/work/Scoreboard.tsx'",
+      "decision": "allow"
     }
   ]
 }
