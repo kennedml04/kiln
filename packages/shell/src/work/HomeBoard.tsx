@@ -4,7 +4,6 @@ import { followLink, projectPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { ApiError } from '../api.ts';
 import { FolderBrowser } from '../FolderBrowser.tsx';
-import { Panels } from '../Panels.tsx';
 import { DemoControls, useDemo } from './Demo.tsx';
 import { ImportScan } from './ImportScan.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
@@ -150,7 +149,6 @@ export function HomeBoard() {
 
   return (
     <>
-      <Panels placement="home" />
       <section className="projects" aria-label="Projects">
         <h2>Projects</h2>
         {projectList.length ? (

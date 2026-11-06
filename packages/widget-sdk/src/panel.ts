@@ -10,7 +10,10 @@
 // Button presses and page actions reach the Widget as a `widget.action` command, and only for
 // actions its Manifest lists in `provides.actions`.
 
-/** Where the Shell draws a panel: on the home board, or on the Widgets page. */
+/**
+ * Kept so older Manifests still validate. The Shell no longer reads it: every panel is drawn on its
+ * Widget's own page under Widgets (`/widgets/<id>`), never on the home board or a Project page.
+ */
 export type PanelPlacement = 'home' | 'widgets';
 
 /** One panel in a Manifest's `provides.panels`. */
@@ -18,7 +21,7 @@ export interface PanelDeclaration {
   /** Unique within the Widget: lowercase letters, digits and dashes. */
   id: string;
   title: string;
-  /** Default `widgets`. */
+  /** Ignored by the Shell (see PanelPlacement). Default `widgets`. */
   placement?: PanelPlacement;
   /**
    * An embedded page instead of declarative content: an HTML file's path in the Widget's folder,

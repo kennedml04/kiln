@@ -22,13 +22,30 @@ const gpus = (use: number): PanelContent => ({
   ],
 });
 
-test("a Widget's declarative panel shows on Home, updates live, and its button runs the Widget's action", async (t) => {
+test("a Widget's panels live on its own page under Widgets, never on the home board", async (t) => {
   const kiln = await startTestKiln(t);
   const widget = await startWidget(t, kiln, {
+    name: 'GPU monitor',
     provides: { panels: [{ id: 'gpus', title: 'GPUs', placement: 'home' }], actions: ['refresh'] },
   });
   await widget.call('PUT', '/api/widget/panels/gpus', gpus(40));
   const page = await openShell(t, kiln);
+
+  await page.getByRole('heading', { name: 'Projects' }).waitFor();
+  assert.equal(await page.getByRole('region', { name: 'GPUs' }).count(), 0, 'even a panel that asks for the home board stays off it');
+  await page.getByRole('list', { name: 'Widget pages' }).getByRole('link', { name: 'GPU monitor' }).click();
+  await page.waitForURL(/\/widgets\/test-widget$/);
+  await page.getByRole('heading', { name: 'GPU monitor', level: 2 }).waitFor();
+  await page.getByRole('region', { name: 'GPUs' }).getByText('40%').waitFor();
+});
+
+test("a Widget's declarative panel updates live, and its button runs the Widget's action", async (t) => {
+  const kiln = await startTestKiln(t);
+  const widget = await startWidget(t, kiln, {
+    provides: { panels: [{ id: 'gpus', title: 'GPUs' }], actions: ['refresh'] },
+  });
+  await widget.call('PUT', '/api/widget/panels/gpus', gpus(40));
+  const page = await openShell(t, kiln, '/widgets/test-widget');
 
   const panel = page.getByRole('region', { name: 'GPUs' });
   await panel.getByText('40%').waitFor();
@@ -62,30 +79,38 @@ addEventListener('message', (e) => { if (e.source === parent && e.data?.kiln ===
 probe();
 </script>`;
 
-test("an embedded page runs sandboxed: no Shell DOM, cookies, network or other Widgets, only its own Widget's bridge", async (t) => {
+test("an embedded page runs sandboxed: no Shell DOM, cookies, network or other frames, only its own panel's bridge", async (t) => {
   const kiln = await startTestKiln(t);
-  const page = await openShell(t, kiln, '/widgets');
+  const page = await openShell(t, kiln, '/widgets/test-widget');
   await page.evaluate(() => (document.cookie = 'shell-cookie=fake-value'));
-  const pageManifest = (id: string): Partial<Manifest> => ({
-    id,
-    name: id,
-    provides: { panels: [{ id: 'rich', title: `Rich ${id}`, page: 'ui/index.html' }], actions: ['report'] },
-  });
-  const mine = await startWidget(t, kiln, pageManifest('test-widget'), { 'ui/index.html': PROBE_PAGE });
-  const theirs = await startWidget(t, kiln, pageManifest('other'), { 'ui/index.html': PROBE_PAGE });
+  const mine = await startWidget(
+    t,
+    kiln,
+    {
+      provides: {
+        panels: [
+          { id: 'rich', title: 'Rich one', page: 'ui/index.html' },
+          { id: 'other', title: 'Rich two', page: 'ui/index.html' },
+        ],
+        actions: ['report'],
+      },
+    },
+    { 'ui/index.html': PROBE_PAGE },
+  );
 
-  const frame = page.getByRole('region', { name: 'Rich test-widget' }).locator('iframe');
+  const frame = page.getByRole('region', { name: 'Rich one' }).locator('iframe');
   await frame.waitFor();
   assert.equal(await frame.getAttribute('sandbox'), 'allow-scripts');
-  await page.getByRole('region', { name: 'Rich other' }).locator('iframe').waitFor();
+  await page.getByRole('region', { name: 'Rich two' }).locator('iframe').waitFor();
 
-  const [probe] = await mine.actions(1);
-  assert.deepEqual(probe?.input, { shellDom: 'blocked', cookie: 'blocked', fetch: 'blocked', readableSiblings: 0 });
-  assert.equal(probe?.panelId, 'rich');
-  assert.equal((await theirs.actions(1))[0]?.action, 'report', "each page's request reaches only its own Widget");
+  const probes = await mine.actions(2);
+  for (const probe of probes) assert.deepEqual(probe.input, { shellDom: 'blocked', cookie: 'blocked', fetch: 'blocked', readableSiblings: 0 });
+  assert.deepEqual(probes.map((p) => p.panelId).sort(), ['other', 'rich'], 'each page acts as its own panel');
 
   await mine.call('POST', '/api/widget/panels/rich/messages', { ping: 1 });
-  const [, echo] = await mine.actions(2);
+  const [, , echo] = await mine.actions(3);
   assert.deepEqual(echo?.input, { echo: { ping: 1 } });
-  assert.equal((await theirs.actions(1)).length, 1, "another Widget's page gets none of its messages");
+  assert.equal(echo?.panelId, 'rich');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await mine.actions(3)).length, 3, "the other panel's page gets none of its messages");
 });

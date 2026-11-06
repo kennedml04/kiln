@@ -7,7 +7,7 @@ import { followLink, usePath } from './router.ts';
 import { SETUP_PATH, SetupWizard } from './SetupWizard.tsx';
 import { useStore, type ConnectionState } from './store.ts';
 import { setTheme, useTheme } from './theme.ts';
-import { WidgetsPage } from './WidgetsPage.tsx';
+import { WIDGET_ROUTE, WidgetPage, WidgetsNav, WidgetsPage } from './WidgetsPage.tsx';
 import { HomeBoard } from './work/HomeBoard.tsx';
 import { ItemView } from './work/ItemView.tsx';
 import { MODELS_PATH, ModelsPage } from './work/ModelsPage.tsx';
@@ -95,6 +95,8 @@ function Page({ isAdmin }: { isAdmin: boolean }) {
   if (path === MODELS_PATH && isAdmin) return <ModelsPage />;
   if (path === SETUP_PATH && isAdmin) return <SetupWizard />;
   if (path === '/widgets') return <WidgetsPage isAdmin={isAdmin} />;
+  const widget = WIDGET_ROUTE.exec(path);
+  if (widget) return <WidgetPage widgetId={decodeURIComponent(widget[1]!)} isAdmin={isAdmin} />;
   const project = PROJECT_ROUTE.exec(path);
   if (project) return <ProjectView projectId={decodeURIComponent(project[1]!)} />;
   const projectThread = PROJECT_THREAD_ROUTE.exec(path);
@@ -131,6 +133,7 @@ export function App() {
           <NavLink to="/widgets" icon={<WidgetsIcon />}>
             Widgets
           </NavLink>
+          <WidgetsNav />
           {isAdmin && (
             <NavLink to="/audit" icon={<AuditIcon />}>
               Audit log

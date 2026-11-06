@@ -3,7 +3,7 @@
 // so it can't reach the Shell's DOM, cookies or API, or another Widget's page. Its only way out is
 // the postMessage bridge below, which acts for the Widget that owns the frame and no other.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PageToShell, PanelBlock, PanelPlacement, PanelView, ShellToPage } from '@kiln/widget-sdk';
+import type { PageToShell, PanelBlock, PanelView, ShellToPage } from '@kiln/widget-sdk';
 import { api, onPageMessage, useStore } from './store.ts';
 
 const runAction = (panel: PanelView, action: string, input: unknown) =>
@@ -129,10 +129,10 @@ function Panel({ panel }: { panel: PanelView }) {
   );
 }
 
-/** Every running Widget's panels for one place in the Shell. */
-export function Panels({ placement }: { placement: PanelPlacement }) {
+/** One Widget's panels, drawn on its own page under Widgets (`/widgets/<id>`). */
+export function Panels({ widgetId }: { widgetId: string }) {
   const all = useStore((s) => s.panels);
-  const panels = useMemo(() => Object.values(all).filter((p) => p.placement === placement), [all, placement]);
+  const panels = useMemo(() => Object.values(all).filter((p) => p.widgetId === widgetId), [all, widgetId]);
   if (panels.length === 0) return null;
   return (
     <div className="panels">

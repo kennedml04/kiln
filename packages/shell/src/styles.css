@@ -501,6 +501,21 @@ div[role='alert'] {
   margin-left: auto;
 }
 
+/* The Widgets submenu: one page per Widget with panels, indented under Widgets. */
+.nav-sub {
+  list-style: none;
+  margin: 0 0 0.2rem;
+  padding: 0 0 0 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-sub a {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.86rem;
+}
+
 .sidebar-label {
   margin: 0 0 0.4rem;
   padding: 0 0.6rem;
@@ -709,6 +724,14 @@ div[role='alert'] {
 
   .nav .nav-icon {
     display: none;
+  }
+
+  .nav-sub {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0;
+    margin: 0;
+    gap: 0.25rem;
   }
 
   .sidebar-section {

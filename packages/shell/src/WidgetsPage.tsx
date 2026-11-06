@@ -1,9 +1,12 @@
-// The Widgets page: allowed sources, installs, Manifests, approvals and health.
-// Everyone with a role sees it; only Admins get the install form and the buttons.
+// The Widgets page: allowed sources, installs, Manifests, approvals and health. Each Widget with
+// panels also gets its own page (`/widgets/<id>`, listed under Widgets in the sidebar), which is the
+// only place its panels show. Everyone with a role sees them; only Admins get the install form and
+// the buttons.
 import { useEffect, useState, type FormEvent } from 'react';
 import type { WidgetInfo, WidgetNeeds, WidgetPin, WidgetSourcePolicy, WidgetState } from '@kiln/widget-sdk';
 import { api } from './api.ts';
 import { Panels } from './Panels.tsx';
+import { followLink, usePath } from './router.ts';
 import { useStore } from './store.ts';
 
 const STATE_LABELS: Partial<Record<WidgetState, string>> = { 'awaiting-approval': 'awaiting approval' };
@@ -132,18 +135,102 @@ function InstallForm({ onError }: { onError(message: string): void }) {
   );
 }
 
-export function WidgetsPage({ isAdmin }: { isAdmin: boolean }) {
-  const [widgets, setWidgets] = useState<WidgetInfo[]>();
-  const [policy, setPolicy] = useState<WidgetSourcePolicy>();
-  const [error, setError] = useState<string>();
-  const lastEvent = useStore((s) => s.lastEvent);
-  const relevant = lastEvent && (lastEvent.type.startsWith('widget.') || lastEvent.type.startsWith('org_policy.')) ? lastEvent.id : 0;
+/** Widget events that change the list (not panel updates, page messages, logs or actions). */
+const LIFECYCLE = /^(?:widget\.(?!panel_|page_|log|request|action)|org_policy\.)/;
 
+/** The id of the last lifecycle or Org Policy event, so a list reloads after one. */
+function useWidgetEvent() {
+  const [id, setId] = useState(0);
+  const event = useStore((s) => s.lastEvent);
+  useEffect(() => {
+    if (event && LIFECYCLE.test(event.type)) setId(event.id);
+  }, [event]);
+  return id;
+}
+
+/** The installed Widgets, reloaded after each Widget event. */
+function useWidgets(onError?: (message: string) => void): WidgetInfo[] | undefined {
+  const [widgets, setWidgets] = useState<WidgetInfo[]>();
+  const relevant = useWidgetEvent();
   useEffect(() => {
     let current = true;
     api<WidgetInfo[]>('GET', '/api/widgets')
       .then((list) => current && setWidgets(list))
-      .catch((err: Error) => current && setError(err.message));
+      .catch((err: Error) => current && onError?.(err.message));
+    return () => {
+      current = false;
+    };
+  }, [relevant]);
+  return widgets;
+}
+
+/** A Widget's own page. */
+export const widgetPath = (id: string) => `/widgets/${encodeURIComponent(id)}`;
+export const WIDGET_ROUTE = /^\/widgets\/([^/]+)\/?$/;
+
+/** Widgets with a page of their own: the ones whose Manifest declares panels. */
+const hasPanels = (w: WidgetInfo) => (w.manifest.provides?.panels ?? []).length > 0;
+
+/** The Widgets submenu in the sidebar: one entry per Widget with panels. */
+export function WidgetsNav() {
+  const widgets = useWidgets()?.filter(hasPanels) ?? [];
+  const path = usePath();
+  if (widgets.length === 0) return null;
+  return (
+    <ul className="nav-sub" aria-label="Widget pages">
+      {widgets.map((w) => {
+        const to = widgetPath(w.id);
+        return (
+          <li key={w.id}>
+            <a href={to} onClick={followLink} aria-current={path === to ? 'page' : undefined}>
+              {w.name}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** One Widget's space: its panels, then its state and buttons. */
+export function WidgetPage({ widgetId, isAdmin }: { widgetId: string; isAdmin: boolean }) {
+  const [error, setError] = useState<string>();
+  const widgets = useWidgets(setError);
+  const widget = widgets?.find((w) => w.id === widgetId);
+  const shown = useStore((s) => Object.values(s.panels).some((p) => p.widgetId === widgetId));
+  if (widgets && !widget) {
+    return (
+      <section className="widgets">
+        <h2>Widget not found</h2>
+        <p>
+          No Widget <code>{widgetId}</code> is installed. <a href="/widgets" onClick={followLink}>All Widgets</a>
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="widgets">
+      <h2>{widget?.name ?? widgetId}</h2>
+      {error && (
+        <p role="alert">
+          {error} <button onClick={() => setError(undefined)}>Dismiss</button>
+        </p>
+      )}
+      <Panels widgetId={widgetId} />
+      {widget && !shown && hasPanels(widget) && <p className="panel-empty">Its panels show here while the Widget runs.</p>}
+      {widget && <WidgetCard widget={widget} isAdmin={isAdmin} onError={setError} />}
+    </section>
+  );
+}
+
+export function WidgetsPage({ isAdmin }: { isAdmin: boolean }) {
+  const [policy, setPolicy] = useState<WidgetSourcePolicy>();
+  const [error, setError] = useState<string>();
+  const widgets = useWidgets(setError);
+  const relevant = useWidgetEvent();
+
+  useEffect(() => {
+    let current = true;
     if (isAdmin) {
       api<WidgetSourcePolicy>('GET', '/api/org-policy/widget-sources')
         .then((p) => current && setPolicy(p))
@@ -157,7 +244,6 @@ export function WidgetsPage({ isAdmin }: { isAdmin: boolean }) {
   return (
     <section className="widgets">
       <h2>Widgets</h2>
-      <Panels placement="widgets" />
       {error && (
         <p role="alert">
           {error} <button onClick={() => setError(undefined)}>Dismiss</button>
