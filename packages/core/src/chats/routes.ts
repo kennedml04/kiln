@@ -2,6 +2,7 @@
 //   GET  /api/chats[?archived=0|1]  the caller's chats, pinned first, then by last message (ScratchChat[])
 //   POST /api/chats {text}          opens a chat and starts its Session at once, attended -> 201 OpenChatResult
 //   GET  /api/chats/:id             ScratchChat
+//   PATCH /api/chats/:id {title?, pinned?, archived?}  rename, pin or archive -> ScratchChat
 //   GET  /api/chats/:id/thread      the chat's Thread (ThreadEntry[])
 //   GET  /api/chats/:id/digests     the chat's Digests, oldest first (Digest[])
 //   POST /api/chats/:id/messages {text}  a message into the chat's Session -> 201 ThreadMessageResult
@@ -76,6 +77,11 @@ export async function handleChatRoute(
     if (url.pathname === '/api/chats') {
       if (req.method === 'GET') {
         const archived = url.searchParams.get('archived') === '1';
+        // `all=1` lists every person's chats; only an Admin may ask for it.
+        if (url.searchParams.get('all') === '1') {
+          if (access.caller(req).role !== 'admin') throw new WorkError(403, "Only an Admin can list everyone's chats");
+          return (sendJson(res, 200, chats.list({ archived })), true);
+        }
         return (sendJson(res, 200, chats.list({ ownerId: ownerOf(), archived })), true);
       }
       if (req.method === 'POST') {

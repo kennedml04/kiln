@@ -33,3 +33,6 @@ export function followLink(event: MouseEvent<HTMLAnchorElement>) {
 export const projectPath = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 export const itemPath = (itemId: string) => `/items/${encodeURIComponent(itemId)}`;
 export const projectThreadPath = (projectId: string) => `${projectPath(projectId)}/thread`;
+export const CHATS_PATH = '/chats';
+export const NEW_CHAT_PATH = '/chats/new';
+export const chatPath = (chatId: string) => `${CHATS_PATH}/${encodeURIComponent(chatId)}`;

@@ -8,6 +8,8 @@ import { SETUP_PATH, SetupWizard } from './SetupWizard.tsx';
 import { useStore, type ConnectionState } from './store.ts';
 import { setTheme, useTheme } from './theme.ts';
 import { WIDGET_ROUTE, WidgetPage, WidgetsNav, WidgetsPage } from './WidgetsPage.tsx';
+import { ChatView, ChatsLink, NewChatButton, NewChatView } from './work/Chats.tsx';
+import { ChatsPage } from './work/ChatsPage.tsx';
 import { HomeBoard } from './work/HomeBoard.tsx';
 import { ItemView } from './work/ItemView.tsx';
 import { MODELS_PATH, ModelsPage } from './work/ModelsPage.tsx';
@@ -85,10 +87,15 @@ function NoAccess({ me }: { me: Me }) {
 
 const PROJECT_ROUTE = /^\/projects\/([^/]+)\/?$/;
 const PROJECT_THREAD_ROUTE = /^\/projects\/([^/]+)\/thread\/?$/;
+const CHAT_ROUTE = /^\/chats\/([^/]+)\/?$/;
 const ITEM_ROUTE = /^\/items\/([^/]+)\/?$/;
 
 function Page({ isAdmin }: { isAdmin: boolean }) {
   const path = usePath();
+  if (path === '/chats' || path === '/chats/') return <ChatsPage isAdmin={isAdmin} />;
+  if (path === '/chats/new') return <NewChatView />;
+  const chat = CHAT_ROUTE.exec(path);
+  if (chat) return <ChatView chatId={decodeURIComponent(chat[1]!)} />;
   if (path === '/audit' && isAdmin) return <AuditPage />;
   if (path === NEEDS_YOU_PATH) return <NeedsYouPage />;
   if (path === '/settings' && isAdmin) return <SettingsPage />;
@@ -130,6 +137,7 @@ export function App() {
             All Projects
           </NavLink>
           <NeedsYouLink />
+          <ChatsLink />
           <NavLink to="/widgets" icon={<WidgetsIcon />}>
             Widgets
           </NavLink>
@@ -147,6 +155,7 @@ export function App() {
         </nav>
         <BudgetSection />
         <div className="sidebar-footer">
+          <NewChatButton canAct={me?.role === 'admin' || me?.role === 'member'} />
           <StopAll canAct={me?.role === 'admin' || me?.role === 'member'} />
           <div className="sidebar-status">
             <ConnectionBadge />

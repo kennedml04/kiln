@@ -6,9 +6,9 @@ import {
   ASK_TYPES,
   needsYouOrder,
   type Actor,
-  chatOfThread,
   type Ask,
   type AskRaiser,
+  chatOfThread,
   type Item,
   projectOfThread,
   PROPOSAL_ANSWERS,
@@ -197,16 +197,12 @@ export function createAskService({ db, bus, work }: { db: DatabaseSync; bus: Eve
       const clean = validateRaise(request);
       const threadOf = projectOfThread(request.itemId);
       // A Scratch chat belongs to no Project: its Asks carry an empty projectId.
-      const projectId =
-        chatOfThread(request.itemId) !== undefined
-          ? ''
-          : threadOf !== undefined
-            ? work.project(threadOf)?.id
-            : work.item(request.itemId)?.projectId;
-      if (projectId === undefined || (projectId === '' && chatOfThread(request.itemId) === undefined)) throw new WorkError(404, threadOf !== undefined ? `No Project "${threadOf}"` : `No Item "${request.itemId}"`);
+      const chat = chatOfThread(request.itemId) !== undefined;
+      const projectId = chat ? '' : threadOf !== undefined ? work.project(threadOf)?.id : work.item(request.itemId)?.projectId;
+      if (projectId === undefined || (!projectId && !chat)) throw new WorkError(404, threadOf !== undefined ? `No Project "${threadOf}"` : `No Item "${request.itemId}"`);
       let proposed: Partial<Ask> = {};
       if (request.proposal !== undefined) {
-        if (threadOf === undefined) throw new WorkError(400, 'Only a Project Thread Session makes proposals');
+        if (threadOf === undefined || chat) throw new WorkError(400, 'Only a Project Thread Session makes proposals');
         const options: string[] = [PROPOSAL_ANSWERS.accept, PROPOSAL_ANSWERS.decline];
         proposed = {
           type: 'decision',

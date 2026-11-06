@@ -77,3 +77,21 @@ export const MoonIcon = () => (
     <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
   </Icon>
 );
+
+export const ChatIcon = () => (
+  <Icon>
+    <path d="M4 5h16v11H9l-5 4z" />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
+export const PinIcon = () => (
+  <Icon>
+    <path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7" />
+  </Icon>
+);

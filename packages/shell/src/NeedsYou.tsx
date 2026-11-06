@@ -1,9 +1,9 @@
 // Needs you: every open Ask, the ones blocking the most work first, then the oldest.
 // The header link carries the live count on every page.
 import { useId, useMemo, useState, type FormEvent } from 'react';
-import { GATE_REJECT, projectOfThread, type Ask, type Item, type Project, type Proposal } from '@kiln/widget-sdk';
+import { GATE_REJECT, chatOfThread, projectOfThread, type Ask, type Item, type Project, type Proposal } from '@kiln/widget-sdk';
 import { InboxIcon } from './Icons.tsx';
-import { followLink, itemPath, projectThreadPath, usePath } from './router.ts';
+import { chatPath, followLink, itemPath, projectThreadPath, usePath } from './router.ts';
 import { api, openAsks, useStore } from './store.ts';
 
 const TYPE_NAMES: Record<Ask['type'], string> = {
@@ -50,6 +50,15 @@ function describeProposal(proposal: Proposal, project: Project | undefined, item
 function AskSubject({ ask }: { ask: Ask }) {
   const item = useStore((s) => s.items[ask.itemId]);
   const project = useStore((s) => s.projects[ask.projectId]);
+  const chatId = chatOfThread(ask.itemId);
+  const chat = useStore((s) => (chatId === undefined ? undefined : s.chats[chatId]));
+  if (chatId !== undefined) {
+    return (
+      <a href={chatPath(chatId)} onClick={followLink}>
+        Chat: {chat?.title ?? 'Scratch chat'}
+      </a>
+    );
+  }
   if (projectOfThread(ask.itemId) !== undefined) {
     return (
       <a href={projectThreadPath(ask.projectId)} onClick={followLink}>

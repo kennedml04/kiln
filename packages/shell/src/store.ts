@@ -19,6 +19,7 @@ import type {
   Me,
   PanelView,
   Project,
+  ScratchChat,
   ProjectRegisteredEvent,
   ProjectRemovedEvent,
   ProjectUpdatedEvent,
@@ -44,6 +45,8 @@ export interface ShellState {
   items: Record<string, Item>;
   /** Thread entries per Item id, in event order: what the Item view loaded plus live events. */
   threads: Record<string, ThreadEntry[]>;
+  /** Scratch chats (the caller's, unarchived and archived), by id. */
+  chats: Record<string, ScratchChat>;
   /** Open Asks (Needs you), by id. */
   asks: Record<string, Ask>;
   /** Running Widgets' panels, by `widgetId/panelId`. */
@@ -54,7 +57,7 @@ export interface ShellState {
   budgets: BudgetInfo[];
 }
 
-let state: ShellState = { connection: 'connecting', projects: {}, items: {}, threads: {}, asks: {}, panels: {}, budgets: [] };
+let state: ShellState = { connection: 'connecting', projects: {}, items: {}, threads: {}, chats: {}, asks: {}, panels: {}, budgets: [] };
 const listeners = new Set<() => void>();
 
 const update = (patch: Partial<ShellState>) => {
@@ -95,6 +98,24 @@ export function addThreadEntries(itemId: string, entries: ThreadEntry[], lastEve
   if (fresh.length === 0 && current.length > 0) return lastEvent ? update({ lastEvent }) : undefined;
   const merged = [...current, ...fresh].sort((a, b) => a.id - b.id);
   update({ threads: { ...state.threads, [itemId]: merged }, ...(lastEvent ? { lastEvent } : {}) });
+}
+
+/** Puts chats from the API in the store. */
+export function putChats(chats: ScratchChat[]) {
+  update({ chats: { ...state.chats, ...byId(chats) } });
+}
+
+/** Loads the caller's chats (live and archived), so Needs you can name a chat by its title. */
+async function loadChats() {
+  try {
+    const [live, archived] = await Promise.all([
+      api<ScratchChat[]>('GET', '/api/chats'),
+      api<ScratchChat[]>('GET', '/api/chats?archived=1'),
+    ]);
+    update({ chats: byId([...live, ...archived]) });
+  } catch {
+    // A caller with no right to chats (or an old core): the store keeps what it has.
+  }
 }
 
 export const panelKey = (p: { widgetId: string; panelId: string }) => `${p.widgetId}/${p.panelId}`;
@@ -172,8 +193,14 @@ function apply(event: KilnEvent) {
       return update({ scheduler: (event as SchedulerUpdatedEvent).payload, ...(event.id ? { lastEvent: event } : {}) });
     case 'budgets.updated':
       return update({ budgets: (event as BudgetsUpdatedEvent).payload.budgets });
+    case 'chat.opened':
+    case 'chat.updated': {
+      const { chat } = event.payload as { chat: ScratchChat };
+      return update({ chats: { ...state.chats, [chat.id]: chat }, lastEvent: event });
+    }
     case 'core.hello':
       void loadPanels();
+      void loadChats();
       return;
     default:
       if (THREAD_EVENT.test(event.type)) {

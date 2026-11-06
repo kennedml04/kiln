@@ -2147,3 +2147,133 @@ pre {
     animation: none !important;
   }
 }
+
+/* Scratch chats */
+.new-chat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.new-chat .nav-icon {
+  flex: none;
+}
+
+.chat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chat-toolbar h2 {
+  margin: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.chat-title {
+  max-width: 100%;
+  text-align: left;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+
+.chat-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  flex: 1 1 100%;
+}
+
+.chat-log {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.chat-line {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.chat-person {
+  justify-self: end;
+  background: var(--accent-soft, rgba(120, 120, 255, 0.18));
+}
+
+.chat-agent {
+  justify-self: start;
+  border: 1px solid var(--border);
+}
+
+.chat-system {
+  justify-self: center;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.chat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-tabs [role='tab'][aria-selected='true'] {
+  font-weight: 700;
+  border-bottom: 2px solid currentColor;
+}
+
+.chat-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.chat-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.chat-list li a {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+
+.chat-pin .nav-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (max-width: 860px) {
+  .new-chat {
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0;
+  }
+
+  .new-chat-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
