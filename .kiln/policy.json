@@ -639,6 +639,11 @@
       "action": "other_commands",
       "match": "git diff --name-only --diff-filter=U",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for f in 07-role-modes-and-the-variant-picker 08-escalate-to-cloud-on-failure",
+      "decision": "allow"
     }
   ]
 }
