@@ -8,7 +8,9 @@ Update the README (local-first, Add a model, local-only) and `GLOSSARY.md` (vari
 
 **Blocked by:** 07, 09
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] The scoreboard shows every number the picker uses, and a pin set there takes effect
 - [ ] Role modes can be changed in Settings
