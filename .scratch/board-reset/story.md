@@ -1,7 +1,7 @@
 ---
 title: A "Reset board" button that clears shipped work off the board
 epic: board-ux
-stage: spec
+stage: tickets
 blocked-by: []
 ---
 After a long run the board holds dozens of shipped Stories and Tickets beside the live work (58 shipped against 13 Stories in backlog on the Kiln Project), and finding what is moving takes scrolling. The person wants one button that clears the finished work away and leaves only what is still in play, without losing the history: shipped Items stay in git and in `.scratch`, and can be found again.
