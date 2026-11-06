@@ -1799,6 +1799,11 @@
       "action": "other_commands",
       "match": "for i in 01 02 03 04 05 06 07 09",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src packages/core/src/flow",
+      "decision": "allow"
     }
   ]
 }
