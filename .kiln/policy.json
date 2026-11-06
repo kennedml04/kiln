@@ -1274,6 +1274,11 @@
       "action": "other_commands",
       "match": "cat /tmp/npmci.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "export MSYS_NO_PATHCONV=1",
+      "decision": "allow"
     }
   ]
 }
