@@ -554,6 +554,11 @@
       "action": "other_commands",
       "match": "grep -n \"local-only Project never pushes\" -A30 widgets/github/test/pr-mode.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 26,100p widgets/github/test/pr-mode.test.ts",
+      "decision": "allow"
     }
   ]
 }
