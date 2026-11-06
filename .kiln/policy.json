@@ -2009,6 +2009,11 @@
       "action": "other_commands",
       "match": "grep -n \"ExitStatus\" -A12 ../../widget-sdk/src/flow.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for f in $(git ls-files 'packages/core/src/**/*.ts' 'packages/core/src/*.ts' 'packages/widget-sdk/src/*.ts')",
+      "decision": "allow"
     }
   ]
 }
