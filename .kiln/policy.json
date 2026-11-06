@@ -1794,6 +1794,11 @@
       "action": "other_commands",
       "match": "echo yes01",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for i in 01 02 03 04 05 06 07 09",
+      "decision": "allow"
     }
   ]
 }
