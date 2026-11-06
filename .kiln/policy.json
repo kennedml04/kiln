@@ -1179,6 +1179,11 @@
       "action": "other_commands",
       "match": "sed -n 40,56p .kiln/policy.json",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "p='.kiln/policy.json'",
+      "decision": "allow"
     }
   ]
 }
