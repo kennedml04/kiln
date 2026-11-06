@@ -1669,6 +1669,11 @@
       "action": "other_commands",
       "match": "sed -n 1,30p packages/shell/src/work/ModelsPage.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"knowledge\\b\\|knowledge\\.\\|knowledgeFor\" session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
