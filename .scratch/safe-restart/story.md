@@ -1,7 +1,7 @@
 ---
 title: Restart Kiln without losing running Sessions
 epic: platform
-stage: spec
+stage: tickets
 blocked-by: []
 ---
 Today every Session runs inside the Claude Code Widget, which the core starts, so restarting the core ends them all: their commits and Threads survive, but the turn in flight is lost and the Session has to start again. "Restart when idle" works around this by holding all new work until nothing runs, which on a busy night can mean hours of waiting with an empty queue. The person wants to restart Kiln whenever they need to (to load a merged change, or to reset a stuck app) and have the work simply carry on.
