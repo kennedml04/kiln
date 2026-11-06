@@ -16,9 +16,9 @@ User stories 8, 9, 16–19 in `spec.md`.
 
 **Blocked by:** 03, 04
 
-**Status:** in-review
+**Status:** done
 
-**Stage:** review
+**Stage:** shipped
 
 - [x] Unit tests on fixed results cover: a new variant first, the best rate wins, seeded 1-in-5 exploration, the 3-in-a-row cut-off per size, pins override
 - [x] A local-first Ticket's Thread names the variant and the picker's reason
