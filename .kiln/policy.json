@@ -1904,6 +1904,11 @@
       "action": "other_commands",
       "match": "rm -f ~/sweep.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "\"03 ancestor: $LASTEXITCODE\"",
+      "decision": "allow"
     }
   ]
 }
