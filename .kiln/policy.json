@@ -579,6 +579,11 @@
       "action": "other_commands",
       "match": "npm ci >/dev/null 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline main..HEAD",
+      "decision": "allow"
     }
   ]
 }
