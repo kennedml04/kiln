@@ -1789,6 +1789,11 @@
       "action": "other_commands",
       "match": "grep -rln \"api/chats\" packages --include=*.ts --include=*.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "echo yes01",
+      "decision": "allow"
     }
   ]
 }
