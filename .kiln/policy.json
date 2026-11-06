@@ -2119,6 +2119,21 @@
       "action": "other_commands",
       "match": "grep -n \"stuck\\|Stuck\" -ri ../widget-sdk/src",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show --stat *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge *",
+      "decision": "allow"
     }
   ]
 }
