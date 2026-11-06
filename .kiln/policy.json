@@ -954,6 +954,11 @@
       "action": "other_commands",
       "match": "Monitor {\"description\":\"wait for tests\",\"timeout_ms\":620000,\"command\":\"sleep 600\"}",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 35,60p .kiln/policy.json",
+      "decision": "allow"
     }
   ]
 }
