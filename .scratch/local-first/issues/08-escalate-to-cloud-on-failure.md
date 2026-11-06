@@ -6,7 +6,7 @@
 
 **Status:** in-review
 
-**Stage:** implementing
+**Stage:** review
 
 - [ ] A failing local attempt escalates to cloud, with the diff and the check output in the seed (harness test, fake local server and fake SDK)
 - [ ] The Item stays in its Stage across the escalation
