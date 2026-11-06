@@ -311,6 +311,8 @@ export function withoutQuotedHeredocs(line: string): string {
  * `worktree`. `cd` into the worktree or a folder in it counts, since it changes nothing.
  */
 export function isReadOnlyCommand(command: string, worktree: string): boolean {
+  // `echo` only prints, variables (`$?`, `$x`) included: only a redirect or a substitution does more.
+  if (/^echo(\s|$)/.test(command) && !/[<>`]|\$\(/.test(command)) return true;
   const all = words(command);
   if (!all?.length) return false;
   const [program, ...args] = all;

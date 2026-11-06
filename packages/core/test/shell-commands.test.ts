@@ -57,6 +57,9 @@ test('commands that only read the worktree are reads', () => {
     'Get-ChildItem widgets/claude-code/src',
     'Get-Content packages/core/src/db.ts | Select-Object -First 10',
     'pwd',
+    'echo ---',
+    'echo done $?',
+    'echo "exit: $?"',
   ]) {
     assert.equal(worktreeEffect(command, worktree), 'read', command);
     assert.deepEqual(bash(command)?.decision, 'allow', command);
@@ -102,6 +105,8 @@ test('anything else still asks under the Project template', () => {
     'cat ~/.ssh/id_rsa',
     'cat x > y',
     'echo hi > notes.md',
+    'echo $(rm -rf packages)',
+    'echo `whoami`',
     'find . -name "*.tmp" -delete',
     'find . -exec rm {} ;',
     "sed -i 's/a/b/w /tmp/out' file.ts",
