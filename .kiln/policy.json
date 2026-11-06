@@ -1334,6 +1334,11 @@
       "action": "other_commands",
       "match": "cat packages/widget-sdk/src/agent.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/widget-sdk/src/index.ts",
+      "decision": "allow"
     }
   ]
 }
