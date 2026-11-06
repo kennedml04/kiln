@@ -1284,6 +1284,11 @@
       "action": "other_commands",
       "match": "pwd",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls node_modules >/dev/null 2>&1",
+      "decision": "allow"
     }
   ]
 }
