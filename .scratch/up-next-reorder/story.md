@@ -1,7 +1,7 @@
 ---
 title: Move cards up and down in Up next
 epic: board-ux
-stage: grill
+stage: spec
 blocked-by: []
 ---
 The person wants to say what starts next without editing priorities by hand: each card in the Up next queue gets up and down controls (and drag on a wide screen), and the new order is the start order the scheduler follows. The API already takes an order (`PUT /api/scheduler/queue {order}`); this Story is the board side, on the phone first.
