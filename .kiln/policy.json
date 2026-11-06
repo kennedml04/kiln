@@ -984,6 +984,11 @@
       "action": "other_commands",
       "match": "git ls-tree -r master --name-only",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"wait\",\"timeout_ms\":920000,\"command\":\"sleep 900\"}",
+      "decision": "allow"
     }
   ]
 }
