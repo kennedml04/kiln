@@ -1194,6 +1194,11 @@
       "action": "other_commands",
       "match": "grep -E \"^ℹ (pass|fail)\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline -6",
+      "decision": "allow"
     }
   ]
 }
