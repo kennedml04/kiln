@@ -1514,6 +1514,11 @@
       "action": "other_commands",
       "match": "node - <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 1,110p packages/core/test/project-thread.test.ts",
+      "decision": "allow"
     }
   ]
 }
