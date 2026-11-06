@@ -1724,6 +1724,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/chat.txt <<'E'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat >> packages/core/test/scratch-chat.test.ts <<'EOF'",
+      "decision": "allow"
     }
   ]
 }
