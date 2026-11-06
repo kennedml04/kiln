@@ -799,6 +799,11 @@
       "action": "other_commands",
       "match": "sed -n 1,60p packages/core/test/role-modes.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's/<tr key={r.variantId} aria-label={r.name}>/<tr key={r.variantId} aria-label={`${r.name} scores`}>/' packages/shell/src/work/Scoreboard.tsx",
+      "decision": "allow"
     }
   ]
 }
