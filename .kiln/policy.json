@@ -929,6 +929,11 @@
       "action": "other_commands",
       "match": "git add .scratch/scratch-chat/spec.md GLOSSARY.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline -3 master",
+      "decision": "allow"
     }
   ]
 }
