@@ -1384,6 +1384,11 @@
       "action": "other_commands",
       "match": "sed -n 225,260p session-manager.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd packages/core",
+      "decision": "allow"
     }
   ]
 }
