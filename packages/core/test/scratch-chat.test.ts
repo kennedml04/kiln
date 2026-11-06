@@ -190,6 +190,20 @@ test('raise_ask works in a chat: the Ask has no Project and shows in Needs you',
   assert.equal(asks[0]!.projectId, '');
 });
 
+test('with no chat role set and an Agent with no default model, a chat runs on the Budget\'s Opus model, never Fable', async (t) => {
+  const kiln = await startKiln(t);
+  const models = ['claude-fable-test', 'claude-opus-test', 'claude-sonnet-test'];
+  await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }, { do: 'finish', reason: 'error' }], model: null, models });
+  await kiln.api('PUT', '/api/budgets/max', { kind: 'subscription', name: 'Max', models });
+  const events = await kiln.events();
+
+  const opened = await open(kiln, 'Which model am I on?');
+
+  const started = await events.next<KilnEvent<'session.started', { session: SessionInfo }>>('session.started');
+  assert.equal(started.payload.session.id, opened.sessionId);
+  assert.equal(started.payload.session.model, 'claude-opus-test');
+});
+
 test("another Member gets 404 on someone else's chat, reading or patching it; an Admin can open it", async (t) => {
   const kiln = await startTestKiln(t, { login: 'tailscale', env: { KILN_KNOWLEDGE_DIR: tempDir(t, 'kiln-knowledge') } });
   await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }, { do: 'finish', reason: 'error' }] });

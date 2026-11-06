@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import type { ScratchChat } from '@kiln/widget-sdk';
+import type { BudgetInfo, RoleModel, ScratchChat } from '@kiln/widget-sdk';
 import type { EventBus } from '../events.ts';
 
 export interface Chats {
@@ -42,6 +42,20 @@ const TITLE_MAX = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const ARCHIVE_AFTER_MS = 7 * DAY_MS;
 export const DELETE_AFTER_MS = 30 * DAY_MS;
+
+/**
+ * The chat role's model until setup can choose one (ticket 05): the install's own `chat` role when
+ * set, else an Opus-tier model from a Budget (never Fable), with a Sonnet-tier one as its fallback.
+ * Undefined when no Budget has either: opening a chat is then refused, as before.
+ */
+export function chatRoleModel(chosen: RoleModel | undefined, budgets: Pick<BudgetInfo, 'kind' | 'models'>[]): RoleModel | undefined {
+  if (chosen?.model) return chosen;
+  const models = budgets.filter((b) => b.kind !== 'local').flatMap((b) => b.models).filter((m) => !/fable/i.test(m));
+  const model = models.find((m) => /opus/i.test(m)) ?? models.find((m) => /sonnet/i.test(m));
+  if (!model) return undefined;
+  const fallbackModel = models.find((m) => m !== model && /sonnet/i.test(m));
+  return { model, ...(fallbackModel ? { fallbackModel } : {}) };
+}
 
 const titleOf = (message: string) => {
   const line = message.trim().split('\n')[0]!.trim();

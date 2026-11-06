@@ -23,7 +23,7 @@ import { createAuditLog } from './audit.ts';
 import { createAskService } from './asks/ask-service.ts';
 import { createProposalApplier } from './flow/proposals.ts';
 import { handleAskRoute } from './asks/routes.ts';
-import { createChats } from './chats/chats.ts';
+import { chatRoleModel, createChats } from './chats/chats.ts';
 import { handleChatRoute, linkVisibleTo } from './chats/routes.ts';
 import { createStoryDrafts } from './chats/story-drafts.ts';
 import { handleFlowRoute } from './flow/routes.ts';
@@ -176,7 +176,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   draftSweep.unref();
   const sessions = createSessionManager({
     db,
-    chats: { get: chats.get, folder: chats.folder, roleModel: () => setup.settings().roles?.chat },
+    chats: { get: chats.get, folder: chats.folder, roleModel: () => chatRoleModel(setup.settings().roles?.chat, usage.budgets()) },
     draftStory: (chatId, draft) => void storyDrafts.fill(chatId, draft, clock.now()),
     bus,
     work,
