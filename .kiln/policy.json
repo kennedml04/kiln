@@ -879,6 +879,11 @@
       "action": "other_commands",
       "match": "sed -i 's|<select value={role} onChange|<select aria-label=\"Filter by role\" value={role} onChange|; s|<select value={size} onChange|<select aria-label=\"Filter by size\" value={size} onChange|' packages/shell/src/work/Scoreboard.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff HEAD~1 local-first-03 --stat",
+      "decision": "allow"
     }
   ]
 }
