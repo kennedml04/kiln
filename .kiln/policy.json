@@ -2024,6 +2024,11 @@
       "action": "other_commands",
       "match": "timeout 280 node --test packages/shell/test/chats.test.ts 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's/e.payload.text ?? e.payload.reason ?? e.payload.message/JSON.stringify(e.payload).slice(0,300)/' /tmp/dbg.test.ts",
+      "decision": "allow"
     }
   ]
 }
