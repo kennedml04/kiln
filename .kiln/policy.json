@@ -909,6 +909,11 @@
       "action": "other_commands",
       "match": "sed -n 285,345p packages/core/src/setup/setup.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show local-first-03:packages/core/src/local/variants.ts",
+      "decision": "allow"
     }
   ]
 }
