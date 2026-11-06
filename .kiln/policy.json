@@ -1399,6 +1399,11 @@
       "action": "other_commands",
       "match": "mkdir -p packages/core/src/chats",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"start\\b\\|/start\\|createServer\\|req.url\\|pathname\" widgets/claude-code/src/*.ts",
+      "decision": "allow"
     }
   ]
 }
