@@ -1954,6 +1954,11 @@
       "action": "other_commands",
       "match": "grep -n \"startSession\\|start(itemId\" ../*.ts ../*/*.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "echo done $?",
+      "decision": "allow"
     }
   ]
 }
