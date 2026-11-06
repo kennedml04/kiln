@@ -629,6 +629,11 @@
       "action": "other_commands",
       "match": "git add .scratch/local-first/reviews/08-escalate-to-cloud-on-failure.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge kiln/ticket/local-first/07 -m \"Merge local-first 07 (picker) for the scoreboard\" 2>&1",
+      "decision": "allow"
     }
   ]
 }
