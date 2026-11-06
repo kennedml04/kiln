@@ -1784,6 +1784,11 @@
       "action": "other_commands",
       "match": "ls packages/core/src packages/core/src/chats packages/core/test",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -rln \"api/chats\" packages --include=*.ts --include=*.tsx",
+      "decision": "allow"
     }
   ]
 }
