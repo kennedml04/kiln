@@ -1099,6 +1099,11 @@
       "action": "other_commands",
       "match": "sed -i \"64s/30_000/90_000/\" packages/core/test/story-flow.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git commit -qm \"story-flow: give the full-Workflow test room when the machine is busy\"",
+      "decision": "allow"
     }
   ]
 }
