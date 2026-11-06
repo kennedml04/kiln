@@ -1114,6 +1114,11 @@
       "action": "other_commands",
       "match": "git fetch . 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "head -60",
+      "decision": "allow"
     }
   ]
 }
