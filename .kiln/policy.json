@@ -574,6 +574,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/e8.mjs <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "npm ci >/dev/null 2>&1",
+      "decision": "allow"
     }
   ]
 }
