@@ -589,6 +589,11 @@
       "action": "other_commands",
       "match": "wc -l packages/core/src/local/*",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline master..HEAD",
+      "decision": "allow"
     }
   ]
 }
