@@ -1579,6 +1579,11 @@
       "action": "other_commands",
       "match": "git ls-files",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -i scratch",
+      "decision": "allow"
     }
   ]
 }
