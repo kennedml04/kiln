@@ -43,6 +43,10 @@ export interface FakeScenario {
    * after `close()`, and only then does the query's message stream end.
    */
   holdsCwd?: { exitDelayMs?: number };
+  /** The `transcript_path` hooks get. Default ''. */
+  transcriptPath?: string;
+  /** The `cwd` hooks get, as Claude Code reports its shell's folder after a `cd`. Default the Session's folder. */
+  hookCwd?: string;
 }
 
 /** One line of the fake's log (`<scenario>.log`, JSON lines), for tests to check what happened. */

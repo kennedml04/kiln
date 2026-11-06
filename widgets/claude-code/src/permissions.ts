@@ -64,6 +64,26 @@ const slashes = (path: string) => path.split('\\').join('/');
  */
 export const SCRATCH = [...new Set([tmpdir(), '/tmp'])];
 
+/**
+ * Where a tool call runs, as Claude Code's hook reports it: `cwd`, the folder its shell stands in
+ * (it can `cd` away from the worktree), and `ownFolder`, the Session's own Claude Code folder
+ * (where Claude Code saves long tool results for the Session to read back).
+ */
+export interface ToolPlace {
+  cwd?: string;
+  ownFolder?: string;
+}
+
+/**
+ * The Session's own Claude Code folder, from a hook's `transcript_path` and `session_id`: the
+ * transcript `<projects>/<slug>/<session id>.jsonl` sits beside it (a subagent's inside it).
+ */
+export function ownFolderOf(transcriptPath: unknown, sessionId: unknown): string | undefined {
+  if (typeof transcriptPath !== 'string' || typeof sessionId !== 'string' || !transcriptPath || !/^[\w-]+$/.test(sessionId)) return undefined;
+  const m = new RegExp(`^(.*[\\\\/]${sessionId})(?:\\.jsonl$|[\\\\/])`).exec(transcriptPath);
+  return m?.[1];
+}
+
 /** The file or folder a read or write tool touches, if it names one. */
 function pathOf(input: Record<string, unknown>): string | undefined {
   for (const key of ['file_path', 'notebook_path', 'path']) if (typeof input[key] === 'string' && input[key]) return input[key] as string;
@@ -74,7 +94,8 @@ function pathOf(input: Record<string, unknown>): string | undefined {
  * What a tool call amounts to and what the Policy says about it. `undefined` means the tool needs
  * no Kiln decision (it is harmless or a Kiln tool); a tool Kiln does not know asks. `skillFolders`
  * are the Session's own skill copies: reading them needs no decision. `readRoots` are folders the
- * Session may read but not write (see SessionStart).
+ * Session may read but not write (see SessionStart); its own Claude Code folder (`where.ownFolder`)
+ * is one too. Shell commands are judged from `where.cwd`.
  */
 export function requestFor(
   policy: EffectivePolicy,
@@ -82,9 +103,11 @@ export function requestFor(
   tool: string,
   input: Record<string, unknown>,
   skillFolders: string[] = [],
-  readRoots: string[] = [],
+  givenReadRoots: string[] = [],
   allScratch: string[] = SCRATCH,
+  where: ToolPlace = {},
 ): ToolRequest | undefined {
+  const readRoots = where.ownFolder ? [...givenReadRoots, where.ownFolder] : givenReadRoots;
   // A Stage that denies acting outside the worktree (a chat, a Project Thread) gets no scratch either.
   const scratch = policy.actions.outside_worktree === 'deny' ? [] : allScratch;
   if (HARMLESS.has(tool) || tool.startsWith('mcp__kiln__')) return undefined;
@@ -116,7 +139,12 @@ export function requestFor(
   }
   // Reads and writes inside the worktree (`ls`, `git log`, `git add`) count as such; see shellRequest.
   // Monitor runs a shell command too (a watch loop), so it is judged the same way.
-  if (tool === 'Bash' || tool === 'PowerShell' || tool === 'Monitor') return shellRequest(policy, worktree, String(input.command ?? ''), scratch.map(slashes));
+  if (tool === 'Bash' || tool === 'PowerShell' || tool === 'Monitor') {
+    return shellRequest(policy, worktree, String(input.command ?? ''), scratch.map(slashes), {
+      ...(where.cwd ? { cwd: where.cwd } : {}),
+      readRoots: where.ownFolder ? [slashes(where.ownFolder)] : [],
+    });
+  }
   if (tool === 'WebFetch') {
     let domain = '';
     try {

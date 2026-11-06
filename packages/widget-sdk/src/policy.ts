@@ -119,8 +119,17 @@ const RANK: Record<PolicyDecision, number> = { allow: 0, ask: 1, deny: 2 };
 export const strictest = (...decisions: PolicyDecision[]): PolicyDecision =>
   decisions.reduce<PolicyDecision>((a, b) => (RANK[b] > RANK[a] ? b : a), 'allow');
 
+/** A command that runs another inside its arguments: `$(...)`, backquotes, `<(...)`. */
+const RUNS_MORE = /\$\(|`|[<>]\(/;
+
+// A prefix rule that allows a command allows its arguments, not another command run inside them:
+// `npm run lint *` doesn't allow `npm run lint $(rm -rf src)` (an exact rule still does).
 const matches = (rule: PolicyRule, action: PolicyAction, detail: string) =>
-  rule.action === action && (rule.match.endsWith('*') ? detail.startsWith(rule.match.slice(0, -1)) : rule.match === detail);
+  rule.action === action &&
+  (rule.match.endsWith('*')
+    ? detail.startsWith(rule.match.slice(0, -1)) &&
+      !(rule.decision === 'allow' && (action === 'other_commands' || action === 'known_commands') && RUNS_MORE.test(detail.slice(rule.match.length - 1)))
+    : rule.match === detail);
 
 /** What one layer says about a request: its matching rules (strictest), else its rule for the action. */
 export function layerDecision(layer: PolicyLayer, action: PolicyAction, detail?: string): PolicyDecision {

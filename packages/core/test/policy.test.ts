@@ -340,6 +340,30 @@ test('Always allow commits one narrow rule to the Project Policy file alone, and
   );
 });
 
+test('Always allow saves the prefix of the command, says so, and never a local folder', async (t) => {
+  const kiln = await startTestKiln(t);
+  const home = ['C:', 'Users', 'someone', 'x'].join('/');
+  const script: FakeAgentScript = [
+    { do: 'permission', action: 'other_commands', detail: 'git checkout -q feature/a' },
+    { do: 'permission', action: 'other_commands', detail: 'git checkout -q feature/b' },
+    { do: 'permission', action: 'other_commands', detail: `cd ${home}` },
+  ];
+  const { project, events } = await ticketSession(kiln, script);
+  const ask = await permissionAsk(events);
+  assert.match(ask.why, /Always allow saves the rule "git checkout -q \*"/);
+  await kiln.api('POST', `/api/asks/${ask.id}/answer`, { answer: 'Always allow' });
+  assert.equal(await progress(events, /^permission /), 'permission allow');
+  assert.equal(await progress(events, /^permission /), 'permission allow', 'the same shape needs no Ask');
+  assert.deepEqual(JSON.parse(readRepoFile(kiln.repo, '.kiln/policy.json')).rules, [
+    { action: 'other_commands', match: 'git checkout -q *', decision: 'allow' },
+  ]);
+  const { effective } = await policyOf(kiln, project, 'ticket', 'implementing');
+  assert.equal(decideIn(effective, 'other_commands', 'git checkout -b feature/c'), 'ask', 'another flag is another shape');
+  const local = await permissionAsk(events);
+  assert.deepEqual(local.options, ['Allow once', 'Deny'], 'a rule would name a local folder');
+  await kiln.api('POST', `/api/asks/${local.id}/answer`, { answer: 'Allow once' });
+});
+
 test('Always allow is not offered when the Org Policy would still ask', async (t) => {
   const kiln = await startTestKiln(t);
   const { events } = await ticketSession(kiln, [{ do: 'permission', action: 'other_commands', detail: 'npm run lint' }], async () => {

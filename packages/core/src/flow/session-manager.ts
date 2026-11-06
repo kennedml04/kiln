@@ -11,6 +11,7 @@ import {
   CHAT_POLICY,
   CHAT_ROLE,
   CHAT_STAGE,
+  alwaysAllowMatch,
   chatOfThread,
   chatThreadId,
   decide,
@@ -813,12 +814,14 @@ export function createSessionManager({
         answerPermission(info, requestId, decision);
         return;
       }
-      const offered = known && policy.alwaysAllowOffered(scope!, action, detail);
+      const rule = isPolicyAction(action) ? alwaysAllowMatch(action, detail) : undefined;
+      const offered = isPolicyAction(action) && rule !== undefined && policy.alwaysAllowOffered(scope!, action, detail);
       const label = known ? POLICY_ACTION_NAMES[action] : action;
+      const saves = offered && rule !== detail ? ` Always allow saves the rule "${rule}".` : '';
       asks.raise({
         type: 'permission',
         question: `${label}: ${detail}?`,
-        why: `The ${info.role} wants to do this, and the Policy says to ask first. The Session waits for your answer.`,
+        why: `The ${info.role} wants to do this, and the Policy says to ask first. The Session waits for your answer.${saves}`,
         recommendation: PERMISSION_ANSWERS.once,
         options: [PERMISSION_ANSWERS.once, ...(offered ? [PERMISSION_ANSWERS.always] : []), PERMISSION_ANSWERS.deny],
         blocking: true,
@@ -844,10 +847,11 @@ export function createSessionManager({
       const info = live.get(ask.permission.sessionId)?.info;
       const scope = info && scopeOf(info);
       const { action, detail } = ask.permission;
-      if (!scope || !isPolicyAction(action) || !policy.alwaysAllowOffered(scope, action, detail)) {
+      const match = isPolicyAction(action) ? alwaysAllowMatch(action, detail) : undefined;
+      if (!scope || !isPolicyAction(action) || match === undefined || !policy.alwaysAllowOffered(scope, action, detail)) {
         throw new WorkError(409, 'The Org or Stage Policy no longer lets this Project always allow it');
       }
-      policy.alwaysAllow(scope.project, { action, match: detail });
+      policy.alwaysAllow(scope.project, { action, match });
     },
     deliver(ask, changed) {
       if (ask.raisedBy.kind !== 'session' || ask.answer === undefined) return;

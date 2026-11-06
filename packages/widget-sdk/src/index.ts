@@ -153,6 +153,7 @@ export * from './flow.ts';
 export * from './asks.ts';
 export * from './policy.ts';
 export * from './shell-commands.ts';
+export * from './rule-patterns.ts';
 export * from './scheduler.ts';
 export * from './budgets.ts';
 export * from './runaway.ts';

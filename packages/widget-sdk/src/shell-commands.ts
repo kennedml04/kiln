@@ -1,8 +1,10 @@
 // Shell command lines, judged against the Policy. A command that only reads the worktree (`ls`,
 // `cat`, `git log`, `grep`, `sed -n`) is the worktree read it is, and one that only changes files in
-// it (`git add`, `git commit`, `mkdir`, `cat > file <<'EOF'`) a worktree write, so no Permission Ask
-// comes up for an `ls`. Anything this file is unsure of (a redirect, a variable, a path outside the
-// worktree, an option that runs another program, deleting with `rm`) stays an ordinary command.
+// it (`git add`, `git commit`, `git checkout`, `mkdir`, `rm <file>`, `cat > file <<'EOF'`) a worktree
+// write, so no Permission Ask comes up for an `ls`. Anything this file is unsure of (a redirect, a
+// variable it can't follow, a path outside the worktree, an option that runs another program,
+// deleting a folder) stays an ordinary command. Relative paths are judged from the folder the
+// command runs in: the shell's folder, then wherever a `cd` in the line went.
 // Browser-safe: paths are compared as text, with no node:path.
 import { decide, type EffectivePolicy, type PolicyAction, type PolicyDecision } from './policy.ts';
 
@@ -13,11 +15,32 @@ export interface ShellRequest {
   decision: PolicyDecision;
 }
 
-/** Splits a shell command line into its commands (on `&&`, `||`, `;`, `|` and newlines), outside quotes. */
-export function splitCommands(line: string): string[] {
-  const parts: string[] = [];
+/**
+ * Where a command line runs, beyond its worktree. `cwd` is the folder the shell stands in (the
+ * worktree when not given); `readRoots` are folders the command may read but not write (the
+ * Session's own Claude Code folder, with its saved tool results).
+ */
+export interface ShellPlace {
+  cwd?: string;
+  readRoots?: string[];
+}
+
+/** One command between separators, and the separator after it (`&&`, `||`, `;`, `|`, a newline, or '' at the end). */
+interface Part {
+  text: string;
+  sep: string;
+}
+
+/** Splits a line into its commands and the separators between them, outside quotes and `$(...)`. */
+function splitParts(line: string): Part[] {
+  const parts: Part[] = [];
   let current = '';
   let quote: string | null = null;
+  let depth = 0;
+  const end = (sep: string) => {
+    parts.push({ text: current.trim(), sep });
+    current = '';
+  };
   for (let i = 0; i < line.length; i++) {
     const c = line[i]!;
     if (quote) {
@@ -31,22 +54,38 @@ export function splitCommands(line: string): string[] {
       current += c;
       continue;
     }
+    // A substitution's own commands belong to it: `f=$(ls; pwd)` is one command.
+    if (c === '$' && line[i + 1] === '(') {
+      depth++;
+      current += '$(';
+      i++;
+      continue;
+    }
+    if (depth) {
+      if (c === '(') depth++;
+      else if (c === ')') depth--;
+      current += c;
+      continue;
+    }
     const two = line.slice(i, i + 2);
     if (two === '&&' || two === '||') {
-      parts.push(current);
-      current = '';
+      end(two);
       i++;
       continue;
     }
     if (c === ';' || c === '|' || c === '\n') {
-      parts.push(current);
-      current = '';
+      end(c);
       continue;
     }
     current += c;
   }
-  parts.push(current);
-  return parts.map((p) => p.trim()).filter(Boolean);
+  end('');
+  return parts.filter((p) => p.text);
+}
+
+/** Splits a shell command line into its commands (on `&&`, `||`, `;`, `|` and newlines), outside quotes and `$(...)`. */
+export function splitCommands(line: string): string[] {
+  return splitParts(line).map((p) => p.text);
 }
 
 /** Splits one command into words, honouring quotes; undefined when it uses anything this file won't judge. */
@@ -91,6 +130,8 @@ function words(command: string): string[] | undefined {
 }
 
 const DRIVE = /^[a-z]:\//i;
+const slash = (path: string) => path.split('\\').join('/');
+const isAbsolute = (path: string) => path.startsWith('/') || /^[a-z]:/i.test(path);
 
 /** An absolute path with `.` and `..` worked out (never above its root). */
 function normalise(path: string): string {
@@ -105,34 +146,91 @@ function normalise(path: string): string {
 }
 
 /**
- * Whether an operand stays inside the worktree. On a worktree with a drive letter, a Git Bash
- * `/c/...` path counts as `C:/...` and case does not matter.
+ * Whether an operand stays inside the worktree, a relative one read from `cwd` (the worktree when
+ * not given). On a worktree with a drive letter, a Git Bash `/c/...` path counts as `C:/...` and
+ * case does not matter.
  */
-export function staysInside(worktree: string, word: string): boolean {
-  const root = worktree.split('\\').join('/');
+export function staysInside(worktree: string, word: string, cwd = worktree): boolean {
+  const root = slash(worktree);
   const windows = DRIVE.test(root);
-  let path = word.split('\\').join('/');
-  if (windows) path = path.replace(/^\/([a-z])(\/|$)/i, '$1:/');
+  const gitBash = (p: string) => (windows ? p.replace(/^\/([a-z])(\/|$)/i, '$1:/') : p);
+  const path = gitBash(slash(word));
   if (/^[a-z]:(?!\/)/i.test(path)) return false;
   const absolute = path.startsWith('/') || DRIVE.test(path);
   const fold = (p: string) => (windows ? p.toLowerCase() : p);
   const base = normalise(root);
-  const target = normalise(absolute ? path : `${root}/${path}`);
+  const target = normalise(absolute ? path : `${gitBash(slash(cwd))}/${path}`);
   const b = fold(base).replace(/\/$/, '');
   const t = fold(target).replace(/\/$/, '');
   return t === b || t.startsWith(`${b}/`);
 }
 
 /**
- * Whether an operand stays inside the worktree or names a path in one of the `scratch` folders (the
- * temp folder: `/tmp`, and the system's, where Claude Code keeps background task output). A
- * relative path is always the worktree's.
+ * Where one command is judged: its worktree, every folder it might run in (more than one when a
+ * `cd` before it might not have run), the scratch folders it may read and write, and the folders
+ * it may only read.
  */
-function reaches(worktree: string, scratch: string[], word: string): boolean {
-  if (staysInside(worktree, word)) return true;
-  const path = word.split('\\').join('/');
-  const absolute = path.startsWith('/') || DRIVE.test(path);
-  return absolute && scratch.some((root) => staysInside(root, path));
+interface Place {
+  worktree: string;
+  cwds: string[];
+  scratch: string[];
+  readRoots: string[];
+}
+
+const placeOf = (worktree: string, scratch: string[], where: ShellPlace = {}): Place => ({
+  worktree,
+  cwds: [where.cwd ?? worktree],
+  scratch,
+  readRoots: where.readRoots ?? [],
+});
+
+/** A folder no command is judged from: a `cd` this file can't follow (`cd`, `cd -`, `cd "$x"`) goes there. */
+const UNKNOWN_FOLDER = '/:unknown';
+
+/** Whether every folder the command might run in is the worktree or a folder in it. */
+const standsInside = (p: Place) => p.cwds.every((c) => staysInside(p.worktree, c));
+
+/** Whether an operand stays inside the worktree from every folder the command might run in. */
+const inside = (p: Place, word: string) => standsInside(p) && p.cwds.every((c) => staysInside(p.worktree, word, c));
+
+/**
+ * Whether an operand stays inside the worktree or names a path in one of `roots` (by default the
+ * scratch folders: `/tmp`, and the system's temp folder, where Claude Code keeps background task
+ * output). A relative path is always the worktree's.
+ */
+function reaches(p: Place, word: string, roots = p.scratch): boolean {
+  if (inside(p, word)) return true;
+  const path = slash(word);
+  return isAbsolute(path) && roots.some((root) => staysInside(root, path));
+}
+
+/** Whether a command may read an operand: in the worktree, the scratch folders or a read root (or `/dev/null`, which is empty). */
+const readable = (p: Place, word: string) => word === '/dev/null' || reaches(p, word, [...p.scratch, ...p.readRoots]);
+
+/** A path from `cwd`: the path itself when it is absolute. */
+const from = (cwd: string, path: string) => (isAbsolute(slash(path)) ? slash(path) : `${slash(cwd)}/${slash(path)}`);
+
+/**
+ * Whether a path might name a `.git` (the repo's own data, or a worktree's link to it): a segment
+ * that is `.git`, or a glob that could match it. Writing there is never a plain worktree write.
+ */
+function touchesGit(word: string): boolean {
+  return slash(word)
+    .split('/')
+    .some((segment) => {
+      if (segment.toLowerCase() === '.git') return true;
+      if (!/[*?[]/.test(segment)) return false;
+      const pattern = segment
+        .replace(/[.+^${}()|\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.')
+        .replace(/\[!/g, '[^');
+      try {
+        return new RegExp(`^${pattern}$`, 'i').test('.git');
+      } catch {
+        return true;
+      }
+    });
 }
 
 const flag = (w: string) => w.startsWith('-') && w !== '-';
@@ -164,6 +262,7 @@ const PLAIN: Record<string, (args: string[]) => boolean> = {
   echo: () => true,
   which: () => true,
   sleep: () => true,
+  seq: () => true,
   nproc: () => true,
   true: () => true,
   false: () => true,
@@ -176,62 +275,124 @@ const PLAIN: Record<string, (args: string[]) => boolean> = {
   // Prints to stdout only: no `-i`, and a script that reads no other file and writes or runs nothing.
   sed: (a) => !sedInPlace(a) && sedParts(a) !== undefined,
 };
+/** Reading programs whose operands are not paths. */
+const NO_PATHS = new Set(['sleep', 'seq', 'date', 'nproc', 'true', 'false']);
 
 const sedInPlace = (args: string[]) => args.some((w) => /^-[a-zA-Z]*i/.test(w) || w.startsWith('--in-place'));
 
 /**
- * Whether a sed script only selects, deletes, prints and substitutes lines: addresses (`12`, `$`,
- * `/re/`, `0,/re/`), then `p`, `d`, `=`, `q`, or `s` with any delimiter and only the `g`, `p`, `i`,
- * `I`, `m`, `M` or number flags. `w`, `r`, `e` and every other command are not judged here.
+ * Whether a sed script only selects, edits and prints lines: addresses (`12`, `$`, `/re/`, `\%re%`,
+ * `1~2`, `0,/re/`, `/re/,+2`), blocks (`{ ... }`), then commands that read no file and write or run
+ * nothing: `p`, `d`, `=`, `q`, `n`, `N`, `D`, `P`, `h`, `H`, `g`, `G`, `x`, `l`, `z`, `F`, the
+ * text commands `a`, `i` and `c`, labels and branches (`:a`, `b`, `t`, `T`), `y`, and `s` with any
+ * delimiter and only the `g`, `p`, `i`, `I`, `m`, `M` or number flags. `w`, `W`, `r`, `R`, `e` (and
+ * the `w` and `e` flags of `s`) are not judged here.
  */
 export function isPlainSedScript(script: string): boolean {
   let i = 0;
   const n = script.length;
+  const at = (re: RegExp) => re.test(script[i] ?? '');
   const skipRegex = (d: string) => {
     for (i++; i < n && script[i] !== d; i++) if (script[i] === '\\') i++;
     if (i >= n) return false;
     i++;
     return true;
   };
+  const number = () => {
+    const start = i;
+    while (at(/\d/)) i++;
+    return i > start;
+  };
   const address = () => {
-    if (/\d/.test(script[i] ?? '')) while (/\d/.test(script[i] ?? '')) i++;
-    else if (script[i] === '$') i++;
-    else if (script[i] === '/') return skipRegex('/');
+    if (number()) {
+      if (script[i] === '~') {
+        i++;
+        return number();
+      }
+    } else if (script[i] === '$') i++;
+    else if (script[i] === '/' || script[i] === '\\') {
+      const d = script[i] === '\\' ? script[++i] : '/';
+      if (!d || /[\s\\]/.test(d) || !skipRegex(d)) return false;
+      while (at(/[IM]/)) i++;
+    }
     return true;
   };
+  // A text command's text: the rest of the line, going on past a backslash-newline.
+  const text = () => {
+    while (i < n && script[i] !== '\n') i += script[i] === '\\' ? 2 : 1;
+  };
+  const label = () => {
+    const start = i;
+    while (i < n && !/[;\n}]/.test(script[i]!)) i++;
+    return i > start;
+  };
   let commands = 0;
+  let depth = 0;
   while (i < n) {
     while (i < n && /[\s;]/.test(script[i]!)) i++;
     if (i >= n) break;
+    if (script[i] === '}') {
+      if (!depth) return false;
+      depth--;
+      i++;
+      continue;
+    }
     if (!address()) return false;
     if (script[i] === ',') {
       i++;
-      if (!address()) return false;
+      if (script[i] === '+' || script[i] === '~') {
+        i++;
+        if (!number()) return false;
+      } else if (!address()) return false;
     }
     while (script[i] === ' ' || script[i] === '!') i++;
-    const c = script[i];
-    if (c === 'p' || c === 'd' || c === '=' || c === 'q') i++;
-    else if (c === 's') {
+    const c = script[i] ?? '';
+    if (c === '{') {
+      depth++;
+      i++;
+      continue;
+    }
+    if (c && 'pdDnNPhHgGxlzF='.includes(c)) {
+      i++;
+      if (c === 'l') number();
+    } else if (c === 'q' || c === 'Q') {
+      i++;
+      while (script[i] === ' ') i++;
+      number();
+    } else if (c === 'a' || c === 'i' || c === 'c') {
+      i++;
+      text();
+    } else if (c === ':') {
+      i++;
+      if (!label()) return false;
+    } else if (c === 'b' || c === 't' || c === 'T') {
+      i++;
+      while (script[i] === ' ') i++;
+      label();
+    } else if (c === 's' || c === 'y') {
       const d = script[++i];
       if (!d || /[\s\\\n]/.test(d)) return false;
       if (!skipRegex(d)) return false;
       i--;
       if (!skipRegex(d)) return false;
-      while (/[gpiImM\d]/.test(script[i] ?? '')) i++;
+      if (c === 's') while (at(/[gpiImM\d]/)) i++;
     } else return false;
     while (script[i] === ' ') i++;
-    if (i < n && script[i] !== ';' && script[i] !== '\n') return false;
+    if (i < n && !';\n}'.includes(script[i]!)) return false;
     commands++;
   }
-  return commands > 0;
+  return commands > 0 && depth === 0;
 }
 
 /** Whether a command has a backslash outside quotes, which the shell would take out before sed sees it. */
 function bareBackslash(command: string): boolean {
   let quote: string | null = null;
-  for (const c of command) {
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i]!;
     if (quote) {
       if (c === quote) quote = null;
+      // In double quotes a backslash escapes the next character (`\"` does not close the quote).
+      else if (quote === '"' && c === '\\') i++;
     } else if (c === '"' || c === "'") quote = c;
     else if (c === '\\') return true;
   }
@@ -259,6 +420,9 @@ function sedParts(args: string[]): string[] | undefined {
   return scripts.every(isPlainSedScript) ? files : undefined;
 }
 
+/** `git branch` options that make it list the branches they filter. */
+const BRANCH_FILTERS = ['--contains', '--no-contains', '--merged', '--no-merged', '--points-at'];
+
 /** Git subcommands that only read, with the options that would make them write or run something. */
 const GIT: Record<string, (args: string[]) => boolean> = {
   status: () => true,
@@ -276,8 +440,10 @@ const GIT: Record<string, (args: string[]) => boolean> = {
   'cat-file': () => true,
   'show-ref': () => true,
   grep: (a) => !has(a, '-O', '--open-files-in-pager'),
-  // Listing only: a bare name would create a branch, unless `--list` makes it a pattern.
-  branch: (a) => (a.every((w) => flag(w)) || a.includes('--list') || a.includes('-l')) && !a.some((w) => /^-[a-z]*[dDmMcCf]/.test(w) || ['--delete', '--move', '--copy', '--force', '--set-upstream-to', '--unset-upstream', '--edit-description'].some((b) => w.startsWith(b))),
+  // Listing only: a bare name would create a branch, unless `--list` or a filter makes it a pattern.
+  branch: (a) =>
+    (a.every((w) => flag(w)) || a.includes('--list') || a.includes('-l') || has(a, ...BRANCH_FILTERS)) &&
+    !a.some((w) => /^-[a-z]*[dDmMcCf]/.test(w) || ['--delete', '--move', '--copy', '--force', '--set-upstream-to', '--unset-upstream', '--edit-description'].some((b) => w.startsWith(b))),
   tag: (a) => a.length === 0 || a.every((w) => w === '-l' || w === '--list'),
   remote: (a) => a.length === 0 || a.every((w) => w === '-v' || w === '--verbose'),
   worktree: (a) => a[0] === 'list',
@@ -288,6 +454,12 @@ const GIT: Record<string, (args: string[]) => boolean> = {
 /** PowerShell's reading cmdlets (and their aliases). */
 const POWERSHELL = new Set(['get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-location', 'gl', 'test-path', 'resolve-path', 'get-item', 'gi', 'measure-object', 'select-object', 'select', 'sort-object', 'format-table', 'ft', 'format-list', 'fl', 'out-string']);
 
+/**
+ * `git checkout` options that switch to a revision or restore paths and nothing else: no new
+ * branch (`-b`), no `--force` throwing work away, no patch prompt, no paths read from a file.
+ */
+const CHECKOUT_FLAGS = new Set(['-q', '--quiet', '--', '--ours', '--theirs', '--detach', '--progress', '--no-progress']);
+
 /** Git subcommands that only change the worktree, its index or its branch. */
 const GIT_WRITES: Record<string, (args: string[]) => boolean> = {
   add: () => true,
@@ -296,8 +468,8 @@ const GIT_WRITES: Record<string, (args: string[]) => boolean> = {
   restore: () => true,
   rm: () => true,
   mv: () => true,
-  // Files only (`git checkout -- <path>`, `--ours`/`--theirs`), never a branch switch.
-  checkout: (a) => a.includes('--') || a.some((w) => w === '--ours' || w === '--theirs'),
+  // A revision or paths in the worktree (every operand must stay in it), with only CHECKOUT_FLAGS.
+  checkout: (a) => a.every((w) => !flag(w) || CHECKOUT_FLAGS.has(w)),
   // Finishing or dropping a rebase or merge already under way.
   rebase: (a) => a.length === 1 && ['--continue', '--abort', '--skip'].includes(a[0]!),
   // Merging a branch into this one; its operands are branch names, and hooks still run.
@@ -307,13 +479,29 @@ const GIT_WRITES: Record<string, (args: string[]) => boolean> = {
 /** Git writes whose operands are revisions or messages, not paths. */
 const GIT_NO_PATHS = new Set(['commit', 'rebase', 'merge', 'stash']);
 
-/** File commands whose every operand stays in the worktree. */
-const FILE_WRITES: Record<string, (args: string[]) => boolean> = {
-  mkdir: () => true,
-  touch: () => true,
-  cp: () => true,
-  mv: () => true,
+/** `rm` with only these options deletes files, never folders, and does not prompt. */
+const RM_FLAGS = /^(?:-[fv]+|--force|--verbose)$/;
+
+/** File commands, each giving its operands, or undefined for an option this file won't judge. */
+const FILE_WRITES: Record<string, (args: string[]) => string[] | undefined> = {
+  mkdir: (a) => a.filter((w) => !flag(w)),
+  touch: (a) => a.filter((w) => !flag(w)),
+  cp: (a) => a.filter((w) => !flag(w)),
+  mv: (a) => a.filter((w) => !flag(w)),
+  rm: (a) => {
+    const operands: string[] = [];
+    let dashes = false;
+    for (const w of a) {
+      if (!dashes && w === '--') dashes = true;
+      else if (!dashes && flag(w)) {
+        if (!RM_FLAGS.test(w)) return undefined;
+      } else operands.push(w);
+    }
+    return operands;
+  },
 };
+/** File commands that may only touch the worktree itself, not the scratch folders. */
+const WORKTREE_ONLY = new Set(['rm']);
 
 /**
  * Takes out the body of every heredoc whose delimiter is quoted (`<<'EOF'`, `<<"EOF"`): the shell
@@ -336,9 +524,15 @@ export function withoutQuotedHeredocs(line: string): string {
 
 /**
  * Whether one shell command (already split from its line on `&&`, `|`, `;`) only reads inside
- * `worktree`. `cd` into the worktree or a folder in it counts, since it changes nothing.
+ * `worktree` (its relative paths read from `where.cwd`). `cd` into the worktree or a folder in it
+ * counts, since it changes nothing.
  */
-export function isReadOnlyCommand(command: string, worktree: string, scratch: string[] = []): boolean {
+export function isReadOnlyCommand(command: string, worktree: string, scratch: string[] = [], where: ShellPlace = {}): boolean {
+  return readOnly(command, placeOf(worktree, scratch, where));
+}
+
+function readOnly(command: string, p: Place): boolean {
+  if (!standsInside(p)) return false;
   // `echo` only prints, variables (`$?`, `$x`) included: only a redirect or a substitution does more.
   if (/^echo(\s|$)/.test(command) && !/[<>`]|\$\(/.test(command)) return true;
   const all = words(command);
@@ -348,14 +542,15 @@ export function isReadOnlyCommand(command: string, worktree: string, scratch: st
   // Writing options that every program shares.
   if (args.some((a) => a.startsWith('--output'))) return false;
   const operands = (list: string[]) => list.filter((w) => !flag(w));
-  const ok = (w: string) => reaches(worktree, scratch, w);
-  // `cd` and `git -C` change where later commands run, so only the worktree counts there.
+  const ok = (w: string) => readable(p, w);
   const pathsInside = (list: string[]) => operands(list).every(ok);
 
-  // A bare `cd` goes to the home folder, and the commands after it would read there.
-  if (name === 'cd') return args.length === 1 && !flag(args[0]!) && staysInside(worktree, args[0]!);
+  // `cd` changes where later commands run, so only the worktree counts there. A bare `cd` goes to
+  // the home folder, and the commands after it would read there.
+  if (name === 'cd') return args.length === 1 && !flag(args[0]!) && args[0] !== '-' && inside(p, args[0]!);
   if (name === 'git') {
     let rest = args;
+    let at = p;
     // `git -C <folder>` in the worktree and `--no-pager`; any other option before the subcommand
     // (`-c`, `--exec-path`) is not judged.
     while (rest[0] === '--no-pager' || (rest[0] === '-C' && rest[1] !== undefined)) {
@@ -363,7 +558,9 @@ export function isReadOnlyCommand(command: string, worktree: string, scratch: st
         rest = rest.slice(1);
         continue;
       }
-      if (!staysInside(worktree, rest[1]!)) return false;
+      if (!inside(at, rest[1]!)) return false;
+      const folder = rest[1]!;
+      at = { ...at, cwds: at.cwds.map((c) => from(c, folder)) };
       rest = rest.slice(2);
     }
     // `--no-index` compares files anywhere on disk.
@@ -373,12 +570,12 @@ export function isReadOnlyCommand(command: string, worktree: string, scratch: st
     const check = GIT[sub];
     // A revision such as `main:.scratch/x.md` is not a path; paths after `--` are.
     const dashes = subArgs.indexOf('--');
-    return !!check && check(subArgs) && (dashes < 0 || pathsInside(subArgs.slice(dashes + 1)));
+    return !!check && check(subArgs) && (dashes < 0 || operands(subArgs.slice(dashes + 1)).every((w) => readable(at, w)));
   }
   if (POWERSHELL.has(name)) return pathsInside(args.filter((a) => !/^-[a-z]+$/i.test(a)));
   const check = PLAIN[name];
   if (!check || !check(args)) return false;
-  if (name === 'echo') return true;
+  if (name === 'echo' || NO_PATHS.has(name)) return true;
   if (name === 'sed') return !bareBackslash(command) && sedParts(args)!.every(ok);
   // grep takes a pattern first; only what follows names files.
   let files = ['grep', 'egrep', 'fgrep', 'rg'].includes(name) ? operands(args).slice(1) : operands(args);
@@ -386,7 +583,6 @@ export function isReadOnlyCommand(command: string, worktree: string, scratch: st
   if (name === 'jq') files = files.slice(1);
   // `[ -s file ]`: the brackets and `!` are not paths, nor are the words after `=`, `-eq`, ...
   if (name === 'test' || name === '[') files = files.filter((w) => w !== ']' && w !== '!' && w !== '=' && w !== '!=');
-  if (name === 'sleep' || name === 'date' || name === 'nproc' || name === 'true' || name === 'false') return true;
   return files.every(ok);
 }
 
@@ -395,10 +591,13 @@ const SAFE_ENV = /^(?:GIT_EDITOR=(?:true|:)|GIT_PAGER=cat|PAGER=cat|CI=(?:1|true
 /** Shell words that only shape a loop or a branch: nothing to judge on their own. */
 const SHAPE = new Set(['', 'do', 'done', 'then', 'else', 'fi', '{', '}', 'esac']);
 
+const count = (text: string, c: string) => text.split(c).length - 1;
+
 /**
  * One command with what only wraps it taken off: a subshell's or group's brackets left at its ends
  * by the split, `timeout N`, `time`, a background `&`, a loop's or branch's keyword (`do`, `until`,
- * `if`), PowerShell's `if ($?) { ... }`, and the harmless environment settings in SAFE_ENV.
+ * `if`), PowerShell's `if ($?) { ... }`, and the harmless environment settings in SAFE_ENV. A
+ * closing bracket that closes something in the command (`f=$(ls)`) stays.
  */
 export function unwrap(command: string): string {
   let c = command.trim();
@@ -407,13 +606,14 @@ export function unwrap(command: string): string {
     c = c
       .replace(/^if\s*\(\s*\$\?\s*\)\s*\{\s*/i, '')
       .replace(/^[({]\s*/, '')
-      .replace(/\s*[)}]$/, '')
       .replace(/\s+&$/, '')
       .replace(/^(?:do|then|else|elif|until|while|if|!)\s+/, '')
       .replace(/^time\s+/, '')
       .replace(/^timeout\s+(?:(?:-[sk]|--signal|--kill-after)[\s=]\S+\s+|--\w[\w-]*\s+)*\d+(?:\.\d+)?[smhd]?\s+/, '')
       .replace(SAFE_ENV, '')
       .trim();
+    const close = /\s*([)}])$/.exec(c);
+    if (close && count(c, close[1]!) > count(c, close[1] === ')' ? '(' : '{')) c = c.slice(0, close.index).trim();
   }
   return c;
 }
@@ -424,7 +624,7 @@ export function unwrap(command: string): string {
  * says whether a redirect wrote a file; `ok` is false when a target is outside the worktree and the
  * scratch folders, and the command is left for the Policy.
  */
-function withoutRedirects(command: string, worktree: string, scratch: string[]): { command: string; wrote: boolean; ok: boolean } {
+function withoutRedirects(command: string, p: Place): { command: string; wrote: boolean; ok: boolean } {
   let wrote = false;
   let ok = true;
   const out = command
@@ -432,7 +632,7 @@ function withoutRedirects(command: string, worktree: string, scratch: string[]):
     .replace(/(^|\s)(?:[12]|&)?>>?\s*("[^"$`]+"|'[^']+'|[^\s'"$`<>|&;()]+)/g, (whole, lead: string, target: string) => {
       const path = target.replace(/^["']|["']$/g, '');
       if (path === '/dev/null' || /^&[12]$/.test(path)) return lead;
-      if (!reaches(worktree, scratch, path)) {
+      if (!reaches(p, path) || touchesGit(path)) {
         ok = false;
         return whole;
       }
@@ -447,12 +647,12 @@ function withoutRedirects(command: string, worktree: string, scratch: string[]):
  * The command a Policy rule is matched against and the shell effect is judged on: unwrapped, with
  * redirects into the worktree or scratch taken out (see unwrap, withoutRedirects).
  */
-function reduce(command: string, worktree: string, scratch: string[]): { command: string; wrote: boolean } {
+function reduce(command: string, p: Place): { command: string; wrote: boolean } {
   let c = unwrap(command);
   let wrote = false;
   for (let prev = ''; prev !== c; ) {
     prev = c;
-    const r = withoutRedirects(c, worktree, scratch);
+    const r = withoutRedirects(c, p);
     if (!r.ok) return { command: c, wrote: false };
     wrote ||= r.wrote;
     c = unwrap(r.command);
@@ -461,65 +661,145 @@ function reduce(command: string, worktree: string, scratch: string[]): { command
 }
 
 /**
+ * A shell variable a sole `name=value` command sets: lower case (or one capital, `F=`), so it is
+ * never an environment setting a program reads (`PATH`, `GIT_DIR`), and none that zsh ties to one.
+ */
+const ASSIGNMENT = /^([a-z_][a-z0-9_]*|[A-Z])=([\s\S]*)$/;
+const SHELL_TIED = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'psvar']);
+
+function assignment(command: string): { name: string; value: string } | undefined {
+  const m = ASSIGNMENT.exec(command);
+  return m && !SHELL_TIED.has(m[1]!) ? { name: m[1]!, value: m[2]! } : undefined;
+}
+
+/** The commands of a word that is one whole `$(...)` substitution, bare or in double quotes. */
+function substitution(word: string): string | undefined {
+  const m = /^\$\(([\s\S]*)\)$/.exec(word) ?? /^"\$\(([\s\S]*)\)"$/.exec(word);
+  return m?.[1];
+}
+
+/** Whether every command of a substitution only reads. */
+function readsOnly(inner: string, p: Place): boolean {
+  const commands = splitCommands(inner);
+  return commands.length > 0 && commands.every((c) => effectOf(c, p) === 'read');
+}
+
+/** Whether a value is one plain word (or none): something a variable can be bound to. */
+const plainValue = (value: string) => {
+  const list = words(value);
+  return list && list.length <= 1 ? (list[0] ?? '') : undefined;
+};
+
+/**
  * What one shell command (already split from its line) does to `worktree`: `read` (it only reads
  * inside it; `cd` into it counts), `write` (it only changes files in it, its index or its branch),
- * or undefined when this file can't tell, so the Policy treats it as a command.
+ * or undefined when this file can't tell, so the Policy treats it as a command. Relative paths
+ * read from `where.cwd`.
  */
-export function worktreeEffect(command: string, worktree: string, scratch: string[] = []): 'read' | 'write' | undefined {
-  const { command: bare, wrote } = reduce(command, worktree, scratch);
-  // A loop's or branch's own keywords (`done`, `fi`) and a `for` header over plain words do nothing.
-  if (SHAPE.has(bare) || (/^for\s+\w+\s+in\b/.test(bare) && words(bare) !== undefined)) return 'read';
-  const effect = bareEffect(bare, worktree, scratch);
+export function worktreeEffect(command: string, worktree: string, scratch: string[] = [], where: ShellPlace = {}): 'read' | 'write' | undefined {
+  return effectOf(command, placeOf(worktree, scratch, where));
+}
+
+function effectOf(command: string, p: Place): 'read' | 'write' | undefined {
+  const { command: bare, wrote } = reduce(command, p);
+  // A loop's or branch's own keywords (`done`, `fi`) do nothing.
+  if (SHAPE.has(bare)) return 'read';
+  if (!standsInside(p)) return undefined;
+  // A `for` header over plain words, or over a substitution that only reads (`$(seq 1 55)`).
+  const loop = /^for\s+\w+\s+in\s+([\s\S]*)$/.exec(bare);
+  if (loop) {
+    const inner = substitution(loop[1]!.trim());
+    return words(loop[1]!) !== undefined || (inner !== undefined && readsOnly(inner, p)) ? 'read' : undefined;
+  }
+  // Setting a shell variable changes nothing on disk; a substitution in it must only read.
+  const set = assignment(bare);
+  if (set) {
+    const inner = substitution(set.value);
+    return plainValue(set.value) !== undefined || (inner !== undefined && readsOnly(inner, p)) ? 'read' : undefined;
+  }
+  const effect = bareEffect(bare, p);
   return effect && wrote ? 'write' : effect;
 }
 
-function bareEffect(command: string, worktree: string, scratch: string[]): 'read' | 'write' | undefined {
-  if (isReadOnlyCommand(command, worktree, scratch)) return 'read';
-  const ok = (w: string) => reaches(worktree, scratch, w);
+function bareEffect(command: string, p: Place): 'read' | 'write' | undefined {
+  if (readOnly(command, p)) return 'read';
   const all = words(command);
   if (!all?.length) return undefined;
   const [program, ...args] = all;
-  const operands = args.filter((w) => !flag(w));
   if (program === 'git') {
     const [sub, ...subArgs] = args;
     const check = sub ? GIT_WRITES[sub] : undefined;
     if (!check || !check(subArgs)) return undefined;
     // A commit's message, or a branch to merge, is not a path; every other operand is.
     if (GIT_NO_PATHS.has(sub!)) return 'write';
-    return subArgs.filter((w) => !flag(w)).every((w) => staysInside(worktree, w)) ? 'write' : undefined;
+    return subArgs.filter((w) => !flag(w)).every((w) => inside(p, w) && !touchesGit(w)) ? 'write' : undefined;
   }
   // `sed -i` with a plain script edits the files it names, and nothing else.
   if (program === 'sed' && sedInPlace(args) && !bareBackslash(command)) {
     const files = sedParts(args);
-    return files?.length && files.every(ok) ? 'write' : undefined;
+    return files?.length && files.every((w) => reaches(p, w) && !touchesGit(w)) ? 'write' : undefined;
   }
-  const check = FILE_WRITES[program!];
-  return check && check(args) && operands.length > 0 && operands.every(ok) ? 'write' : undefined;
+  const operands = FILE_WRITES[program!]?.(args);
+  const ok = (w: string) => (WORKTREE_ONLY.has(program!) ? inside(p, w) : reaches(p, w)) && !touchesGit(w);
+  return operands?.length && operands.every(ok) ? 'write' : undefined;
 }
 
 /**
- * A `for <name> in <words>` header's variable and its values, when every value is a plain word.
- * The loop's body is judged once for each value, so `cat "$f"` reads the files it lists.
+ * The shell variables a line sets, and their values: a `for <name> in <words>` header's words, or
+ * a sole `name=value`'s plain value. A variable set from anything else (`$(...)`) is null: unknown.
+ * A command using a known variable is judged once for each value, so `cat "$f"` reads the files it
+ * lists; one using an unknown variable is not judged.
  */
-function loopVariables(commands: string[]): Map<string, string[]> {
-  const vars = new Map<string, string[]>();
+function variables(commands: string[]): Map<string, string[] | null> {
+  const vars = new Map<string, string[] | null>();
+  const bind = (name: string, values: string[] | null) => {
+    const had = vars.get(name);
+    vars.set(name, values === null || had === null ? null : [...(had ?? []), ...values]);
+  };
   for (const c of commands) {
-    const m = /^for\s+(\w+)\s+in\s+(.*)$/.exec(unwrap(c));
-    const values = m ? words(m[2]!) : undefined;
-    if (m && values?.length) vars.set(m[1]!, values);
+    const bare = unwrap(c);
+    const loop = /^for\s+(\w+)\s+in\s+([\s\S]*)$/.exec(bare);
+    if (loop) {
+      const values = words(loop[2]!);
+      bind(loop[1]!, values?.length ? values : null);
+      continue;
+    }
+    const set = assignment(bare);
+    if (set) {
+      const value = plainValue(set.value);
+      bind(set.name, value === undefined ? null : [value]);
+    }
   }
   return vars;
 }
 
-/** The command once for each value of each loop variable it uses (`$f`, `"$f"`, `${f}`). */
-function expand(command: string, vars: Map<string, string[]>): string[] {
+/** The command once for each value of each known variable it uses (`$f`, `"$f"`, `${f}`). */
+function expand(command: string, vars: Map<string, string[] | null>): string[] {
   let out = [command];
   for (const [name, values] of vars) {
+    if (values === null) continue;
     const use = new RegExp(`"?\\$(?:\\{${name}\\}|${name}\\b)"?`, 'g');
     if (!use.test(command)) continue;
     out = out.flatMap((c) => values.map((v) => c.replace(use, `'${v.replace(/'/g, '')}'`)));
   }
   return out;
+}
+
+/** Commands that change the shell's folder. */
+const CHANGES_FOLDER = new Set(['cd', 'chdir', 'pushd', 'popd', 'set-location', 'sl', 'push-location', 'pop-location']);
+
+/**
+ * Where a command leaves the shell, from each of `cwds`, when it changes folder: `cd <path>`'s
+ * target, or UNKNOWN_FOLDER for a change this file can't follow. Undefined when it stays put.
+ */
+function folderAfter(command: string, cwds: string[]): string[] | undefined {
+  const bare = unwrap(command);
+  const program = /^\S+/.exec(bare)?.[0].toLowerCase();
+  if (!program || !CHANGES_FOLDER.has(program)) return undefined;
+  const all = words(bare);
+  // `cd -` goes back to the folder before, which this file does not track.
+  const target = program === 'cd' && all?.length === 2 && !flag(all[1]!) && all[1] !== '-' ? all[1]! : undefined;
+  return target === undefined ? [UNKNOWN_FOLDER] : cwds.map((c) => from(c, target));
 }
 
 const EXTERNAL_WRITES = [/^git\s+push\b/, /^gh\s+(pr|issue)\s+(create|comment|edit|close|merge|review)\b/, /^gh\s+release\s+create\b/, /^gh\s+api\b.*-X\s*(POST|PUT|PATCH|DELETE)/i];
@@ -531,12 +811,12 @@ const isKnown = (command: string, known: string[]) =>
  * One shell command's action. A worktree read or write counts as one, unless a rule names it as a
  * command (an Org rule that denies `cat secrets*` still holds).
  */
-function commandRequest(policy: EffectivePolicy, worktree: string, command: string, scratch: string[], judged = command): ShellRequest {
+function commandRequest(policy: EffectivePolicy, p: Place, command: string, judged = command): ShellRequest {
   // Rules match the command without its wrapping (`timeout 120 npm test` is `npm test`).
-  const bare = reduce(judged, worktree, scratch).command;
+  const bare = reduce(judged, p).command;
   const ruled = [judged, bare].map((c) => decide(policy, 'other_commands', c)).filter((d) => d !== policy.actions.other_commands);
   if (ruled.length) return { action: 'other_commands', detail: command, decision: strictestOf(...ruled) };
-  const effect = worktreeEffect(judged, worktree, scratch);
+  const effect = effectOf(judged, p);
   if (effect) {
     const action: PolicyAction = effect === 'read' ? 'worktree_read' : 'worktree_write';
     return { action, detail: command, decision: decide(policy, action, command) };
@@ -553,8 +833,11 @@ const strictestOf = (...decisions: PolicyDecision[]) => decisions.reduce((a, b) 
 
 const RANK: Record<PolicyDecision, number> = { allow: 0, ask: 1, deny: 2 };
 
-/** What a shell command line (Bash or PowerShell) run in `worktree` amounts to, and the Policy's word on it. */
-export function shellRequest(policy: EffectivePolicy, worktree: string, line: string, scratch: string[] = []): ShellRequest {
+/**
+ * What a shell command line (Bash or PowerShell) run in `worktree` amounts to, and the Policy's
+ * word on it. `where.cwd` is the folder the shell stands in, when that is not the worktree itself.
+ */
+export function shellRequest(policy: EffectivePolicy, worktree: string, line: string, scratch: string[] = [], where: ShellPlace = {}): ShellRequest {
   // Kiln never commits a Co-Authored-By trailer. The core refuses one in a Permission Ask; this
   // catches the commands the Policy allows without asking. (A `grep` for trailers is fine: only
   // lines that commit, merge or write to GitHub are refused.)
@@ -563,13 +846,27 @@ export function shellRequest(policy: EffectivePolicy, worktree: string, line: st
   }
   // A quoted heredoc's body is data; the command that opens it is judged.
   const stripped = withoutQuotedHeredocs(line);
-  const commands = splitCommands(stripped);
-  if (!commands.length) return { action: 'other_commands', detail: '', decision: decide(policy, 'other_commands', '') };
-  // The strictest of its commands decides, and is the one a Permission Ask names.
-  const vars = loopVariables(commands);
-  const strictest = commands
-    .flatMap((c) => expand(c, vars).map((judged) => commandRequest(policy, worktree, c, scratch, judged)))
-    .reduce((a, b) => (RANK[b.decision] > RANK[a.decision] ? b : a));
+  const parts = splitParts(stripped);
+  if (!parts.length) return { action: 'other_commands', detail: '', decision: decide(policy, 'other_commands', '') };
+  const vars = variables(parts.map((part) => part.text));
+  // A `cd` moves the commands after it only when they can't run without it: no `||`, no subshell
+  // or group, and nothing after it but `&&` and pipes. Otherwise either folder is possible.
+  const grouped = /[(){}]/.test(stripped.replace(/\$\([^()]*\)/g, ''));
+  const anyOr = parts.some((part) => part.sep === '||');
+  const base = placeOf(worktree, scratch, where);
+  let cwds = base.cwds;
+  const requests: ShellRequest[] = [];
+  parts.forEach((part, k) => {
+    const p = { ...base, cwds };
+    // The strictest of its commands decides, and is the one a Permission Ask names.
+    for (const judged of expand(part.text, vars)) requests.push(commandRequest(policy, p, part.text, judged));
+    const next = folderAfter(part.text, cwds);
+    if (!next) return;
+    const piped = part.sep === '|' || (k > 0 && parts[k - 1]!.sep === '|');
+    const sure = !grouped && !anyOr && !piped && parts.slice(k).every((q) => q.sep === '&&' || q.sep === '|' || q.sep === '');
+    cwds = sure ? next : [...new Set([...cwds, ...next])];
+  });
+  const strictest = requests.reduce((a, b) => (RANK[b.decision] > RANK[a.decision] ? b : a));
   // A person asked about `python - <<'EOF'` sees the script too.
   return strictest.decision === 'ask' && stripped !== line && /<<-?\s*['"]/.test(strictest.detail) ? { ...strictest, detail: line } : strictest;
 }

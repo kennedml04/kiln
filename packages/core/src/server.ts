@@ -35,6 +35,7 @@ import { answerKilnTools, calledTool, KILN_TOOLS_PATH, kilnToolsTarget } from '.
 import { createSessionManager } from './flow/session-manager.ts';
 import { createMovableKnowledgeStore } from './knowledge/markdown-store.ts';
 import { handleIdentityRoute } from './identity-routes.ts';
+import { createPermissionReview } from './policy/permission-review.ts';
 import { createPolicyEngine } from './policy/policy.ts';
 import { handlePolicyRoute } from './policy/routes.ts';
 import { createLoginAdapter } from './login.ts';
@@ -209,6 +210,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   const scheduler = createScheduler({ db, bus, work, sessions, grantedPools });
   // Roll-up (ticket 08): a Story ships with its Tickets, an Epic with its Stories.
   createRollUp({ bus, work, scheduler });
+  // After an Item merges, one Decision Ask proposes Policy rules for the Permission Asks it raised.
+  createPermissionReview({ bus, work, asks, policy, audit });
   // A Project Thread Session's accepted proposal is applied as the person who accepted it (ticket 13).
   asks.setProposalApplier(createProposalApplier({ work, scheduler, audit }));
   // Budgets: every turn is recorded and its caps checked; a reached Project or Budget cap holds starts.

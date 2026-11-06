@@ -74,6 +74,10 @@ _Avoid_: permissions, allowlist, settings
 A request for a person's input, raised by a Session or a Gate. It is typed (Decision, Permission, Review or Question), names its Item, says why it matters, carries a recommended answer, and is either blocking or non-blocking.
 _Avoid_: flag, alert, blocker, notification
 
+**Permission review**:
+The non-blocking Decision Ask Kiln raises after an Item merges, when the Permission Asks its Sessions raised were allowed every time and could be Policy rules. It lists the proposed rules (prefixes such as `git checkout -q *`, never a local folder), warns about any allowed command that kills processes by image name, and changes nothing until answered: Apply all, Apply some (by number) or Skip all. The rules chosen are one Policy commit.
+_Avoid_: allowlist review, permissions audit
+
 **Needs you**:
 The single inbox in the Shell that holds every open Ask, sorted by how much work each one blocks.
 _Avoid_: Your turn

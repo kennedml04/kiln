@@ -1,7 +1,7 @@
 // Needs you: every open Ask, the ones blocking the most work first, then the oldest.
 // The header link carries the live count on every page.
 import { useId, useMemo, useState, type FormEvent } from 'react';
-import { GATE_REJECT, chatOfThread, projectOfThread, type Ask, type Item, type Project, type Proposal } from '@kiln/widget-sdk';
+import { GATE_REJECT, PERMISSION_REVIEW_ANSWERS, chatOfThread, projectOfThread, type Ask, type Item, type Project, type Proposal } from '@kiln/widget-sdk';
 import { InboxIcon } from './Icons.tsx';
 import { chatPath, followLink, itemPath, projectThreadPath, usePath } from './router.ts';
 import { api, openAsks, useStore } from './store.ts';
@@ -83,14 +83,18 @@ function AskCard({ ask }: { ask: Ask }) {
   const [sending, setSending] = useState(false);
   // A Gate's Review Ask: rejecting it needs a comment saying what to change.
   const gate = ask.raisedBy.kind === 'gate' && ask.type === 'review';
-  const needsComment = gate && answer === GATE_REJECT && comment.trim() === '';
+  // A Permission review's "Apply some" names the rules to apply in its comment.
+  const review = ask.permissionReview;
+  const pickRules = review !== undefined && answer === PERMISSION_REVIEW_ANSWERS.some;
+  const withComment = gate || pickRules;
+  const needsComment = ((gate && answer === GATE_REJECT) || pickRules) && comment.trim() === '';
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSending(true);
     setError(undefined);
     try {
-      await api('POST', `/api/asks/${encodeURIComponent(ask.id)}/answer`, { answer, ...(gate && comment.trim() ? { comment } : {}) });
+      await api('POST', `/api/asks/${encodeURIComponent(ask.id)}/answer`, { answer, ...(withComment && comment.trim() ? { comment } : {}) });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -107,7 +111,25 @@ function AskCard({ ask }: { ask: Ask }) {
         <AskSubject ask={ask} />
       </p>
       <h3 id={headingId}>{ask.question}</h3>
-      <p className="ask-why">{ask.why}</p>
+      <p className="ask-why">{review ? ask.why.split('\n')[0] : ask.why}</p>
+      {review && (
+        <div className="ask-permission-review">
+          <ol aria-label="Proposed rules">
+            {review.rules.map((rule) => (
+              <li key={`${rule.action} ${rule.match}`}>
+                <code>{rule.match}</code> ({rule.asks === 1 ? '1 Ask' : `${rule.asks} Asks`}), e.g. {rule.examples.map((e) => `"${e}"`).join(', ')}
+              </li>
+            ))}
+          </ol>
+          {review.warnings.length > 0 && (
+            <ul aria-label="Warnings" className="ask-warnings">
+              {review.warnings.map((w) => (
+                <li key={w}>Warning: {w}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {ask.proposal ? (
         <p className="ask-proposal">Proposed: {describeProposal(ask.proposal, project, items)}</p>
       ) : null}
@@ -150,9 +172,9 @@ function AskCard({ ask }: { ask: Ask }) {
             Your answer <input value={answer} onChange={(e) => setAnswer(e.target.value)} />
           </label>
         )}
-        {gate && (
+        {withComment && (
           <label className="ask-comment">
-            Comment{answer === GATE_REJECT ? ' (needed to reject)' : ''}
+            {pickRules ? 'Rules to apply, by number (e.g. 1, 3)' : `Comment${answer === GATE_REJECT ? ' (needed to reject)' : ''}`}
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
           </label>
         )}

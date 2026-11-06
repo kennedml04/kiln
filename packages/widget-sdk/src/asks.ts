@@ -1,5 +1,6 @@
 // Asks and Needs you: a person's input, requested by a Session (through its Kiln tools) or a Widget.
 import type { Actor, KilnEvent } from './index.ts';
+import type { PolicyAction } from './policy.ts';
 import type { Proposal, ProposalOutcome } from './project-thread.ts';
 
 export type AskType = 'decision' | 'permission' | 'review' | 'question';
@@ -29,14 +30,39 @@ export interface WidgetRaiseAskRequest extends RaiseAskRequest {
 /**
  * `budget`: Kiln itself, when a Budget cap is reached and the work it covers is paused. `gate`: a
  * Gate raises its Item's Review Ask, and the Decision Ask when merging fails; `stage` is the Gate's Stage.
- * `runaway`: Kiln itself, when the stall rule pauses a Session.
+ * `runaway`: Kiln itself, when the stall rule pauses a Session. `permission_review`: Kiln itself,
+ * after an Item merges, proposing Policy rules for the Permission Asks its Sessions raised.
  */
 export type AskRaiser =
   | { kind: 'session'; sessionId: string }
   | { kind: 'widget'; widgetId: string }
   | { kind: 'budget'; budgetId: string }
   | { kind: 'gate'; stage: string }
-  | { kind: 'runaway'; sessionId: string };
+  | { kind: 'runaway'; sessionId: string }
+  | { kind: 'permission_review' };
+
+/** One rule a Permission review proposes, numbered from 1 in the order listed. */
+export interface ProposedRule {
+  action: PolicyAction;
+  /** The rule's match: a command, or a prefix ending in ` *`. */
+  match: string;
+  /** How many Permission Asks it would have answered. */
+  asks: number;
+  /** Some of the requests it covers, as they were asked. */
+  examples: string[];
+}
+
+/** What a Permission review's Decision Ask carries: the rules it proposes, and what to watch. */
+export interface PermissionReview {
+  rules: ProposedRule[];
+  /** Allowed commands that kill processes by image name (not by PID). */
+  warnings: string[];
+  /** The Permission Asks reviewed. */
+  askIds: string[];
+}
+
+/** A Permission review's answers. "Apply some" names the rules to apply by number in its comment ("1, 3"). */
+export const PERMISSION_REVIEW_ANSWERS = { all: 'Apply all', some: 'Apply some', skip: 'Skip all' } as const;
 
 /**
  * What a Gate's Review Ask shows: the artifact the Gate is about (a Ticket's review findings, a
@@ -89,6 +115,8 @@ export interface Ask extends RaiseAskRequest {
   answeredBy?: Actor;
   /** Set on the Permission Asks Kiln raises for an Agent's `permission_request`. */
   permission?: PermissionRequestRef;
+  /** Set on a Permission review's Decision Ask. */
+  permissionReview?: PermissionReview;
   /**
    * Set on a Project Thread Session's proposal (a Decision Ask to Accept or Decline, answered once).
    * Its `itemId` is then the Project Thread's id (`project:<projectId>`).

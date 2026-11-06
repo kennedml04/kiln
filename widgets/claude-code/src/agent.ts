@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { CanUseTool, HookCallback, Options, PermissionResult, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
 import { ORG_POLICY_DEFAULT } from '@kiln/widget-sdk';
-import { requestFor } from './permissions.ts';
+import { SCRATCH, ownFolderOf, requestFor, type ToolPlace } from './permissions.ts';
 import { buildSkillsPlugin, removeSessionConfig, sessionConfigDir } from './skills.ts';
 import { overageCredits, readingFromRateLimit, readingsFromUsage, type UsageReply } from './quota.ts';
 import { createUsageTracker } from './usage.ts';
@@ -184,9 +184,16 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
     const skills = buildSkillsPlugin(run.configDir, start.skills ?? []);
     const skillFolders = skills?.folders ?? [];
     const readRoots = start.readRoots ?? [];
+    // The hook knows the shell's folder and the Session's transcript; the permission callback that
+    // follows for the same tool call does not, so it looks them up by the tool call's id.
+    const places = new Map<string, ToolPlace>();
     const hook: HookCallback = async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return {};
-      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, skillFolders, readRoots);
+      const ownFolder = ownFolderOf(input.transcript_path, input.session_id);
+      const where: ToolPlace = { ...(input.cwd ? { cwd: input.cwd } : {}), ...(ownFolder ? { ownFolder } : {}) };
+      places.set(input.tool_use_id, where);
+      if (places.size > 200) places.delete(places.keys().next().value!);
+      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, skillFolders, readRoots, SCRATCH, where);
       const decision = request?.decision ?? 'allow';
       return {
         hookSpecificOutput: {
@@ -196,8 +203,8 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
         },
       };
     };
-    const canUseTool: CanUseTool = async (toolName, input, { signal }): Promise<PermissionResult> => {
-      const request = requestFor(policy, cwd, toolName, input, skillFolders, readRoots);
+    const canUseTool: CanUseTool = async (toolName, input, { signal, toolUseID }): Promise<PermissionResult> => {
+      const request = requestFor(policy, cwd, toolName, input, skillFolders, readRoots, SCRATCH, places.get(toolUseID) ?? {});
       const decision = request?.decision ?? 'allow';
       if (decision === 'allow') return { behavior: 'allow', updatedInput: input };
       if (decision === 'deny' || !request) return { behavior: 'deny', message: `Kiln's Policy denies ${request?.action}: ${request?.detail}` };

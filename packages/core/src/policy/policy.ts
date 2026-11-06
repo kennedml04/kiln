@@ -60,6 +60,12 @@ export interface PolicyEngine {
    * Returns the commit (null outside git). 409 when the file has uncommitted changes.
    */
   alwaysAllow(project: Project, rule: { action: PolicyAction; match: string }): string | null;
+  /**
+   * Writes these allow rules into the Project Policy file as one commit of that file alone, as
+   * Kiln, with `message` (a Permission review's answer). Returns the commit (null outside git).
+   * 409 when the file has uncommitted changes.
+   */
+  addRules(project: Project, rules: { action: PolicyAction; match: string }[], message: string): string | null;
   /** Writes the Project Policy template when a Project is registered, unless it has a Policy file already. */
   writeTemplate(project: Project): void;
 }
@@ -152,6 +158,16 @@ export function createPolicyEngine({ db, bus, sources }: PolicyDeps): PolicyEngi
     return { ...policy, rules: policy.rules.filter((r) => r.action !== 'external_writes') };
   };
 
+  const addRules: PolicyEngine['addRules'] = (project, added, message) => {
+    const layer = readFileLayer(project);
+    const fresh: PolicyRule[] = added.map(({ action, match }) => ({ action, match, decision: 'allow' }));
+    const kept = (layer.rules ?? []).filter((r) => !fresh.some((f) => f.action === r.action && f.match === r.match));
+    const next: PolicyLayer = { ...layer, rules: [...kept, ...fresh] };
+    const commit = commitOnly(project.path, PROJECT_POLICY_FILE, format(next), message);
+    for (const rule of fresh) bus.publish('project_policy.changed', { projectId: project.id, rule, commit });
+    return commit;
+  };
+
   return {
     org,
 
@@ -187,15 +203,11 @@ export function createPolicyEngine({ db, bus, sources }: PolicyDeps): PolicyEngi
     alwaysAllowOffered: (scope, action, detail) =>
       layerDecision(orgLayer(), action, detail) === 'allow' && layerDecision(stageLayer(scope), action, detail) === 'allow',
 
-    alwaysAllow(project, { action, match }) {
-      const layer = readFileLayer(project);
-      const rules = (layer.rules ?? []).filter((r) => !(r.action === action && r.match === match));
-      const rule: PolicyRule = { action, match, decision: 'allow' };
-      const next: PolicyLayer = { ...layer, rules: [...rules, rule] };
-      const commit = commitOnly(project.path, PROJECT_POLICY_FILE, format(next), `Kiln: always allow ${action} ${JSON.stringify(match)}`);
-      bus.publish('project_policy.changed', { projectId: project.id, rule, commit });
-      return commit;
+    alwaysAllow(project, rule) {
+      return addRules(project, [rule], `Kiln: always allow ${rule.action} ${JSON.stringify(rule.match)}`);
     },
+
+    addRules,
 
     writeTemplate(project) {
       if (existsSync(join(project.path, PROJECT_POLICY_FILE))) return;

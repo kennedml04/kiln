@@ -14,6 +14,7 @@ import {
   PROPOSAL_ANSWERS,
   PROPOSAL_KINDS,
   type PermissionRequestRef,
+  type PermissionReview,
   type Proposal,
   type ProposalOutcome,
   type RaiseAskRequest,
@@ -52,6 +53,7 @@ export interface AskService {
       permission?: PermissionRequestRef;
       review?: ReviewDetails;
       proposal?: unknown;
+      permissionReview?: PermissionReview;
     },
   ): Ask;
   /**
@@ -218,6 +220,7 @@ export function createAskService({ db, bus, work }: { db: DatabaseSync; bus: Eve
         raisedBy: request.raisedBy,
         ...(request.permission ? { permission: request.permission } : {}),
         ...(request.review ? { review: request.review } : {}),
+        ...(request.permissionReview ? { permissionReview: request.permissionReview } : {}),
       };
       const ask: Ask = {
         id: `ask-${randomUUID()}`,

@@ -10,14 +10,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CHAT_POLICY, ORG_POLICY_DEFAULT, WIDGET_ENV, effectivePolicy, type PolicyLayer } from '@kiln/widget-sdk';
 import { tempDir, type Cleanup } from '@kiln/testing';
-import type { FakeLogEntry, FakeStep } from './fake-sdk/scenario.ts';
+import type { FakeLogEntry, FakeScenario, FakeStep } from './fake-sdk/scenario.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Runs one Session on the Widget with `readRoots` and `policy`; resolves to what happened to each tool call. */
-async function runSession(t: Cleanup, steps: FakeStep[], readRoots: string[], policy: ReturnType<typeof effectivePolicy>, folder: string) {
+async function runSession(t: Cleanup, steps: FakeStep[], readRoots: string[], policy: ReturnType<typeof effectivePolicy>, folder: string, scenario: Partial<FakeScenario> = {}) {
   const scenarioFile = join(tempDir(t, 'kiln-fake-claude'), 'scenario.json');
-  writeFileSync(scenarioFile, JSON.stringify({ turns: [[...steps, { text: 'Done.' }]] }));
+  writeFileSync(scenarioFile, JSON.stringify({ ...scenario, turns: [[...steps, { text: 'Done.' }]] }));
   const dataDir = tempDir(t, 'kiln-widget-data');
   let finished: () => void = () => {};
   const done = new Promise<void>((resolveDone) => (finished = resolveDone));
@@ -128,5 +128,43 @@ test('a Monitor command is judged like a Bash command, and a Stage that denies o
     ['Monitor', 'ran'],
     ['Monitor', 'denied'],
     ['Read', 'denied'],
+  ]);
+});
+
+test("a Session reads its own Claude Code folder, and its shell commands are judged from the shell's folder", async (t) => {
+  const folder = tempDir(t, 'kiln-cwd-wt');
+  mkdirSync(join(folder, 'sub'));
+  writeFileSync(join(folder, 'a.txt'), 'a');
+  const projects = join(tempDir(t, 'kiln-claude-config'), 'projects', 'C--kiln-cwd-wt');
+  const own = join(projects, 'claude-s1');
+  mkdirSync(join(own, 'tool-results'), { recursive: true });
+  writeFileSync(join(own, 'tool-results', 't1.txt'), 'saved output');
+  mkdirSync(join(projects, 'claude-s2'));
+  writeFileSync(join(projects, 'claude-s2', 'x.txt'), 'another Session');
+  const policy = effectivePolicy([{ actions: { ...ORG_POLICY_DEFAULT, other_commands: 'deny', outside_worktree: 'deny' }, rules: [] }]);
+  const slashed = (p: string) => p.split('\\').join('/');
+  const outcomes = await runSession(
+    t,
+    [
+      { tool: 'Read', input: { file_path: join(own, 'tool-results', 't1.txt') } },
+      { tool: 'Bash', input: { command: `cat "${slashed(join(own, 'tool-results', 't1.txt'))}"` } },
+      { tool: 'Read', input: { file_path: join(projects, 'claude-s2', 'x.txt') } },
+      { tool: 'Write', input: { file_path: join(own, 'x.txt'), content: 'x' } },
+      // The shell stands in `sub`: `..` is the worktree, `../..` is not.
+      { tool: 'Bash', input: { command: 'wc -l ../a.txt' } },
+      { tool: 'Bash', input: { command: 'wc -l ../../a.txt' } },
+    ],
+    [],
+    policy,
+    folder,
+    { sessionId: 'claude-s1', transcriptPath: join(projects, 'claude-s1.jsonl'), hookCwd: join(folder, 'sub') },
+  );
+  assert.deepEqual(outcomes, [
+    ['Read', 'ran'],
+    ['Bash', 'ran'],
+    ['Read', 'denied'],
+    ['Write', 'denied'],
+    ['Bash', 'ran'],
+    ['Bash', 'denied'],
   ]);
 });

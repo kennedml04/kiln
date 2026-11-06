@@ -123,7 +123,7 @@ test('anything else still asks under the Project template', () => {
     'git -c core.pager=evil log',
     'git branch new-branch',
     'git branch -D old',
-    'git checkout main',
+    'git checkout -b main',
     'git commit --no-verify -m x',
     'git push',
     "cat > /etc/edit.mjs <<'EOF'",
@@ -138,9 +138,9 @@ test('anything else still asks under the Project template', () => {
     'FOO=1 git log',
     'git rebase main',
     'git merge -s ours main',
-    'git checkout packages/x.ts',
+    'git checkout -f packages/x.ts',
     'pkill -f archive.test',
-    'f=$(ls -t .scratch/*/spec.md)',
+    'f=$(rm -rf packages)',
     'tail -f log.txt',
     'grep "$HOME" notes.md',
     'grep "${x}" notes.md',
@@ -209,6 +209,176 @@ test('wrappers, loops and branches are judged by the commands inside them', () =
   ]) {
     assert.notEqual(scratchBash(command, rules)?.decision, 'allow', command);
   }
+});
+
+test('deleting files in the worktree is a write; folders, .git and anything outside it still ask', () => {
+  for (const command of ['rm packages/core/test/old.test.ts', 'rm -f a.ts b.ts', 'rm -fv -- -odd.ts', 'rm .scratch/x/*.md', 'rm packages/x/../y.ts']) {
+    assert.equal(worktreeEffect(command, worktree), 'write', command);
+    assert.equal(bash(command)?.decision, 'allow', command);
+  }
+  for (const command of [
+    'rm -rf packages',
+    'rm -r .scratch',
+    'rm -i x.ts',
+    'rm',
+    `rm ${outside}`,
+    'rm ../other/x.ts',
+    'rm packages/../../x.ts',
+    'rm .git',
+    'rm sub/.git',
+    'rm .gi?',
+    'rm .*',
+    'rm .[g]it',
+    'rm /tmp/x.log',
+    'rm $f',
+  ]) {
+    assert.equal(worktreeEffect(command, worktree, [tmp, '/tmp']), undefined, command);
+    assert.notEqual(scratchBash(command)?.decision, 'allow', command);
+  }
+});
+
+test('git checkout of revisions and paths inside the worktree is a write', () => {
+  for (const command of [
+    'git checkout main',
+    'git checkout -q HEAD~1',
+    'git checkout -q kiln/ticket/board-reset/02',
+    'git checkout package.json',
+    'git checkout packages/core/test/threads.test.ts',
+    'git checkout -- package.json',
+    'git checkout --theirs -- .kiln/policy.json',
+    'git checkout --detach main',
+    'git checkout .',
+  ]) {
+    assert.equal(worktreeEffect(command, worktree), 'write', command);
+    assert.equal(bash(command)?.decision, 'allow', command);
+  }
+  for (const command of [
+    'git checkout -b new',
+    'git checkout -B new',
+    'git checkout -f main',
+    'git checkout --force main',
+    'git checkout -p',
+    'git checkout --orphan x',
+    'git checkout --pathspec-from-file=list.txt',
+    'git checkout -qf main',
+    `git checkout -- ${outside}`,
+    'git checkout ../other/x.ts',
+    'git checkout $branch',
+  ]) {
+    assert.equal(worktreeEffect(command, worktree), undefined, command);
+    assert.notEqual(bash(command)?.decision, 'allow', command);
+  }
+});
+
+test('git branch with a listing filter only lists', () => {
+  for (const command of ['git branch --contains 3945fc9', 'git branch -a --merged main', 'git branch --no-merged', 'git branch --points-at HEAD']) {
+    assert.equal(worktreeEffect(command, worktree), 'read', command);
+  }
+  assert.equal(worktreeEffect('git branch --contains x -D y', worktree), undefined);
+});
+
+const sub = `${worktree}\\packages\\core\\src`;
+const bashIn = (cwd: string, command: string, policy = projectPolicy) => shellRequest(policy, worktree, command, [tmp, '/tmp'], { cwd });
+
+test('relative paths are judged from the folder the command runs in', () => {
+  for (const command of ['grep -rn "x" ../../widget-sdk/src/*.ts', 'wc -l ../*', 'cat ../../../README.md', 'ls', 'git add ../test/x.test.ts', 'rm ../test/old.test.ts']) {
+    assert.notEqual(worktreeEffect(command, worktree, [], { cwd: sub }), undefined, command);
+    assert.equal(bashIn(sub, command)?.decision, 'allow', command);
+  }
+  for (const command of ['cat ../../../../secret.txt', 'rm ../../../../x.ts', 'cd ../../../..']) {
+    assert.equal(worktreeEffect(command, worktree, [], { cwd: sub }), undefined, command);
+    assert.notEqual(bashIn(sub, command)?.decision, 'allow', command);
+  }
+  // A Session whose shell already stands outside the worktree is not judged as in it.
+  const elsewhere = 'C:\\kiln-wt\\elsewhere';
+  for (const command of ['ls', 'git add -A', 'git log -3', 'cat notes.txt']) {
+    assert.notEqual(bashIn(elsewhere, command)?.decision, 'allow', command);
+  }
+});
+
+test('a cd changes the folder the commands after it are judged from', () => {
+  assert.equal(bash('cd packages && cat ../README.md')?.decision, 'allow');
+  assert.equal(bash('cd packages/core && grep -n x ../widget-sdk/src/policy.ts')?.decision, 'allow');
+  // From the root this would be the worktree's own README; from packages it is outside.
+  assert.notEqual(bash('cd packages && cat ../../kiln-wt/story-x/x')?.decision, 'allow');
+  // A cd that might not have run (`;`, `||`, a subshell) leaves both folders possible.
+  assert.notEqual(bash('cd packages; cat ../README.md')?.decision, 'allow');
+  assert.notEqual(bash('cd packages && ls || cat ../README.md')?.decision, 'allow');
+  assert.notEqual(bash('(cd packages && ls) && cat ../README.md')?.decision, 'allow');
+  assert.notEqual(bash('ls | cd packages && cat ../README.md')?.decision, 'allow');
+  // A cd a rule allows to a folder outside the worktree: what follows is outside too.
+  const cdAnywhere = effectivePolicy([
+    { actions: ORG_POLICY_DEFAULT, rules: [] },
+    { ...projectPolicyTemplate(false), rules: [{ action: 'other_commands', match: 'cd *', decision: 'allow' }] },
+  ]);
+  for (const command of ['cd /c/kiln-wt/elsewhere && git add -A', 'cd ../.. && ls', 'cd "$X" && git add -A', 'cd && ls', 'cd - && git commit -m x']) {
+    assert.notEqual(bash(command, cdAnywhere)?.decision, 'allow', command);
+  }
+  assert.equal(bash('cd /c/kiln-wt/story-x/packages && ls', cdAnywhere)?.decision, 'allow');
+});
+
+test('a plain assignment, and a substitution that only reads, set a variable', () => {
+  const rules = effectivePolicy([
+    { actions: ORG_POLICY_DEFAULT, rules: [] },
+    { ...projectPolicyTemplate(false), rules: [{ action: 'other_commands', match: 'pgrep *', decision: 'allow' }] },
+  ]);
+  for (const command of [
+    'f=packages/core/src/db.ts',
+    `f="${tmp}/claude/x/tasks/b4.output"`,
+    'F=x',
+    'n=',
+    'f=$(ls -t .scratch/*/spec.md)',
+    'n="$(git rev-parse HEAD)"',
+    'for i in $(seq 1 55); do echo $i; done',
+    'seq 1 57',
+    `f="${tmp}/claude/x/tasks/b4.output"; tail -5 "$f"`,
+    'f=packages/x.ts && grep -n foo $f',
+    'while pgrep -f node-test > /dev/null; do sleep 5; done',
+  ]) {
+    assert.equal(scratchBash(command, rules)?.decision, 'allow', command);
+  }
+  for (const command of [
+    'PATH=/c/evil',
+    'GIT_DIR=../x',
+    'path=/c/evil',
+    'x=1 git push',
+    'f=$(rm -rf packages)',
+    'f=$(ls ../..)',
+    `f=${outside} && cat $f`,
+    'f=$(ls) && cat $f',
+    'cat $(ls)',
+    'for f in $(ls); do rm "$f"; done',
+    'echo $(rm -rf packages)',
+  ]) {
+    assert.notEqual(scratchBash(command, rules)?.decision, 'allow', command);
+  }
+});
+
+test('sed scripts that only append, insert, change, transliterate or branch are plain', () => {
+  for (const command of [
+    `sed -i "s|\\"GET\\"|'GET'|" packages/x.ts`,
+    `sed -i '/^import/a import { x } from "y";' a.ts`,
+    "sed -i '3i // header' a.ts",
+    "sed -i '5c replaced line' a.ts",
+    "sed -i '1a\\\nfirst\\\nsecond' a.ts",
+    "sed -i 'y/abc/xyz/' a.ts",
+    "sed -i '/start/,/end/{/x/d}' a.ts",
+    "sed -i '/start/,+2d; 1~2s/a/b/' a.ts",
+    "sed -i ':a;N;$!ba;s/\\n/ /g' a.ts",
+  ]) {
+    assert.equal(worktreeEffect(command, worktree), 'write', command);
+  }
+  for (const command of ["sed -i '/x/{r /etc/passwd\n}' a.ts", "sed -i '/x/W out' a.ts", "sed -i '/x/{s/a/b/w out\n}' a.ts", "sed -i '1a text' ../x.ts"]) {
+    assert.equal(worktreeEffect(command, worktree), undefined, command);
+  }
+});
+
+test("the Session's own read roots are read, not written", () => {
+  const own = 'E:/claude-home/projects/C--kiln-wt-story-x/s-1';
+  const where = { readRoots: [own] };
+  assert.equal(shellRequest(projectPolicy, worktree, `cat "${own}/tool-results/t1.txt"`, [], where)?.decision, 'allow');
+  assert.notEqual(shellRequest(projectPolicy, worktree, `echo x > "${own}/x.txt"`, [], where)?.decision, 'allow');
+  assert.notEqual(shellRequest(projectPolicy, worktree, `rm "${own}/x.txt"`, [], where)?.decision, 'allow');
 });
 
 test('the strictest command of a line decides', () => {
