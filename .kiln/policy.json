@@ -1454,6 +1454,11 @@
       "action": "other_commands",
       "match": "sed -i 's|^  layerDecision,$|  CHAT_POLICY,\\n  layerDecision,|' policy/policy.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "import fs from 'node:fs'",
+      "decision": "allow"
     }
   ]
 }
