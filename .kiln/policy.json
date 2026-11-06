@@ -719,6 +719,11 @@
       "action": "other_commands",
       "match": "Get-ChildItem widgets/claude-code/src",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "python3 - <<'EOF' 2>/dev/null",
+      "decision": "allow"
     }
   ]
 }
