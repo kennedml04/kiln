@@ -1614,6 +1614,11 @@
       "action": "other_commands",
       "match": "grep -n \"defaultRoles\\|checkRoles\" -r packages --include=*.ts --include=*.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 95,125p packages/core/src/setup/setup.ts",
+      "decision": "allow"
     }
   ]
 }
