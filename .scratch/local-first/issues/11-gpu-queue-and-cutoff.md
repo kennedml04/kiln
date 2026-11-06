@@ -4,9 +4,9 @@
 
 **Blocked by:** 07, 08
 
-**Status:** blocked
+**Status:** done
 
-**Stage:** review
+**Stage:** shipped
 
 > Blocked 2026-11-05: 08 (escalation) has no code on any branch. 03 (local Sessions) and 07 (role modes, picker) have code on their branches but are not merged to master. The GPU queue mostly exists already (`LOCAL_POOL` is the same pool as the GPU monitor's `gpu`); box 1 needs 03 plus a "waiting for the GPU" card reason.
 
