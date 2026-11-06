@@ -974,6 +974,11 @@
       "action": "other_commands",
       "match": "git diff",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"wait\",\"timeout_ms\":900000,\"command\":\"sleep 840\"}",
+      "decision": "allow"
     }
   ]
 }
