@@ -1304,6 +1304,11 @@
       "action": "other_commands",
       "match": "sed -n 240,300p packages/core/src/budgets/usage.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/core/src/flow/kiln-tools.ts",
+      "decision": "allow"
     }
   ]
 }
