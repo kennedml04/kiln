@@ -1524,6 +1524,11 @@
       "action": "other_commands",
       "match": "grep -n \"stop-all\\|stopAll\\|stop_all\" packages/core/src/flow/scheduler-routes.ts packages/core/test/*.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > packages/core/test/scratch-chat.test.ts <<'EOF'",
+      "decision": "allow"
     }
   ]
 }
