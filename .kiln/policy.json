@@ -1549,6 +1549,11 @@
       "action": "other_commands",
       "match": "sed -i \"0,/{ do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'finish'/s//{ do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'finish'/\" packages/core/test/scratch-chat.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"Project Thread\" GLOSSARY.md",
+      "decision": "allow"
     }
   ]
 }
