@@ -1594,6 +1594,11 @@
       "action": "other_commands",
       "match": "git commit -q -m \"Scratch chat subject, chats table and attended chat Sessions\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff --stat kiln-v1 kiln/ticket/scratch-chat/01",
+      "decision": "allow"
     }
   ]
 }
