@@ -218,6 +218,27 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY,
      record TEXT NOT NULL
    )`,
+  // Results (local-first Ticket 07): every local Stage attempt against its variant, and the pins.
+  `CREATE TABLE variant_results (
+     id TEXT PRIMARY KEY,
+     variant_id TEXT NOT NULL,
+     role TEXT NOT NULL,
+     size TEXT NOT NULL,
+     passed INTEGER NOT NULL,
+     reason TEXT,
+     wall_ms INTEGER NOT NULL,
+     tokens_per_second REAL,
+     item_id TEXT,
+     session_id TEXT,
+     diff_lines INTEGER,
+     files INTEGER,
+     at TEXT NOT NULL,
+     seq INTEGER NOT NULL
+   )`,
+  `CREATE TABLE variant_pins (
+     scope TEXT PRIMARY KEY,
+     variant_id TEXT NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

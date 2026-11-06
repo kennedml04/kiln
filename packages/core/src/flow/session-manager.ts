@@ -34,6 +34,8 @@ import type {
   SessionUsage,
   Stage,
   ThreadEntry,
+  TicketSize,
+  Variant,
   ThreadMessageResult,
 } from '@kiln/widget-sdk';
 import type { AskService } from '../asks/ask-service.ts';
@@ -44,9 +46,10 @@ import { WidgetHostError, type WidgetHost } from '../widget-host.ts';
 import { WorkError, type Work } from '../work/work.ts';
 import { readProjectFiles } from '../work/project-files.ts';
 import { moduleSessionKit } from '../work/skills.ts';
-import { checkExit, exitFeedback, grillPathOf, specPathOf } from './exit-checker.ts';
+import { checkExit, exitFeedback, grillPathOf, readProjectSettings, specPathOf } from './exit-checker.ts';
 import { findingsPathOf, type Gates } from './gates.ts';
 import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
+import { modeOf, ticketSize, type Routing } from '../local/routing.ts';
 import type { KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
 import { digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
 
@@ -135,6 +138,8 @@ const RELEASE_WAIT_MS = 10_000;
 
 interface Live {
   info: SessionInfo;
+  /** Set for a Session on a local variant: its result is recorded when it ends. */
+  local?: { variantId: string; size: TicketSize; startedMs: number; failure?: string; recorded?: boolean };
   /** The Session's Kiln tools credential (in memory only: it dies with the Session or the core). */
   toolsToken: string;
   /** The branch the worktree started from. */
@@ -275,6 +280,8 @@ export interface SessionManagerDeps {
   stageModel?: (projectId: string, kind: string, stage: string) => string | undefined;
   /** The id of the Budget a model draws from, if any: it decides which Agent offers a Stage's model. */
   budgetOf?: (model: string) => string | undefined;
+  /** Local-first routing (Ticket 07), read when a Session starts. Unset: every Stage runs on its own model. */
+  local?: () => { routing: Routing; variants: () => Variant[]; /** Whether local models are set up at all (a server is configured). */ inUse: () => boolean };
   /** Holds Items at Gate Stages once their Exit is met, and seeds rework Sessions. */
   gates?: Gates;
   /** The `toolPaths` Setting, read each time a module check or MCP server names a tool. */
@@ -297,6 +304,7 @@ export function createSessionManager({
   stageModel,
   budgetOf,
   gates,
+  local,
   toolPaths = () => undefined,
 }: SessionManagerDeps): SessionManager {
   const live = new Map<string, Live>();
@@ -370,6 +378,35 @@ export function createSessionManager({
   };
 
   /**
+   * Where the Stage's Session runs (Ticket 07): by its role's mode, a local variant the picker names,
+   * or the Stage's own model, with the words the Thread shows. A local-only Project or install, or
+   * a local-only role, never runs on cloud: with no variant to run it, the start is refused.
+   */
+  const planLocal = (item: Item, stage: Stage, project: Project): { stage: Stage; attempt?: Live['local']; note?: string } => {
+    if (!local) return { stage };
+    const { routing, variants, inUse } = local();
+    const mode = readProjectSettings(project.path).localOnly || routing.localOnlyInstall() ? 'local-only' : modeOf(stage);
+    if (mode === 'cloud-only') return { stage };
+    const role = stage.role!;
+    const estimate = item.path ? /\*\*Estimate:\*\*\s*(\w+)/i.exec(readIfExists(join(project.path, item.path)) ?? '')?.[1] : undefined;
+    const size = ticketSize(routing.results().filter((r) => r.itemId === item.id), estimate);
+    const pick = routing.pick({ role, size, itemId: item.id, variants: variants().map((v) => ({ id: v.id, name: v.name })) });
+    if (pick) {
+      const variant = variants().find((v) => v.id === pick.variant.id)!;
+      return {
+        stage: { ...stage, model: variant.serverModelId },
+        attempt: { variantId: variant.id, size, startedMs: Date.now() },
+        note: `Running locally on ${variant.name} (${size} Ticket): ${pick.reason}`,
+      };
+    }
+    const why = variants().length ? `every enabled variant is cut off for ${size} Tickets` : 'it has no enabled local variant';
+    if (mode === 'local-only') throw new WorkError(409, `${item.title}'s ${stage.name} Stage is local only, and ${why}, so it cannot start: no Session runs on a cloud model there`);
+    // An install that has not set up local models gets no note: local first is then just cloud.
+    if (!inUse() && !variants().length) return { stage };
+    return { stage, note: `The ${role} role is local first, but ${why}: running on cloud (${stage.model ?? "the Agent's model"})` };
+  };
+
+  /**
    * The Item's own record (with the grill record and spec beside it, for a Story), its parent's,
    * and the parent's spec, read from where the Session works.
    */
@@ -437,6 +474,7 @@ export function createSessionManager({
     clearTimeout(session.idleTimer);
     if (!ACTIVE.has(info.state)) return;
     bus.publish('session.message', { ...ref(info), from: 'kiln', text: `Kiln stopped this Session: ${why}` });
+    if (session.local) session.local.failure = why;
     stopAgent(info);
     await end(session, 'stopped');
   };
@@ -506,11 +544,45 @@ export function createSessionManager({
     return { decided: [], changed, open: [`The Session ended (${info.state}) without writing a Digest; check its Thread and branch.`] };
   };
 
+  /** A local Session's result goes against its variant: a pass once its Exit is met, a fail when it errors or Kiln gave up on it. */
+  const recordLocalResult = async (session: Live) => {
+    const { info, local: attempt } = session;
+    if (!attempt || attempt.recorded || !local) return;
+    const failed = info.state === 'error' || (info.state === 'stopped' && attempt.failure !== undefined);
+    if (info.state !== 'finished' && !failed) return;
+    attempt.recorded = true;
+    const wallMs = Math.max(1, Date.parse(info.endedAt ?? new Date().toISOString()) - attempt.startedMs);
+    let diff: { diffLines: number; files: number } | undefined;
+    if (info.worktree && session.base) {
+      try {
+        const rows = (await git(info.worktree, 'diff', '--numstat', session.base)).split('\n').map((row) => row.trim()).filter(Boolean);
+        const count = (row: string) => row.split(/\s+/).slice(0, 2).reduce((n, c) => n + (Number(c) || 0), 0);
+        diff = { files: rows.length, diffLines: rows.reduce((n, row) => n + count(row), 0) };
+      } catch {
+        // No diff to read: the size history just lacks this attempt.
+      }
+    }
+    const output = info.usage?.outputTokens;
+    local().routing.record({
+      variantId: attempt.variantId,
+      role: info.role,
+      size: attempt.size,
+      passed: !failed,
+      ...(failed ? { reason: attempt.failure ?? (info.state === 'error' ? 'the Session ended in an error' : 'failed') } : {}),
+      wallMs,
+      ...(output ? { tokensPerSecond: Math.round((output / (wallMs / 1000)) * 10) / 10 } : {}),
+      itemId: info.itemId,
+      sessionId: info.id,
+      ...(diff ?? {}),
+    });
+  };
+
   /** Every Session end: save the state, then make sure a Digest is left behind. */
   const end = async (session: Live, state: SessionState, note?: string) => {
     const { info } = session;
     Object.assign(info, { state, endedAt: new Date().toISOString() });
     save(info);
+    await recordLocalResult(session);
     if (!session.digested) {
       const digest = await fallbackDigest(session);
       if (note) digest.open.unshift(note);
@@ -785,7 +857,8 @@ export function createSessionManager({
       if ([...live.values()].some((s) => s.info.itemId === itemId && ACTIVE.has(s.info.state))) {
         throw new WorkError(409, `${item.title} already has a running Session`);
       }
-      const { widgetId, agentId, model } = pickAgent(stage);
+      const planned = planLocal(item, stage, project);
+      const { widgetId, agentId, model } = pickAgent(planned.stage);
       // Never the Agent tool's own default: the Budget guard holds such an Item before it gets here.
       if (!model) throw new WorkError(409, `${item.title}'s ${stage.name} Stage names no model, and neither does its Agent`);
       const sessionPolicy = policy.effective({ project, kind: item.kind, stage: stage.id });
@@ -818,9 +891,10 @@ export function createSessionManager({
       };
       insert.run(info.id, itemId, project.id, stage.id, stage.role, agentId, widgetId, model ?? null, worktree, branch, base, 'running', null, info.startedAt, null);
       const toolsToken = randomBytes(32).toString('base64url');
-      live.set(info.id, { info, toolsToken, base, queue: Promise.resolve(), digested: false, interrupted: false, interruptsSent: 0 });
+      live.set(info.id, { info, toolsToken, base, queue: Promise.resolve(), digested: false, interrupted: false, interruptsSent: 0, ...(planned.attempt ? { local: planned.attempt } : {}) });
       work.setRun(itemId, toRun(info));
       bus.publish('session.started', { ...ref(info), session: info });
+      if (planned.note) bus.publish('session.message', { ...ref(info), from: 'kiln', text: planned.note });
       widgets.sendCommand(widgetId, {
         type: 'agent.start_session',
         agentId,

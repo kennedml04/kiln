@@ -2,6 +2,7 @@
 import type { KilnEvent } from './index.ts';
 import type { ExitCheckId, ItemRun, ProjectSettings, TrackerId } from './flow.ts';
 import type { PolicyLayer } from './policy.ts';
+import type { RoleMode } from './variants.ts';
 
 /** One step of a Workflow for one Item kind. */
 export interface Stage {
@@ -16,6 +17,8 @@ export interface Stage {
   model?: string;
   /** The model offered instead when `model`'s Budget runs low (e.g. at the Fable reserve). */
   fallbackModel?: string;
+  /** Local first, cloud only or local only. Unset: local first for the implementer and reviewer, else cloud only. */
+  mode?: RoleMode;
   /** Whether Sessions in this Stage get their own git worktree and branch. */
   worktree?: boolean;
   /** The named checks that make up this Stage's Exit, all of which must be met. */

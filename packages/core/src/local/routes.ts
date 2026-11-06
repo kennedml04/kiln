@@ -20,6 +20,7 @@ import type { DisableVariantRequest } from '@kiln/widget-sdk';
 import { WorkError } from '../work/work.ts';
 import type { RouteHelpers } from '../work/routes.ts';
 import type { LocalModels } from './models.ts';
+import type { Routing } from './routing.ts';
 import type { VariantService } from './variants.ts';
 
 const VARIANT = /^\/api\/variants\/([^/]+)$/;
@@ -83,6 +84,26 @@ export async function handleVariantRoute(
       if (body.reason !== undefined && typeof body.reason !== 'string') throw new WorkError(400, '"reason" must be text');
       return (sendJson(res, 200, await variants.disable(id, body.reason)), true);
     }
+    return false;
+  } catch (err) {
+    if (err instanceof WorkError) return (sendJson(res, err.status, { error: err.message }), true);
+    throw err;
+  }
+}
+
+/** Answers the request if it is a routing route (results, pins, the install-wide switch); false otherwise. */
+export async function handleRoutingRoute(
+  routing: Routing,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  { sendJson, readJson }: RouteHelpers,
+): Promise<boolean> {
+  const route = `${req.method} ${url.pathname}`;
+  try {
+    if (route === 'GET /api/local-routing') return (sendJson(res, 200, routing.routing()), true);
+    if (route === 'PUT /api/local-routing') return (sendJson(res, 200, routing.update(await readJson(req))), true);
+    if (route === 'GET /api/variant-results') return (sendJson(res, 200, routing.results(url.searchParams.get('variantId') ?? undefined)), true);
     return false;
   } catch (err) {
     if (err instanceof WorkError) return (sendJson(res, err.status, { error: err.message }), true);

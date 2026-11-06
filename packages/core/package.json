@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./effective-workflow": "./src/work/effective-workflow.ts",
     "./local-models": "./src/local-models/index.ts",
+    "./variant-picker": "./src/local/variant-picker.ts",
     "./modules": "./src/work/modules.ts"
   },
   "dependencies": {

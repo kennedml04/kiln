@@ -63,7 +63,8 @@ import { createDemo } from './demo/demo.ts';
 import { handleDemoRoute } from './demo/routes.ts';
 import { createRunawayGuard, handleRunawayRoute } from './budgets/runaway.ts';
 import { createVariantService } from './local/variants.ts';
-import { handleLocalModelRoute, handleVariantRoute } from './local/routes.ts';
+import { handleLocalModelRoute, handleRoutingRoute, handleVariantRoute } from './local/routes.ts';
+import { createRouting } from './local/routing.ts';
 import { createLocalModels } from './local/models.ts';
 
 /** Where the built Shell lives in the monorepo (`npm run build` writes it). */
@@ -179,6 +180,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     kilnToolsUrl: () => `http://127.0.0.1:${port}${KILN_TOOLS_PATH}`,
     // `setup` is made below; this is read only when a Session starts or its Exit is checked.
     toolPaths: () => setup.settings().toolPaths,
+    // Made below; read only when a Session starts.
+    local: () => ({ routing, variants: () => variants.enabled(), inUse: () => variants.settings().configPath !== undefined }),
   });
   work.onUnregister((project) => sessions.removeProject(project, `the Project "${project.name}" was unregistered`));
   const panels = createWidgetPanels({ bus, host: widgets, widgets: () => installs.list() });
@@ -205,6 +208,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   const runaway = createRunawayGuard({ db, bus, work, sessions, asks, enqueue: (itemId) => scheduler.enqueue(itemId) });
   // Variants and the local server (local-first Ticket 04).
   const variants = createVariantService({ db, bus, clock });
+  const routing = createRouting({ db, now: () => clock.now() });
   // Add a model (local-first Ticket 06): GGUF facts and recommendations, Hugging Face downloads.
   const localModels = createLocalModels({
     clock,
@@ -518,6 +522,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleDemoRoute(demo, req, res, url, { sendJson, readJson, caller: demoCaller })) return;
       if (await handleRunawayRoute(runaway, req, res, url, { sendJson, readJson })) return;
       if (await handleVariantRoute(variants, req, res, url, { sendJson, readJson })) return;
+      if (await handleRoutingRoute(routing, req, res, url, { sendJson, readJson })) return;
       if (await handleLocalModelRoute(localModels, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;

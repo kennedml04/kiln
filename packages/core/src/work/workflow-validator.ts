@@ -1,5 +1,5 @@
 // Checks a Workflow file: every problem points at where it is, as a JSON path into the file.
-import { parsePolicyLayer, type ExitCheckId, type ItemKind, type ProjectFileError, type Stage, type Workflow } from '@kiln/widget-sdk';
+import { parsePolicyLayer, ROLE_MODES, type ExitCheckId, type ItemKind, type ProjectFileError, type Stage, type Workflow } from '@kiln/widget-sdk';
 import { EXIT_CHECK_IDS, WORKTREE_FREE_CHECKS } from '../flow/exit-checker.ts';
 
 export type WorkflowProblem = Omit<ProjectFileError, 'file'>;
@@ -10,7 +10,7 @@ const isText = (value: unknown): value is string => typeof value === 'string' &&
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 
 export const STAGE_FIELDS = new Set([
-  'id', 'name', 'gate', 'role', 'agent', 'model', 'fallbackModel', 'worktree', 'exit', 'status', 'pool', 'policy', 'mergeOnExit', 'rework', 'rollUp',
+  'id', 'name', 'gate', 'role', 'agent', 'model', 'fallbackModel', 'mode', 'worktree', 'exit', 'status', 'pool', 'policy', 'mergeOnExit', 'rework', 'rollUp',
 ]);
 const BOOLEAN_FIELDS = ['gate', 'worktree', 'mergeOnExit', 'rollUp'] as const;
 const TEXT_FIELDS = ['role', 'agent', 'model', 'fallbackModel', 'status', 'pool'] as const;
@@ -64,6 +64,9 @@ export function validateWorkflow(raw: unknown, moduleChecks: readonly string[] =
       }
       for (const field of TEXT_FIELDS) {
         if (stage[field] !== undefined && !isText(stage[field])) problem(`${where}.${field}`, `${field} must be a name`);
+      }
+      if (stage.mode !== undefined && !ROLE_MODES.includes(stage.mode as never)) {
+        problem(`${where}.mode`, `mode must be one of: ${ROLE_MODES.join(', ')}`);
       }
       const label = `${isText(kind.name) ? kind.name : `kinds[${k}]`} > ${isText(stage.name) ? stage.name : stage.id}`;
       // A Stage that runs a Session names who runs it and on what: never a silent (expensive) default.

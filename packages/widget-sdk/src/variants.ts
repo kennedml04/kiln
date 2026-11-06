@@ -132,3 +132,50 @@ export interface DisableVariantRequest {
 
 /** A variant was added, changed, smoke-tested, enabled, disabled or removed. */
 export type VariantUpdatedEvent = KilnEvent<'variant.updated', { variant: Variant }>;
+
+/**
+ * How a Workflow role uses local models (local-first Ticket 07). `local-first`: a local variant
+ * first. `cloud-only`: never local. `local-only`: never cloud.
+ */
+export type RoleMode = 'local-first' | 'cloud-only' | 'local-only';
+export const ROLE_MODES: readonly RoleMode[] = ['local-first', 'cloud-only', 'local-only'];
+
+/** The mode a role has when its Stage names none: the implementer and reviewer go local first. */
+export const defaultRoleMode = (role: string): RoleMode => (role === 'implementer' || role === 'reviewer' ? 'local-first' : 'cloud-only');
+
+export type TicketSize = 'small' | 'medium' | 'large';
+
+/** One local Stage attempt, recorded against the variant that ran it. */
+export interface VariantResult {
+  id: string;
+  variantId: string;
+  role: string;
+  size: TicketSize;
+  passed: boolean;
+  /** Why it failed (or a note on a pass). */
+  reason?: string;
+  wallMs: number;
+  tokensPerSecond?: number;
+  itemId?: string;
+  sessionId?: string;
+  /** Lines changed and files touched in the attempt's worktree (the history Ticket size is read from). */
+  diffLines?: number;
+  files?: number;
+  at: string;
+}
+
+/** `GET /api/variant-results[?variantId=]`. */
+export type VariantResultList = VariantResult[];
+
+/** `GET` and `PUT /api/local-routing` (Admin on PUT): the install-wide local-only switch and the pins. */
+export interface LocalRouting {
+  /** No Session in any Project starts on a cloud model. */
+  localOnly: boolean;
+  /** Variant ids pinned to a role (`role:<role>`) or one Item (`item:<itemId>`). */
+  pins: Record<string, string>;
+}
+export interface UpdateLocalRoutingRequest {
+  localOnly?: boolean;
+  /** Pin a variant to a role or an Item; `null` removes the pin. */
+  pin?: { role?: string; itemId?: string; variantId: string | null };
+}

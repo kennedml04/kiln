@@ -37,6 +37,8 @@ export const FOUND_REASON = "Found in the local server's config; enable it to us
 
 export interface VariantService {
   settings(): LocalServerSettings;
+  /** The recorded, enabled variants, in the order they were added (no call to the server). */
+  enabled(): Variant[];
   setSettings(input: unknown): LocalServerSettings;
   list(): Promise<VariantList>;
   get(id: string): Promise<Variant>;
@@ -300,6 +302,7 @@ export function createVariantService({ db, bus, clock, server: makeServer = crea
   return {
     settings,
     setSettings,
+    enabled: () => records().filter((r) => r.state === 'enabled').map(shown),
     list,
     get: find,
     add: (input) =>

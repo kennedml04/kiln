@@ -98,7 +98,10 @@ export interface ProjectSettings {
   testCommand?: string;
   /** Commands that count as the Policy's `known_commands` (the test command always does). */
   knownCommands?: string[];
-  /** A local-only Project never pushes or opens PRs: its Policy denies external writes. */
+  /**
+   * A local-only Project never pushes or opens PRs (its Policy denies external writes) and never
+   * starts a Session on a cloud model: its roles run only on enabled local variants.
+   */
   localOnly?: boolean;
   /** How approved work lands: merged into the default branch (default), or pushed as a PR (ticket 24). */
   mergeMode?: 'merge' | 'pr';

@@ -3,6 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Ask, AskRaisedEvent, CoreStatus, Item, ItemStageChangedEvent, KilnEvent, StartResult, WidgetInfo } from '@kiln/widget-sdk';
 import { startTestKiln, tempDir, type Cleanup, type TestKiln } from '@kiln/testing';
 import { writeRepoFile } from '@kiln/testing/scratch';
@@ -152,7 +154,12 @@ test('a pull request closed on GitHub without merging sends the Ticket back to r
 });
 
 test('a local-only Project never pushes: the Policy denies the pull request and the Gate asks again', { timeout: 120_000 }, async (t) => {
-  const { kiln, fake, bare, events, review } = await atGate(t, { settings: { localOnly: true } });
+  // The Sessions run on cloud (a local-only Project starts none there); the switch goes on at the Gate.
+  const { kiln, fake, bare, events, review } = await atGate(t);
+  const settings = JSON.parse(readFileSync(join(kiln.repo.path, '.kiln', 'settings.json'), 'utf8')) as Record<string, unknown>;
+  writeRepoFile(kiln.repo, '.kiln/settings.json', JSON.stringify({ ...settings, localOnly: true }));
+  kiln.repo.git('add', '.');
+  kiln.repo.git('commit', '-q', '-m', 'Go local-only');
 
   await answer(kiln, review, 'Approve');
   const failed = await events.next<KilnEvent<'gate.failed', { error: string }>>('gate.failed', { timeoutMs: 30_000 });
