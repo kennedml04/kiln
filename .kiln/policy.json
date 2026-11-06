@@ -1219,6 +1219,11 @@
       "action": "other_commands",
       "match": "git commit -q -m \"Review 08 again: still not built, 03 and 07 still unmerged\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/core/src/local/routing.ts",
+      "decision": "allow"
     }
   ]
 }
