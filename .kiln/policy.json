@@ -1604,6 +1604,11 @@
       "action": "other_commands",
       "match": "grep -n \"defaultRoles\\|checkRoles\" -r packages --include=*.ts --include=*.tsx -l",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline --format='%h %s' -- packages/core/src/chats/chats.ts packages/widget-sdk/src/scratch-chat.ts",
+      "decision": "allow"
     }
   ]
 }
