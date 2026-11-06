@@ -2084,6 +2084,51 @@
       "action": "other_commands",
       "match": "git checkout -q HEAD~1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "uptime*",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "tasklist*",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git fetch*",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "pgrep *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "taskkill //F //IM node.exe*",
+      "decision": "deny"
+    },
+    {
+      "action": "other_commands",
+      "match": "taskkill /F /IM node.exe*",
+      "decision": "deny"
+    },
+    {
+      "action": "other_commands",
+      "match": "taskkill //IM node.exe*",
+      "decision": "deny"
+    },
+    {
+      "action": "other_commands",
+      "match": "pkill node*",
+      "decision": "deny"
+    },
+    {
+      "action": "other_commands",
+      "match": "killall node*",
+      "decision": "deny"
     }
   ]
 }
