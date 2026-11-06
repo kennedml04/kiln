@@ -22,8 +22,14 @@ export interface ResolvedWidget {
 
 const isUrl = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source) || /^[^@\s/\\]+@[^:\s]+:/.test(source);
 
-/** The source as Kiln records it: URLs as given, local paths made absolute. */
-export const normalizeSource = (source: string) => (isUrl(source) ? source : resolve(source));
+/**
+ * The source as Kiln records it: URLs as given, local paths made absolute. Spaces around it and one
+ * pair of quotes (Explorer's "Copy as path" adds them) are dropped: they are never part of a source.
+ */
+export const normalizeSource = (source: string) => {
+  const s = source.trim().replace(/^"(.*)"$/s, '$1').trim();
+  return isUrl(s) ? s : resolve(s);
+};
 
 const isGitSource = (source: string) => isUrl(source) || existsSync(join(source, '.git'));
 

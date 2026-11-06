@@ -214,6 +214,18 @@ test('a folder source runs in place, pinned to a hash, and will not start once i
   await events.next('widget.ready');
 });
 
+test('a pasted source with spaces or quotes around it installs from the folder it names', async (t) => {
+  const kiln = await startTestKiln(t);
+  const spaced = createWidgetSource(t, { git: false, manifest: { id: 'spaced' } });
+  const quoted = createWidgetSource(t, { git: false, manifest: { id: 'quoted' } });
+
+  const a = await kiln.api<WidgetInfo>('POST', '/api/widgets', { source: `${spaced.path} ` });
+  const b = await kiln.api<WidgetInfo>('POST', '/api/widgets', { source: ` "${quoted.path}"` });
+
+  assert.equal(a.pin.source, spaced.path);
+  assert.equal(b.pin.source, quoted.path);
+});
+
 /** Has the test Widget make a core call with its own credential; resolves to the status it got. */
 const widgetCall = async (kiln: TestKiln, method: string, path: string) => {
   const log = join(kiln.dataDir, 'widgets', 'test-widget', 'data', 'calls.jsonl');
