@@ -1484,6 +1484,11 @@
       "action": "other_commands",
       "match": "cat > widgets/claude-code/test/read-roots.test.ts <<'E'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > ../chats/routes.ts <<'EOF'",
+      "decision": "allow"
     }
   ]
 }
