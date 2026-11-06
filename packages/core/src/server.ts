@@ -23,6 +23,9 @@ import { createAuditLog } from './audit.ts';
 import { createAskService } from './asks/ask-service.ts';
 import { createProposalApplier } from './flow/proposals.ts';
 import { handleAskRoute } from './asks/routes.ts';
+import { createChats } from './chats/chats.ts';
+import { handleChatRoute, linkVisibleTo } from './chats/routes.ts';
+import { createStoryDrafts } from './chats/story-drafts.ts';
 import { handleFlowRoute } from './flow/routes.ts';
 import { createGates } from './flow/gates.ts';
 import { createScheduler } from './flow/scheduler.ts';
@@ -161,8 +164,20 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   const gates = createGates({ bus, work, asks, dataDir: options.dataDir, policy, audit, pullRequests, release: (itemId) => sessions.releaseItem(itemId) });
   // The Knowledge store (ticket 10): the markdown folder Digests live in.
   const knowledge = createMovableKnowledgeStore({ root: knowledgeDir, rollupAt: options.digestRollupAt });
+  // Scratch chats: runtime records and each chat's scratch folder. Whether one runs is asked of the Session manager.
+  const chats = createChats({ db, bus, dataDir: options.dataDir, isRunning: (id) => sessions.active().some((s) => s.itemId === `chat:${id}`), endSessions: (id, forget) => sessions.endItem(`chat:${id}`, forget) });
+  // Archive and delete idle chats: at start, then hourly, on the injectable clock.
+  const sweepChats = () => void chats.sweep(clock.now()).catch(() => undefined);
+  const chatSweep = setInterval(sweepChats, 60 * 60 * 1000);
+  chatSweep.unref();
+  // Make it a Story drafts live in memory; one left pending for 30 minutes is dropped.
+  const storyDrafts = createStoryDrafts({ bus });
+  const draftSweep = setInterval(() => storyDrafts.expire(clock.now()), 60 * 1000);
+  draftSweep.unref();
   const sessions = createSessionManager({
     db,
+    chats: { get: chats.get, folder: chats.folder, roleModel: () => setup.settings().roles?.chat },
+    draftStory: (chatId, draft) => void storyDrafts.fill(chatId, draft, clock.now()),
     bus,
     work,
     widgets,
@@ -198,6 +213,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   asks.setProposalApplier(createProposalApplier({ work, scheduler, audit }));
   // Budgets: every turn is recorded and its caps checked; a reached Project or Budget cap holds starts.
   const clock = createClock();
+  // Moving the test clock on runs the chat sweep at once, so tests need not wait an hour.
+  clock.onChange(() => sweepChats());
   const usage = createUsageService({ db, bus, work, sessions, asks, clock, poke: () => scheduler.poke(),
     poolSize: (name) => scheduler.state().pools.find((p) => p.name === name)?.size ?? 0,
   });
@@ -525,7 +542,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleRoutingRoute(routing, req, res, url, { sendJson, readJson })) return;
       if (await handleLocalModelRoute(localModels, req, res, url, { sendJson, readJson })) return;
       if (await handleBudgetRoute(usage, clock, options.testMode === true, req, res, url, { sendJson, readJson })) return;
-      if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson })) return;
+      if (await handleChatRoute(chats, sessions, scheduler, clock, access, req, res, url, { sendJson, readJson }, { work, drafts: storyDrafts, bus })) return;
+      if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson }, (entries) => linkVisibleTo(access.caller(req), chats, entries))) return;
       if (await handleNewProjectRoute(newProjects, req, res, url, { sendJson, readJson })) return;
       if (await handleWorkRoute(work, req, res, url, { sendJson, readJson }, folders)) return;
       if (await handleSecretRoute(secrets, req, res, url, panelDeps)) return;
@@ -566,10 +584,13 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     servers.push(server);
   }
   installs.resume();
+  sweepChats();
 
   return {
     status,
     async stop() {
+      clearInterval(chatSweep);
+      clearInterval(draftSweep);
       restart.close();
       usage.close();
       runaway.close();

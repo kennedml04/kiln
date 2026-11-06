@@ -14,7 +14,7 @@
 //   GET  /api/sessions[?item=id] SessionInfo[] (a Project Thread's Sessions: item=project:<id>)
 //   GET  /api/sessions/:id       SessionInfo
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { projectThreadId, type StartResult, type ThreadMessageRequest, type ThreadMessageResult } from '@kiln/widget-sdk';
+import { projectThreadId, type StartResult, type ThreadEntry, type ThreadMessageRequest, type ThreadMessageResult } from '@kiln/widget-sdk';
 import { WorkError } from '../work/work.ts';
 import type { RouteHelpers } from '../work/routes.ts';
 import type { Scheduler } from './scheduler.ts';
@@ -32,6 +32,8 @@ export async function handleFlowRoute(
   res: ServerResponse,
   url: URL,
   { sendJson, readJson }: RouteHelpers,
+  /** Filters an Item's Thread for the caller (hides links to chats they cannot open). */
+  threadFor: (entries: ThreadEntry[]) => ThreadEntry[] = (entries) => entries,
 ): Promise<boolean> {
   try {
     const action = ITEM_ACTION.exec(url.pathname);
@@ -41,7 +43,7 @@ export async function handleFlowRoute(
         const result = await scheduler.enqueue(itemId);
         return (sendJson(res, result.queued ? 202 : 201, result), true);
       }
-      if (action[2] === 'thread' && req.method === 'GET') return (sendJson(res, 200, sessions.thread(itemId)), true);
+      if (action[2] === 'thread' && req.method === 'GET') return (sendJson(res, 200, threadFor(sessions.thread(itemId))), true);
       if (action[2] === 'digests' && req.method === 'GET') return (sendJson(res, 200, sessions.digests(itemId)), true);
       if (action[2] === 'messages' && req.method === 'POST') {
         const { text } = ((await readJson(req)) ?? {}) as Partial<ThreadMessageRequest>;

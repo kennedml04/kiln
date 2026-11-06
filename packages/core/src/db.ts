@@ -238,6 +238,17 @@ const MIGRATIONS: string[] = [
   `CREATE TABLE variant_pins (
      scope TEXT PRIMARY KEY,
      variant_id TEXT NOT NULL
+     )`,
+  // Scratch chats (scratch-chat/01): runtime records, in no Tracker. `stories` is the linked Item ids as JSON.
+  `CREATE TABLE chats (
+     id TEXT PRIMARY KEY,
+     title TEXT NOT NULL,
+     owner_id TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     last_message_at TEXT NOT NULL,
+     pinned INTEGER NOT NULL DEFAULT 0,
+     archived_at TEXT,
+     stories TEXT NOT NULL DEFAULT '[]'
    )`,
 ];
 

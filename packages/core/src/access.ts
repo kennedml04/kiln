@@ -64,6 +64,12 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'POST', path: /^\/api\/items\/[^/]+\/messages$/, role: 'member', action: 'thread.message' },
   // The Project Thread (ticket 13): chatting in it is Member work too.
   { method: 'POST', path: /^\/api\/projects\/[^/]+\/messages$/, role: 'member', action: 'project_thread.message' },
+  // Scratch chats (scratch-chat/10): pinning, renaming and archiving a chat is Member work.
+  { method: 'PATCH', path: /^\/api\/chats\/[^/]+$/, role: 'member', action: 'chat.update' },
+  // Make it a Story (scratch-chat/08): opening, cancelling and accepting a draft is Member work.
+  { method: 'POST', path: /^\/api\/chats\/[^/]+\/story-draft$/, role: 'member', action: 'chat.story_draft' },
+  { method: 'DELETE', path: /^\/api\/chats\/[^/]+\/story-draft$/, role: 'member', action: 'chat.story_draft_cancel' },
+  { method: 'POST', path: /^\/api\/chats\/[^/]+\/story$/, role: 'member', action: 'chat.make_story' },
   // Scheduler (ticket 14). Pool sizes are Admin settings; Stop all, resume and reordering are Member work.
   { method: 'PUT', path: /^\/api\/scheduler\/pools\/[^/]+$/, role: 'admin', action: 'pool.set_size' },
   { method: 'PUT', path: '/api/scheduler/queue', role: 'member', action: 'queue.reorder' },

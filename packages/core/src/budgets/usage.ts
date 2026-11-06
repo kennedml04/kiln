@@ -120,7 +120,8 @@ const GROUP_COLUMN: Record<UsageGroup, string> = {
   session: 'COALESCE(parent_session_id, session_id)',
   item: 'item_id',
   epic: 'epic_id',
-  project: 'project_id',
+  // A Scratch chat's usage has no Project: it rolls up under one "Scratch chats" row.
+  project: "CASE WHEN project_id = '' THEN 'Scratch chats' ELSE project_id END",
   stage: 'stage',
   kind: 'item_kind',
   day: 'day',

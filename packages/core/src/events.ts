@@ -10,6 +10,8 @@ export interface EventBus {
   since(afterId: number): KilnEvent[];
   /** Stored events whose payload has `field` equal to `value` (e.g. every event of one Item), oldest first. */
   withPayload(field: string, value: string): KilnEvent[];
+  /** Deletes the stored events whose payload has `field` equal to `value` (a deleted chat's Thread). */
+  deleteWithPayload(field: string, value: string): void;
   subscribe(listener: Listener): () => void;
 }
 
@@ -18,10 +20,15 @@ export function createEventBus(db: DatabaseSync): EventBus {
   const insert = db.prepare('INSERT INTO events (type, at, payload) VALUES (?, ?, ?)');
   const select = db.prepare('SELECT id, type, at, payload FROM events WHERE id > ? ORDER BY id');
   const selectByPayload = db.prepare('SELECT id, type, at, payload FROM events WHERE json_extract(payload, ?) = ? ORDER BY id');
+  const deleteByPayload = db.prepare('DELETE FROM events WHERE json_extract(payload, ?) = ?');
   type Row = { id: number; type: string; at: string; payload: string };
   const parse = (rows: Row[]) => rows.map((row) => ({ ...row, payload: JSON.parse(row.payload) as unknown }));
 
   return {
+    deleteWithPayload(field, value) {
+      if (!/^\w+$/.test(field)) throw new Error(`Not a payload field: ${field}`);
+      deleteByPayload.run(`$.${field}`, value);
+    },
     withPayload(field, value) {
       if (!/^\w+$/.test(field)) throw new Error(`Not a payload field: ${field}`);
       return parse(selectByPayload.all(`$.${field}`, value) as Row[]);

@@ -28,6 +28,8 @@ function describe(entry: ThreadEntry, project: Project | undefined, item: Item |
       return item
         ? `Moved from ${stageName(project, item, String(p.from))} to ${stageName(project, item, String(p.to))}`
         : `Moved from ${String(p.from)} to ${String(p.to)}`;
+    case 'item.from_chat':
+      return 'Made from a Scratch chat';
     case 'session.started':
       return 'Session started';
     case 'session.progress': {
@@ -91,7 +93,13 @@ export function ThreadLog({ thread, project, item }: { thread: ThreadEntry[]; pr
     <ol ref={log} role="log" aria-label="Thread" aria-live="polite" className="thread-log" onScroll={onScroll}>
       {thread.map((entry) => (
         <li key={entry.id} className={`thread-${entry.type.replace('.', '-')}`}>
-          {describe(entry, project, item)}
+          {entry.type === 'item.from_chat' && typeof (entry.payload as { chatId?: unknown }).chatId === 'string' ? (
+            <a href={`/chats/${encodeURIComponent((entry.payload.chatId as string))}`} onClick={followLink}>
+              {describe(entry, project, item)}
+            </a>
+          ) : (
+            describe(entry, project, item)
+          )}
         </li>
       ))}
     </ol>

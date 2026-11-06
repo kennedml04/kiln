@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   effectivePolicy,
+  CHAT_POLICY,
   layerDecision,
   ORG_POLICY_DEFAULT,
   parsePolicyLayer,
@@ -45,6 +46,8 @@ export interface PolicyEngine {
   projectLayer(project: Project): PolicyLayer;
   stageLayer(scope: PolicyScope): PolicyLayer;
   effective(scope: PolicyScope): EffectivePolicy;
+  /** What a Scratch chat Session may do: the Org layer plus the chat Stage layer (no Project layer). */
+  chat(): EffectivePolicy;
   view(scope: PolicyScope): PolicyView;
   /**
    * Whether "Always allow" can be offered for this request: every layer but the Project's allows
@@ -177,6 +180,7 @@ export function createPolicyEngine({ db, bus, sources }: PolicyDeps): PolicyEngi
     projectLayer,
     stageLayer,
     effective,
+    chat: () => effectivePolicy([orgLayer(), CHAT_POLICY], []),
 
     view: (scope) => ({ org: org(), project: projectLayer(scope.project), stage: stageLayer(scope), effective: effective(scope) }),
 

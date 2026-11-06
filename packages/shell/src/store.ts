@@ -85,7 +85,7 @@ function putAsk(ask: Ask, lastEvent?: KilnEvent) {
 }
 
 /** Events that are lines in an Item's Thread (the same set the core's thread route returns). */
-const THREAD_EVENT = /^(session\.|exit\.checked$|digest\.written$|item\.stage_changed$)/;
+const THREAD_EVENT = /^(session\.|exit\.checked$|digest\.written$|item\.stage_changed$|item\.from_chat$)/;
 
 /** Adds Thread entries for one Item, skipping ones it already has (by event id) and keeping event order. */
 export function addThreadEntries(itemId: string, entries: ThreadEntry[], lastEvent?: KilnEvent) {

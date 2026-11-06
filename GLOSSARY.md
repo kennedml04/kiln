@@ -152,3 +152,7 @@ _Avoid_: allowlist, trusted sources
 **Panel**:
 A Widget's view in the Shell, described as data (cards, stats, tables, buttons) for the Shell to draw, so a Widget needs no frontend code. A button on a Panel runs one of the Widget's named actions.
 _Avoid_: card, tile, widget UI
+
+**Scratch chat**:
+A Session that belongs to no Project and no Item, for a one-off question. Each chat is its own small Thread, with no Stage, worktree or Exit.
+_Avoid_: scratch card, quick chat

@@ -7,6 +7,12 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  CHAT_KIND,
+  CHAT_POLICY,
+  CHAT_ROLE,
+  CHAT_STAGE,
+  chatOfThread,
+  chatThreadId,
   decide,
   isPolicyAction,
   PERMISSION_ANSWERS,
@@ -16,7 +22,6 @@ import {
   PROJECT_THREAD_ROLE,
   PROJECT_THREAD_STAGE,
   projectOfThread,
-  chatOfThread,
   projectThreadId,
 } from '@kiln/widget-sdk';
 import type {
@@ -30,6 +35,8 @@ import type {
   Item,
   ItemRun,
   Project,
+  RoleModel,
+  ScratchChat,
   SessionInfo,
   SessionState,
   SessionUsage,
@@ -52,7 +59,7 @@ import { findingsPathOf, type Gates } from './gates.ts';
 import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
 import { modeOf, ticketSize, type Routing } from '../local/routing.ts';
 import type { ChatToolsScope, KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
-import { digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
+import { createMarkdownKnowledgeStore, digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
 
 export interface SessionManager {
   /** Starts a fresh Session for the Item's current Stage. 409 when the Stage runs none or one is running. */
@@ -132,6 +139,11 @@ export interface SessionManager {
    * no Agent process still works in the worktree.
    */
   releaseItem(itemId: string): Promise<void>;
+  /**
+   * Ends every live Session of a subject (a Scratch chat being archived or deleted) and lets go of
+   * the Agents kept warm. With `forget`, drops its Session rows too.
+   */
+  endItem(itemId: string, forget: boolean): Promise<void>;
 }
 
 /** How long releaseItem waits for an Agent to report its Session stopped. */
@@ -196,7 +208,7 @@ const ACTIVE = new Set<SessionState>(['running', 'paused', 'waiting']);
 const RESUMABLE = new Set<SessionState>(['finished', 'interrupted']);
 
 /** What an Item's Thread holds: its Sessions' events, Exit checks, Digests and Stage moves. */
-const THREAD_TYPES = /^(session\.|exit\.checked$|digest\.written$|item\.stage_changed$)/;
+const THREAD_TYPES = /^(session\.|exit\.checked$|digest\.written$|item\.stage_changed$|item\.from_chat$|chat\.story_made$)/;
 
 const FINISHED_STATE: Record<Exclude<FinishReason, 'completed'>, SessionState> = {
   interrupted: 'interrupted',
@@ -254,8 +266,33 @@ export const threadSubject = (project: Project): Item => ({
   childIds: [],
 });
 
+/** The Stage a Scratch chat Session runs in: no worktree, no Exit, and the chat Policy. */
+const scratchChatStage = (model?: RoleModel): Stage => ({
+  id: CHAT_STAGE,
+  name: 'Scratch chat',
+  role: CHAT_ROLE,
+  policy: CHAT_POLICY,
+  ...(model ? { model: model.model } : {}),
+});
+
+/**
+ * A Scratch chat as the Session manager sees it: Item-shaped like `threadSubject`, but with no
+ * Project at all (`projectId` is empty and must never be looked up).
+ */
+export const chatSubject = (chat: Pick<ScratchChat, 'id' | 'title'>): Item => ({
+  id: chatThreadId(chat.id),
+  projectId: '',
+  key: chat.id,
+  kind: CHAT_KIND,
+  title: chat.title,
+  stage: CHAT_STAGE,
+  runState: 'backlog',
+  childIds: [],
+});
+
 /** What a Session's audit entries are about: its Item, or its Project for a Project Thread Session. */
-const auditTarget = (info: SessionInfo) => (projectOfThread(info.itemId) !== undefined ? info.itemId : `item:${info.itemId}`);
+const auditTarget = (info: SessionInfo) =>
+  projectOfThread(info.itemId) !== undefined || chatOfThread(info.itemId) !== undefined ? info.itemId : `item:${info.itemId}`;
 
 const readIfExists = (path: string) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
 
@@ -285,6 +322,8 @@ export interface SessionManagerDeps {
   local?: () => { routing: Routing; variants: () => Variant[]; /** Whether local models are set up at all (a server is configured). */ inUse: () => boolean };
   /** Holds Items at Gate Stages once their Exit is met, and seeds rework Sessions. */
   gates?: Gates;
+  /** Scratch chats: the chat records, and the model (and fallback) the `chat` role runs on. */
+  chats?: { get(id: string): ScratchChat | undefined; folder(id: string): string; roleModel(): RoleModel | undefined };
   /**
    * Scratch chats' side of draft_story: stores a Make it a Story draft for the chat, and throws
    * when none is pending. Unset: a chat's draft_story is always refused.
@@ -313,6 +352,7 @@ export function createSessionManager({
   local,
   draftStory,
   toolPaths = () => undefined,
+  chats,
 }: SessionManagerDeps): SessionManager {
   const live = new Map<string, Live>();
   /** Why each held Session waits besides its Asks (e.g. a reached Budget cap). */
@@ -344,6 +384,7 @@ export function createSessionManager({
   /** The Item's Stage, on the model a person moved it to if they did. */
   const stageOf = (item: Item): Stage | undefined => {
     if (item.kind === PROJECT_THREAD_KIND) return THREAD_STAGE;
+    if (item.kind === CHAT_KIND) return scratchChatStage(chats?.roleModel());
     const stage = work.project(item.projectId)?.workflow.kinds.find((k) => k.id === item.kind)?.stages.find((s) => s.id === item.stage);
     const moved = stage && stageModel?.(item.projectId, item.kind, stage.id);
     return moved ? { ...stage, model: moved } : stage;
@@ -351,6 +392,11 @@ export function createSessionManager({
 
   /** What a Session works on: an Item, or the stand-in for a Project's Thread (see `threadSubject`). */
   const subjectOf = (id: string): Item | undefined => {
+    const chatId = chatOfThread(id);
+    if (chatId !== undefined) {
+      const chat = chats?.get(chatId);
+      return chat && chatSubject(chat);
+    }
     const projectId = projectOfThread(id);
     if (projectId === undefined) return work.item(id);
     const project = work.project(projectId);
@@ -436,6 +482,13 @@ export function createSessionManager({
     return artifacts;
   };
 
+  const chatPrompt = () =>
+    [
+      'You are a Scratch chat: a person asks you a quick, one-off question. You belong to no Project and no Item.',
+      'You change nothing; the Policy denies every write. Answer briefly, and raise an Ask only when you cannot go on without a person.',
+      'Before you finish, write your Digest with the write_digest Kiln tool.',
+    ].join('\n');
+
   const threadPrompt = (item: Item) =>
     [
       `You are the Project Thread of the Project "${work.project(item.projectId)?.name ?? item.projectId}": a person talks to you about the Project as a whole.`,
@@ -445,7 +498,7 @@ export function createSessionManager({
     ].join('\n');
 
   const prompt = (item: Item, stage: Stage, rework: { name: string }[]) =>
-    item.kind === PROJECT_THREAD_KIND ? threadPrompt(item) : itemPrompt(item, stage, rework);
+    item.kind === CHAT_KIND ? chatPrompt() : item.kind === PROJECT_THREAD_KIND ? threadPrompt(item) : itemPrompt(item, stage, rework);
 
   const itemPrompt = (item: Item, stage: Stage, rework: { name: string }[]) =>
     [
@@ -526,12 +579,22 @@ export function createSessionManager({
   /** Thread messages waiting for the Item's next fresh Session, by Item id. */
   const held = new Map<string, string[]>();
 
+  /** Chat Digests are runtime data in the chat's own folder, never in the Knowledge store. */
+  const chatStores = new Map<string, KnowledgeStore>();
+  const knowledgeFor = (item: Item): KnowledgeStore => {
+    const chatId = chatOfThread(item.id);
+    if (chatId === undefined || !chats) return knowledge;
+    let store = chatStores.get(chatId);
+    if (!store) chatStores.set(chatId, (store = createMarkdownKnowledgeStore({ root: chats.folder(chatId) })));
+    return store;
+  };
+
   /** Writes a Digest for the Session's Item and publishes it (and the rollup it may trigger). */
   const recordDigest = (session: Live, content: DigestContent, writtenBy: Digest['writtenBy']): Digest => {
     const { info } = session;
     const item = subjectOf(info.itemId);
     if (!item) throw new WorkError(404, `The Item "${info.itemId}" is gone`);
-    const { digest, rollup } = knowledge.writeDigest(item, { sessionId: info.id, stage: info.stage, writtenBy, content });
+    const { digest, rollup } = knowledgeFor(item).writeDigest(item, { sessionId: info.id, stage: info.stage, writtenBy, content });
     session.digested = true;
     for (const written of rollup ? [digest, rollup] : [digest]) {
       bus.publish('digest.written', { itemId: item.id, projectId: item.projectId, sessionId: written.sessionId, digest: written });
@@ -712,8 +775,9 @@ export function createSessionManager({
     const { info } = session;
     const { requestId, action, detail } = event;
     try {
-      const scope = scopeOf(info);
-      if (!scope) throw new Error(`the Item "${info.itemId}" is gone`);
+      const chat = chatOfThread(info.itemId) !== undefined;
+      const scope = chat ? undefined : scopeOf(info);
+      if (!chat && !scope) throw new Error(`the Item "${info.itemId}" is gone`);
       // Nothing Kiln runs commits a Co-Authored-By trailer, whatever the Policy or an "Always allow"
       // says: refused before anyone is asked, and the Agent is told how to do it instead.
       if (CO_AUTHORED_BY.test(detail)) {
@@ -733,9 +797,9 @@ export function createSessionManager({
         return;
       }
       const known = isPolicyAction(action);
-      // A Project Thread Session never leaves anything to a person: what its Policy doesn't name is denied.
-      const thread = projectOfThread(info.itemId) !== undefined;
-      const decision = known ? decide(policy.effective(scope), action, detail) : thread ? 'deny' : 'ask';
+      // A Project Thread or chat Session never leaves anything to a person: what its Policy doesn't name is denied.
+      const thread = chat || projectOfThread(info.itemId) !== undefined;
+      const decision = known ? decide(chat ? policy.chat() : policy.effective(scope!), action, detail) : thread ? 'deny' : 'ask';
       if (decision !== 'ask') {
         audit.record({
           actor: { kind: 'kiln' },
@@ -747,7 +811,7 @@ export function createSessionManager({
         answerPermission(info, requestId, decision);
         return;
       }
-      const offered = known && policy.alwaysAllowOffered(scope, action, detail);
+      const offered = known && policy.alwaysAllowOffered(scope!, action, detail);
       const label = known ? POLICY_ACTION_NAMES[action] : action;
       asks.raise({
         type: 'permission',
@@ -883,37 +947,41 @@ export function createSessionManager({
       if (!item) throw new WorkError(404, `No Item "${itemId}"`);
       const blocked = startBlocked?.();
       if (blocked) throw new WorkError(409, blocked);
-      const project = work.project(item.projectId)!;
+      const chat = chatOfThread(itemId) !== undefined;
+      // A chat belongs to no Project: there is nothing to look up.
+      const project = chat ? undefined : work.project(item.projectId)!;
       const stage = stageOf(item);
       if (!stage?.role) throw new WorkError(409, `${item.title} is in a Stage that runs no Session`);
-      if (item.path && !existsSync(join(project.path, item.path))) {
+      if (project && item.path && !existsSync(join(project.path, item.path))) {
         throw new WorkError(409, `${item.title} is still being written in its parent's worktree; it can start once its parent's Gate merges it`);
       }
       if ([...live.values()].some((s) => s.info.itemId === itemId && ACTIVE.has(s.info.state))) {
         throw new WorkError(409, `${item.title} already has a running Session`);
       }
-      const planned = planLocal(item, stage, project);
+      const planned: ReturnType<typeof planLocal> = project ? planLocal(item, stage, project) : { stage };
       const { widgetId, agentId, model } = pickAgent(planned.stage);
       // Never the Agent tool's own default: the Budget guard holds such an Item before it gets here.
       if (!model) throw new WorkError(409, `${item.title}'s ${stage.name} Stage names no model, and neither does its Agent`);
-      const sessionPolicy = policy.effective({ project, kind: item.kind, stage: stage.id });
+      const sessionPolicy = project ? policy.effective({ project, kind: item.kind, stage: stage.id }) : policy.chat();
       // The Project's modules as they stand now: the Session keeps these skills and servers to the end.
-      const kit = moduleSessionKit(readProjectFiles(project.path).modules, toolPaths());
+      const kit = project ? moduleSessionKit(readProjectFiles(project.path).modules, toolPaths()) : { skills: [], mcpServers: {} };
+      // A chat's Session runs in its own empty scratch folder (never a checkout, never a git repo).
+      const scratch = chat ? chats!.folder(chatOfThread(itemId)!) : null;
       let worktree: string | null = null;
       let branch: string | null = null;
       let base: string | null = null;
-      if (stage.worktree) {
+      if (project && stage.worktree) {
         base = await defaultBranch(project.path);
         branch = `kiln/${item.key}`;
         worktree = worktreePath(dataDir, project.id, item.key);
         await ensureWorktree(project.path, worktree, branch, base);
       }
       const previous = list().filter((s) => s.itemId === itemId).at(-1);
-      const rework = gates?.reworkSeed(itemId, previous?.startedAt) ?? [];
+      const rework = chat ? [] : (gates?.reworkSeed(itemId, previous?.startedAt) ?? []);
       const info: SessionInfo = {
         id: `s-${randomUUID()}`,
         itemId,
-        projectId: project.id,
+        projectId: project?.id ?? '',
         stage: stage.id,
         role: stage.role,
         agentId,
@@ -924,7 +992,7 @@ export function createSessionManager({
         state: 'running',
         startedAt: new Date().toISOString(),
       };
-      insert.run(info.id, itemId, project.id, stage.id, stage.role, agentId, widgetId, model ?? null, worktree, branch, base, 'running', null, info.startedAt, null);
+      insert.run(info.id, itemId, info.projectId, stage.id, stage.role, agentId, widgetId, model ?? null, worktree, branch, base, 'running', null, info.startedAt, null);
       const toolsToken = randomBytes(32).toString('base64url');
       live.set(info.id, { info, toolsToken, base, queue: Promise.resolve(), digested: false, interrupted: false, interruptsSent: 0, ...(planned.attempt ? { local: planned.attempt } : {}) });
       work.setRun(itemId, toRun(info));
@@ -939,10 +1007,10 @@ export function createSessionManager({
           model,
           prompt: prompt(item, stage, rework),
           seed: {
-            artifacts: [...seedArtifacts(item, worktree ?? project.path), ...rework],
-            digests: knowledge.seed(item).map(knowledge.render),
+            artifacts: project ? [...seedArtifacts(item, worktree ?? project.path), ...rework] : [],
+            digests: (() => { const store = knowledgeFor(item); return store.seed(item).map((d) => store.render(d)); })(),
           },
-          worktree,
+          worktree: scratch ?? worktree,
           kilnTools: { url: kilnToolsUrl(), headers: { authorization: `Bearer ${toolsToken}` } },
           policy: sessionPolicy,
           ...(kit.skills.length ? { skills: kit.skills } : {}),
@@ -1011,6 +1079,23 @@ export function createSessionManager({
         ),
       );
     },
+    async endItem(itemId, forget) {
+      const sessions = [...live.values()].filter((s) => s.info.itemId === itemId);
+      for (const session of sessions) {
+        const { info } = session;
+        clearTimeout(session.idleTimer);
+        holds.delete(info.id);
+        await session.queue;
+        if (!ACTIVE.has(info.state)) continue;
+        stopAgent(info);
+        await end(session, 'stopped', 'The chat was archived');
+      }
+      await this.releaseItem(itemId);
+      if (forget) {
+        for (const session of sessions) live.delete(session.info.id);
+        db.prepare('DELETE FROM sessions WHERE item_id = ?').run(itemId);
+      }
+    },
     async renew(id, reason) {
       const session = live.get(id);
       if (!session || !ACTIVE.has(session.info.state)) return false;
@@ -1022,7 +1107,7 @@ export function createSessionManager({
     digests(itemId) {
       const item = subjectOf(itemId);
       if (!item) throw new WorkError(404, `No Item "${itemId}"`);
-      return knowledge.digests(item);
+      return knowledgeFor(item).digests(item);
     },
     kilnTools(token) {
       const session = [...live.values()].find((s) => s.toolsToken === token);
