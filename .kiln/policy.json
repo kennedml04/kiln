@@ -1814,6 +1814,11 @@
       "action": "other_commands",
       "match": "git branch -a --list '*story*'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "wc -l",
+      "decision": "allow"
     }
   ]
 }
