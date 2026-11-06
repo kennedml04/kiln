@@ -2039,6 +2039,11 @@
       "action": "other_commands",
       "match": "GIT_EDITOR=true git rebase --continue 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "until grep -q '^done' /tmp/full.out",
+      "decision": "allow"
     }
   ]
 }
