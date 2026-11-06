@@ -1504,6 +1504,11 @@
       "action": "other_commands",
       "match": "node -e \"\nconst fs=require('fs');const p='packages/core/src/flow/session-manager.ts';let s=fs.readFileSync(p,'utf8');\ns=s.replace(\\\".join('\\n');\\n\\n  const threadPrompt\\\", \\\".join('\\\\\\\\n');\\n\\n  const threadPrompt\\\");fs.writeFileSync(p,s);\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "npx tsc --noEmit -p . 2>&1",
+      "decision": "allow"
     }
   ]
 }
