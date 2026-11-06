@@ -834,6 +834,11 @@
       "action": "other_commands",
       "match": "grep -rn \"projectThreadId\\|projectOfThread\\|PROJECT_THREAD\" packages/widget-sdk/src packages/core/src --include=*.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"notes\\|export\\|digest\" packages/core/src/knowledge/markdown-store.ts",
+      "decision": "allow"
     }
   ]
 }
