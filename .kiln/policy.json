@@ -1204,6 +1204,11 @@
       "action": "other_commands",
       "match": "git show 31fe9d2 9207ebf -- . ':!packages/shell/src/work/Scoreboard.tsx'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/core/src/local/picker.ts",
+      "decision": "allow"
     }
   ]
 }
