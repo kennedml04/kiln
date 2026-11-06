@@ -1,7 +1,7 @@
 ---
 title: A runaway guard of 20% of the week in any 12 hours
 epic: budgets
-stage: spec
+stage: tickets
 blocked-by: []
 ---
 The per-Session share of the week (`perSession.share`) kept pausing ordinary Sessions, and the person was answering its Asks every time, so it was raised from 5% to 20% as a stopgap. What the person actually wants is a guard against runaway spend across the whole Budget: if Kiln's Sessions together use more than 20% of the weekly plan within any 12 hours, the work pauses and one Ask comes up. Otherwise Kiln stays quiet and the person watches usage themselves.
