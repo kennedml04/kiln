@@ -2079,6 +2079,11 @@
       "action": "other_commands",
       "match": "tasklist",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git checkout -q HEAD~1",
+      "decision": "allow"
     }
   ]
 }
