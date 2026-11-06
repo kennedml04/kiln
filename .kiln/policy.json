@@ -2004,6 +2004,11 @@
       "action": "other_commands",
       "match": "git branch --contains kiln/ticket/local-first/10",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"ExitStatus\" -A12 ../../widget-sdk/src/flow.ts",
+      "decision": "allow"
     }
   ]
 }
