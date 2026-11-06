@@ -14,6 +14,12 @@ export interface SessionStart {
   /** The worktree the Session works in, or null when it has none. */
   worktree: string | null;
   /**
+   * Folders the Session may read but never write (a Scratch chat: every Project checkout and the
+   * Knowledge store). A read tool inside one counts as `worktree_read`; any other tool there is
+   * still outside the worktree.
+   */
+  readRoots?: string[];
+  /**
    * The effective Policy for this Session (Org, Project and Stage, strictest wins). Translate it
    * into the tool's own permission settings; report a `permission_request` for anything it says to ask.
    */

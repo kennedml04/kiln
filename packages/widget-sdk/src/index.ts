@@ -160,6 +160,7 @@ export * from './variants.ts';
 export * from './local-models.ts';
 export * from './threads.ts';
 export * from './project-thread.ts';
+export * from './scratch-chat.ts';
 export * from './setup.ts';
 export * from './demo.ts';
 export * from './tracker-widget.ts';

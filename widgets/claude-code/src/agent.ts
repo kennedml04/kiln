@@ -176,9 +176,10 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
     // The module skills go in the Session's own config folder, never the repo.
     const skills = buildSkillsPlugin(run.configDir, start.skills ?? []);
     const skillFolders = skills?.folders ?? [];
+    const readRoots = start.readRoots ?? [];
     const hook: HookCallback = async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return {};
-      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, skillFolders);
+      const request = requestFor(policy, cwd, input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, skillFolders, readRoots);
       const decision = request?.decision ?? 'allow';
       return {
         hookSpecificOutput: {
@@ -189,7 +190,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       };
     };
     const canUseTool: CanUseTool = async (toolName, input, { signal }): Promise<PermissionResult> => {
-      const request = requestFor(policy, cwd, toolName, input, skillFolders);
+      const request = requestFor(policy, cwd, toolName, input, skillFolders, readRoots);
       const decision = request?.decision ?? 'allow';
       if (decision === 'allow') return { behavior: 'allow', updatedInput: input };
       if (decision === 'deny' || !request) return { behavior: 'deny', message: `Kiln's Policy denies ${request?.action}: ${request?.detail}` };

@@ -61,7 +61,8 @@ function pathOf(input: Record<string, unknown>): string | undefined {
 /**
  * What a tool call amounts to and what the Policy says about it. `undefined` means the tool needs
  * no Kiln decision (it is harmless or a Kiln tool); a tool Kiln does not know asks. `skillFolders`
- * are the Session's own skill copies: reading them needs no decision.
+ * are the Session's own skill copies: reading them needs no decision. `readRoots` are folders the
+ * Session may read but not write (see SessionStart).
  */
 export function requestFor(
   policy: EffectivePolicy,
@@ -69,6 +70,7 @@ export function requestFor(
   tool: string,
   input: Record<string, unknown>,
   skillFolders: string[] = [],
+  readRoots: string[] = [],
 ): ToolRequest | undefined {
   if (HARMLESS.has(tool) || tool.startsWith('mcp__kiln__')) return undefined;
   if (AROUND_KILN[tool]) return { action: 'other_commands', detail: `${tool}: ${AROUND_KILN[tool]}`, decision: 'deny' };
@@ -81,6 +83,12 @@ export function requestFor(
   if (READS.has(tool) || WRITES.has(tool)) {
     const target = resolve(worktree, pathOf(input) ?? '.');
     if (READS.has(tool) && skillFolders.some((folder) => inside(samePathCase(folder), samePathCase(target)))) return undefined;
+    // A read tool inside a read root is a read, whatever the worktree is.
+    const inReadRoot = READS.has(tool) && readRoots.some((root) => inside(samePathCase(resolve(root)), samePathCase(target)));
+    if (inReadRoot) {
+      const detail = target.split('\\').join('/');
+      return { action: 'worktree_read', detail, decision: decide(policy, 'worktree_read', detail) };
+    }
     const action: PolicyAction = !inside(samePathCase(worktree), samePathCase(target)) ? 'outside_worktree' : READS.has(tool) ? 'worktree_read' : 'worktree_write';
     const detail = action === 'outside_worktree' ? target : relative(worktree, target).split('\\').join('/') || '.';
     return { action, detail, decision: decide(policy, action, detail) };
