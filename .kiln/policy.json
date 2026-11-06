@@ -734,6 +734,11 @@
       "action": "other_commands",
       "match": "sed -i \"s/^  PUBLIC_WIDGET_REPO,\\n//; 0,/  OLD_BOARD_DATA_FOLDER,/s//  OLD_BOARD_DATA_FOLDER,\\n  ROLE_MODES,/\" packages/core/src/setup/setup.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-String -Path widgets/claude-code/src/usage.ts -Pattern \"model|context\"",
+      "decision": "allow"
     }
   ]
 }
