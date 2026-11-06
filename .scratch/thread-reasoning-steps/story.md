@@ -1,7 +1,7 @@
 ---
 title: Show a running Session's steps in its Thread, folded by default
 epic: board-ux
-stage: grill
+stage: spec
 blocked-by: []
 ---
 A Ticket's Thread is concise, which is worth keeping, but while a Session works it shows little, and the person can't tell it is moving. Opening a Ticket should show its Session's steps as they happen (what it read, ran, edited, and short reasoning notes), each folded to one line with a +/- to expand, so there is visible movement without the Thread turning into a transcript.
