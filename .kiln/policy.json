@@ -1489,6 +1489,11 @@
       "action": "other_commands",
       "match": "cat > ../chats/routes.ts <<'EOF'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -E \"^ℹ (tests|pass|fail)|✖|error|banned\"",
+      "decision": "allow"
     }
   ]
 }
