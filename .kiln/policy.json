@@ -1249,6 +1249,11 @@
       "action": "other_commands",
       "match": "grep -rn \"modeOf\\|decorate\\|routing.pick\\|\\.pick(\" packages/core/src",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "npm ci > /tmp/npmci.log 2>&1 &",
+      "decision": "allow"
     }
   ]
 }
