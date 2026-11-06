@@ -654,6 +654,11 @@
       "action": "other_commands",
       "match": "git show \"kiln/ticket/local-first/07:.scratch/local-first/issues/07-role-modes-and-the-variant-picker.md\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -First 30",
+      "decision": "allow"
     }
   ]
 }
