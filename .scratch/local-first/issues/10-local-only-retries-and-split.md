@@ -4,9 +4,9 @@
 
 **Blocked by:** 07, 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-**Stage:** review
+**Stage:** shipped
 
 > Blocked 2026-11-05: needs 07 (role modes, results, picker; code on kiln/ticket/local-first/07, not yet on master) and 08 (escalation; no code on any branch). Also blocked by 08. Re-run once both are on master.
 
