@@ -2029,6 +2029,11 @@
       "action": "other_commands",
       "match": "sed -i 's/e.payload.text ?? e.payload.reason ?? e.payload.message/JSON.stringify(e.payload).slice(0,300)/' /tmp/dbg.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"wait for full test run\",\"timeout_ms\":1800000,\"command\":\"until grep -q '^done' /tmp/full.out; do sleep 10; done; grep -E \\\"^(ℹ (pass|fail|tests))|✖\\\" /tmp/full.out | head -20\"}",
+      "decision": "allow"
     }
   ]
 }
