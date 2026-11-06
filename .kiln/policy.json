@@ -869,6 +869,11 @@
       "action": "other_commands",
       "match": "git branch --contains HEAD~1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"outside_worktree\\|Read\\b\\|'Read'\\|Glob\\|Grep\\|readOnly\\|read-only\" packages/core/src/policy/policy.ts widgets/claude-code/src/*.ts",
+      "decision": "allow"
     }
   ]
 }
