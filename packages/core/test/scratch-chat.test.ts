@@ -162,3 +162,21 @@ test('idle unpinned chats archive at 7 days, messages un-archive, and archived c
   const rollup = await kiln.api<UsageRollup[]>('GET', '/api/usage?by=project');
   assert.ok((rollup.find((r) => r.key === 'Scratch chats')?.turns ?? 0) >= 1, 'usage stays');
 });
+
+test('raise_ask works in a chat: the Ask has no Project and shows in Needs you', async (t) => {
+  const kiln = await startKiln(t);
+  await kiln.installFakeAgent({
+    script: [
+      { do: 'ask', ask: { type: 'question', question: 'Which Project?', why: 'Need to know', recommendation: 'Kiln', blocking: true } },
+      { do: 'finish', reason: 'error' },
+    ],
+  });
+  const events = await kiln.events();
+  const opened = await open(kiln, 'Ask me something');
+  await progress(events, /^ask raised: /);
+
+  const asks = await kiln.api<{ itemId: string; projectId: string }[]>('GET', '/api/asks');
+  assert.equal(asks.length, 1);
+  assert.equal(asks[0]!.itemId, `chat:${opened.chat.id}`);
+  assert.equal(asks[0]!.projectId, '');
+});

@@ -273,6 +273,8 @@ const scratchChatStage = (model?: RoleModel): Stage => ({
   role: CHAT_ROLE,
   policy: CHAT_POLICY,
   ...(model ? { model: model.model } : {}),
+  ...(model?.fallbackModel ? { fallbackModel: model.fallbackModel } : {}),
+  ...(model?.agent ? { agent: model.agent } : {}),
 });
 
 /**
