@@ -1629,6 +1629,11 @@
       "action": "other_commands",
       "match": "sed -n 236,250p packages/core/src/setup/setup.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/widget-sdk/src/scratch-chat.ts",
+      "decision": "allow"
     }
   ]
 }
