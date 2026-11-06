@@ -10,7 +10,9 @@ The Policy, the Kiln MCP tools, the no-attribution settings and the trailer chec
 
 **Blocked by:** 02, 04
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] A Session whose model is a local variant reaches the local server, not Anthropic (fake SDK test on the logged options and environment)
 - [ ] No Anthropic credential or config folder reaches a local Session
