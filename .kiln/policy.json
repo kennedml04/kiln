@@ -1889,6 +1889,11 @@
       "action": "other_commands",
       "match": "ls C:/tmp/sweep.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -Last 40",
+      "decision": "allow"
     }
   ]
 }
