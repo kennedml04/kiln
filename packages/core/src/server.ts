@@ -167,7 +167,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
   // Scratch chats: runtime records and each chat's scratch folder. Whether one runs is asked of the Session manager.
   const chats = createChats({ db, bus, dataDir: options.dataDir, isRunning: (id) => sessions.active().some((s) => s.itemId === `chat:${id}`), endSessions: (id, forget) => sessions.endItem(`chat:${id}`, forget) });
   // Archive and delete idle chats: at start, then hourly, on the injectable clock.
-  const sweepChats = () => void chats.sweep(clock.now()).catch(() => undefined);
+  const sweepChats = () => void chats.sweep(clock.now()).catch((err) => console.error("Chat sweep failed:", err));
   const chatSweep = setInterval(sweepChats, 60 * 60 * 1000);
   chatSweep.unref();
   // Make it a Story drafts live in memory; one left pending for 30 minutes is dropped.

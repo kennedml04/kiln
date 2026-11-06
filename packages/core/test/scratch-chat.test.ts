@@ -159,6 +159,14 @@ test('idle unpinned chats archive at 7 days, messages un-archive, and archived c
   await until(async () => (await kiln.api<ScratchChat[]>('GET', '/api/chats?archived=1')).length === 0);
   await assert.rejects(kiln.api('GET', `/api/chats/${idle.chat.id}`), /404/);
   assert.ok(await kiln.api<ScratchChat>('GET', `/api/chats/${kept.chat.id}`));
+  // Archiving a pinned chat by hand unpins it; pinning an archived chat brings it back.
+  const byHand = await kiln.api<ScratchChat>('PATCH', `/api/chats/${kept.chat.id}`, { archived: true });
+  assert.ok(byHand.archivedAt);
+  assert.equal(byHand.pinned, false);
+  const pinned = await kiln.api<ScratchChat>('PATCH', `/api/chats/${kept.chat.id}`, { pinned: true, title: 'Renamed' });
+  assert.equal(pinned.archivedAt, undefined);
+  assert.equal(pinned.title, 'Renamed');
+  assert.equal(existsSync(join(kiln.dataDir, 'chats', idle.chat.id)), false, 'its folder is gone');
   const rollup = await kiln.api<UsageRollup[]>('GET', '/api/usage?by=project');
   assert.ok((rollup.find((r) => r.key === 'Scratch chats')?.turns ?? 0) >= 1, 'usage stays');
 });

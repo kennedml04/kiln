@@ -103,6 +103,30 @@ export function createChats({
     rmSync(folder(id), { recursive: true, force: true });
   };
 
+  let sweeping: Promise<void> = Promise.resolve();
+  const sweepOnce = async (now: Date) => {
+    const archived: string[] = [];
+    const deleted: string[] = [];
+    for (const row of (selectAll.all() as unknown as ChatRow[]).map(fromRow)) {
+      const stale = (c: ScratchChat) => (c.archivedAt ? now.getTime() - Date.parse(c.archivedAt) > DELETE_AFTER_MS : !c.pinned && now.getTime() - Date.parse(c.lastMessageAt) > ARCHIVE_AFTER_MS);
+      if (!stale(row)) continue;
+      // The Session wrote its Digest when it went idle; ending it only lets go of the Agent.
+      await endSessions(row.id, !!row.archivedAt);
+      // A message may have come in while the Session ended: look again before acting.
+      const chat = get(row.id);
+      if (!chat || !stale(chat)) continue;
+      if (chat.archivedAt) {
+        remove(chat.id);
+        deleted.push(chat.id);
+      } else {
+        setArchived.run(now.toISOString(), chat.id);
+        bus.publish('chat.updated', { chatId: chat.id, itemId: `chat:${chat.id}`, chat: get(chat.id)! });
+        archived.push(chat.id);
+      }
+    }
+    return { archived, deleted };
+  };
+
   return {
     open(ownerId, firstMessage, now = new Date()) {
       const id = randomBytes(9).toString('base64url');
@@ -133,7 +157,11 @@ export function createChats({
         if (change.pinned) setArchived.run(null, id);
       }
       if (change.archived === false) setArchived.run(null, id);
-      if (change.archived === true && !before.archivedAt && !get(id)!.pinned) setArchived.run(now.toISOString(), id);
+      // Archiving by hand also unpins: the person asked for it to go.
+      if (change.archived === true && !before.archivedAt) {
+        setPinned.run(0, id);
+        setArchived.run(now.toISOString(), id);
+      }
       const chat = get(id)!;
       bus.publish('chat.updated', { chatId: id, itemId: `chat:${id}`, chat });
       return chat;
@@ -146,24 +174,11 @@ export function createChats({
       bus.publish('chat.updated', { chatId: id, itemId: `chat:${id}`, chat });
       return chat;
     },
-    async sweep(now) {
-      const archived: string[] = [];
-      const deleted: string[] = [];
-      for (const chat of (selectAll.all() as unknown as ChatRow[]).map(fromRow)) {
-        if (chat.archivedAt) {
-          if (now.getTime() - Date.parse(chat.archivedAt) <= DELETE_AFTER_MS) continue;
-          await endSessions(chat.id, true);
-          remove(chat.id);
-          deleted.push(chat.id);
-        } else if (!chat.pinned && now.getTime() - Date.parse(chat.lastMessageAt) > ARCHIVE_AFTER_MS) {
-          // The Session wrote its Digest when it went idle; ending it only lets go of the Agent.
-          await endSessions(chat.id, false);
-          setArchived.run(now.toISOString(), chat.id);
-          bus.publish('chat.updated', { chatId: chat.id, itemId: `chat:${chat.id}`, chat: get(chat.id)! });
-          archived.push(chat.id);
-        }
-      }
-      return { archived, deleted };
+    sweep(now) {
+      // One sweep at a time: a later call waits for the one running.
+      const run = sweeping.then(() => sweepOnce(now));
+      sweeping = run.then(() => undefined, () => undefined);
+      return run;
     },
     folder,
     remove,
