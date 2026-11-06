@@ -1864,6 +1864,11 @@
       "action": "other_commands",
       "match": "sed -i '903s/.*/            digests: (() => { const store = knowledgeFor(item); return store.seed(item).map((d) => store.render(d)); })(),/' packages/core/src/flow/session-manager.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's/const sweepChats = () => void chats.sweep(clock.now()).catch((e) => console.error(\"SWEEPERR\", e))/const sweepChats = () => void chats.sweep(clock.now()).then((r) => console.error(\"SWEEP\", clock.now().toISOString(), JSON.stringify(r))).catch((e) => console.error(\"SWEEPERR\", e))/' packages/core/src/server.ts",
+      "decision": "allow"
     }
   ]
 }
