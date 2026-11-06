@@ -1479,6 +1479,11 @@
       "action": "other_commands",
       "match": "sed -i 's|const rework = gates?.reworkSeed(itemId, previous?.startedAt) ?? \\[\\];|const rework = chat ? [] : (gates?.reworkSeed(itemId, previous?.startedAt) ?? []);|' session-manager.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > widgets/claude-code/test/read-roots.test.ts <<'E'",
+      "decision": "allow"
     }
   ]
 }
