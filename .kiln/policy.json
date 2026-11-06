@@ -1934,6 +1934,11 @@
       "action": "other_commands",
       "match": "sed -i \"s|assert.equal(rollup.find((r) => r.key === 'Scratch chats')?.turns, 1, 'usage stays');|assert.ok((rollup.find((r) => r.key === 'Scratch chats')?.turns ?? 0) >= 1, 'usage stays');|\" packages/core/test/scratch-chat.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -A1 -E \"typecheck|check$\"",
+      "decision": "allow"
     }
   ]
 }
