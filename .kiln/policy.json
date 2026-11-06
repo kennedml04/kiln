@@ -2034,6 +2034,11 @@
       "action": "other_commands",
       "match": "Monitor {\"description\":\"wait for full test run\",\"timeout_ms\":1800000,\"command\":\"until grep -q '^done' /tmp/full.out; do sleep 10; done; grep -E \\\"^(ℹ (pass|fail|tests))|✖\\\" /tmp/full.out | head -20\"}",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "GIT_EDITOR=true git rebase --continue 2>&1",
+      "decision": "allow"
     }
   ]
 }
