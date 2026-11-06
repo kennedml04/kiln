@@ -15,4 +15,5 @@ Kiln measures quota per Session against the week and 5-hour windows (`packages/c
 - What pauses when it trips: dispatch of new Sessions only, or running ones too? One Ask, with "carry on for another N%"?
 - The 20% and 12 hours as Admin settings on the Budget, with these as defaults?
 - How it shows on the board: a gauge beside the week, or only when it trips?
+- The week gauge shows the gap to pace as a signed number ("22% used · 18 under pace", "+6 over pace" in a warning colour), so the person needn't subtract; the hold rule trips at `paceAhead` over. Same treatment for the 12-hour figure?
 - Readings are account-wide (the person's own use outside Kiln counts too): measure only Kiln's attributed share, or the whole reading?
