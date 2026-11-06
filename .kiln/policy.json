@@ -1104,6 +1104,11 @@
       "action": "other_commands",
       "match": "git commit -qm \"story-flow: give the full-Workflow test room when the machine is busy\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "tail -15",
+      "decision": "allow"
     }
   ]
 }
