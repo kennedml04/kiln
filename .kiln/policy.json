@@ -1539,6 +1539,11 @@
       "action": "other_commands",
       "match": "sed -i \"s|{ do: 'usage', turn: 1, inputTokens|{ do: 'usage', inputTokens|; s|'/api/usage/rollup?by=project'|'/api/usage?by=project'|; s|a.split(' ').at(-1)|a.split(' ')[1]|\" packages/core/test/scratch-chat.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git commit -qm \"Read roots in the Agent interface and the chat Policy\"",
+      "decision": "allow"
     }
   ]
 }
