@@ -1694,6 +1694,11 @@
       "action": "other_commands",
       "match": "python3 - <<'E'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/core/src/access.ts",
+      "decision": "allow"
     }
   ]
 }
