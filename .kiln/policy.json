@@ -894,6 +894,11 @@
       "action": "other_commands",
       "match": "grep -rn \"PROJECT_THREAD_ROLE\\|project-thread\" packages/core/src packages/shell/src --include=*.ts --include=*.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 5,12p README.md",
+      "decision": "allow"
     }
   ]
 }
