@@ -819,6 +819,11 @@
       "action": "other_commands",
       "match": "cat .scratch/project-wizard/spec.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n -i \"project thread\\|^#\\|attended\\|35\\.\\|context alarm\\|stall rule\\|pace rule\\|reserve\\|Knowledge store\\|notes folder\\|Stop all\\|Viewer\\|id prefix\\|project:\" .scratch/kiln-v1/spec.md",
+      "decision": "allow"
     }
   ]
 }
