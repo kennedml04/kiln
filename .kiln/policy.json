@@ -1939,6 +1939,11 @@
       "action": "other_commands",
       "match": "grep -A1 -E \"typecheck|check$\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git rebase master 2>&1",
+      "decision": "allow"
     }
   ]
 }
