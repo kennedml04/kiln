@@ -1914,6 +1914,11 @@
       "action": "other_commands",
       "match": "Select-Object -First 8",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -Skip 384 -First 12",
+      "decision": "allow"
     }
   ]
 }
