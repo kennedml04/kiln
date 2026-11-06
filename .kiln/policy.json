@@ -1834,6 +1834,11 @@
       "action": "other_commands",
       "match": "git merge kiln/ticket/scratch-chat/01 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -Last 8",
+      "decision": "allow"
     }
   ]
 }
