@@ -1854,6 +1854,11 @@
       "action": "other_commands",
       "match": "sed -i 's|/^/api/chats/\\[^/\\]+\\$/|/^\\\\/api\\\\/chats\\\\/[^/]+$/|' packages/core/src/access.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git branch -a --contains kiln/ticket/scratch-chat/04",
+      "decision": "allow"
     }
   ]
 }
