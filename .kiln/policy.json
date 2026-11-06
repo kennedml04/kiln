@@ -1964,6 +1964,11 @@
       "action": "other_commands",
       "match": "time node --test widgets/claude-code/test/read-roots.test.ts 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show master:packages/widget-sdk/src/scratch-chat.ts > scratch-chat.ts",
+      "decision": "allow"
     }
   ]
 }
