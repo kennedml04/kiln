@@ -72,10 +72,11 @@ test('a chat starts even when the agents pool is full, and takes no pool slot', 
 
 test('Stop all pauses a running chat and refuses new chats and messages with 409', async (t) => {
   const kiln = await startKiln(t);
-  await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }, { do: 'finish', reason: 'error' }] });
+  await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'finish', reason: 'error' }] });
   const events = await kiln.events();
   const opened = await open(kiln, 'First');
   await events.next('session.started');
+  await until(async () => (await kiln.api<SessionInfo>('GET', `/api/sessions/${opened.sessionId}`)).state === 'running');
 
   await kiln.api('POST', '/api/scheduler/stop-all');
 

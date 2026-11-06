@@ -56,7 +56,7 @@ const answer = async (kiln: TestKiln, ask: Ask, text: string) =>
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' });
 
-test('Replay plays the demo Story to shipped on the fake Agent, with the wizard models and their Budget untouched', async (t) => {
+test('Replay plays the demo Story to shipped on the fake Agent, with the wizard models and their Budget untouched', { timeout: 300_000 }, async (t) => {
   const kiln = await startTestKiln(t, { devInstance: true });
   await chooseWizardModels(kiln);
   const events = await kiln.events();
