@@ -1349,6 +1349,11 @@
       "action": "other_commands",
       "match": "grep -n \"requestFor\\|outside_worktree\\|^test(\\|^  test(\" widgets/claude-code/test/claude-code.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"caller\" -B2 -A12 packages/core/src/access.ts",
+      "decision": "allow"
     }
   ]
 }
