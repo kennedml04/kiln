@@ -1319,6 +1319,11 @@
       "action": "other_commands",
       "match": "echo hasnm",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd packages/core/src",
+      "decision": "allow"
     }
   ]
 }
