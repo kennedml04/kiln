@@ -1144,6 +1144,11 @@
       "action": "other_commands",
       "match": "head -150",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git checkout --theirs .kiln/policy.json",
+      "decision": "allow"
     }
   ]
 }
