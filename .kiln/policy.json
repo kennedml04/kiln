@@ -1174,6 +1174,11 @@
       "action": "other_commands",
       "match": "grep -v '^A \\|^M '",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 40,56p .kiln/policy.json",
+      "decision": "allow"
     }
   ]
 }
