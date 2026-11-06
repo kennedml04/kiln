@@ -1704,6 +1704,11 @@
       "action": "other_commands",
       "match": "sed -n 239,310p packages/core/test/threads.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 440,640p server.ts",
+      "decision": "allow"
     }
   ]
 }
