@@ -1544,6 +1544,11 @@
       "action": "other_commands",
       "match": "git commit -qm \"Read roots in the Agent interface and the chat Policy\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i \"0,/{ do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'finish'/s//{ do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'wait_for_message' }, { do: 'finish'/\" packages/core/test/scratch-chat.test.ts",
+      "decision": "allow"
     }
   ]
 }
