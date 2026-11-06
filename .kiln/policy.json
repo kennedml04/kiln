@@ -1059,6 +1059,11 @@
       "action": "other_commands",
       "match": "Monitor {\"description\":\"wait\",\"timeout_ms\":1250000,\"command\":\"sleep 1200\"}",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"final result\",\"timeout_ms\":1500000,\"command\":\"until grep -q \\\"^ℹ fail\\\" /tmp/t12.log; do sleep 15; done; grep -E \\\"^(✖|ℹ (pass|fail))\\\" /tmp/t12.log\"}",
+      "decision": "allow"
     }
   ]
 }
