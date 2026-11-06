@@ -1214,6 +1214,11 @@
       "action": "other_commands",
       "match": "git rev-parse --short HEAD",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git commit -q -m \"Review 08 again: still not built, 03 and 07 still unmerged\"",
+      "decision": "allow"
     }
   ]
 }
