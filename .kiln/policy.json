@@ -934,6 +934,11 @@
       "action": "other_commands",
       "match": "git log --oneline -3 master",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git add .scratch/local-first/reviews/07-role-modes-and-the-variant-picker.md",
+      "decision": "allow"
     }
   ]
 }
