@@ -789,6 +789,11 @@
       "action": "other_commands",
       "match": "git add .scratch/local-first/reviews/03-local-sessions-in-claude-code.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git show HEAD -- packages/core/src packages/widget-sdk widgets",
+      "decision": "allow"
     }
   ]
 }
