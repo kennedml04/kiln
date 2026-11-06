@@ -1874,6 +1874,11 @@
       "action": "other_commands",
       "match": "sed -i 's/console.error(\"SWEEP\", /require(\"node:fs\").appendFileSync(\"C:\\/tmp\\/sweep.log\", /' packages/core/src/server.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i '168s/.*/  const sweepChats = () => void chats.sweep(clock.now()).catch(() => undefined);/' packages/core/src/server.ts",
+      "decision": "allow"
     }
   ]
 }
