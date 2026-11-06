@@ -54,7 +54,37 @@ const messageOf = (sha: string) => {
   return message;
 };
 
-const commits = todo.map((sha) => ({ sha, tree: git('rev-parse', `${sha}^{tree}`), date: git('log', '-1', '--format=%aI', sha), message: messageOf(sha) }));
+// Live Kiln's "Always allow" commits a Project Policy rule to the trunk, and a rule can name a
+// folder on this PC (`cd C:/Users/...`). The public history leaves such rules out of
+// .kiln/policy.json and says only what kind of rule it was; the trunk itself must drop them before
+// it publishes, since the public tip's tree must be the trunk's.
+const POLICY = '.kiln/policy.json';
+const LOCAL_PATH = /[a-z]:(\\\\|\\|\/)+(Users|home)(\\\\|\\|\/)|\/(Users|home)\//i;
+const index = join(tmpdir(), `kiln-publish-index-${process.pid}`);
+const publicTreeOf = (sha: string) => {
+  const tree = git('rev-parse', `${sha}^{tree}`);
+  let text: string;
+  try {
+    text = git('show', `${tree}:${POLICY}`);
+  } catch {
+    return tree;
+  }
+  if (!LOCAL_PATH.test(text)) return tree;
+  const doc = JSON.parse(text) as { rules?: { match?: string }[] };
+  doc.rules = (doc.rules ?? []).filter((r) => !LOCAL_PATH.test(r.match ?? ''));
+  const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { input: `${JSON.stringify(doc, null, 2)}\n`, encoding: 'utf8' }).trim();
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  execFileSync('git', ['read-tree', tree], { env });
+  execFileSync('git', ['update-index', '--cacheinfo', `100644,${blob},${POLICY}`], { env });
+  return execFileSync('git', ['write-tree'], { env, encoding: 'utf8' }).trim();
+};
+const publicMessage = (message: string) => {
+  const rule = /^Kiln: always allow (\S+) /.exec(message);
+  return rule && LOCAL_PATH.test(message) ? `Kiln: always allow ${rule[1]} (a rule that named a local folder, left out here)` : message;
+};
+
+const commits = todo.map((sha) => ({ sha, tree: publicTreeOf(sha), date: git('log', '-1', '--format=%aI', sha), message: publicMessage(messageOf(sha)) }));
+await rm(index, { force: true });
 for (const c of commits) if (TRAILER.test(c.message)) fail(`${c.sha.slice(0, 7)} carries a Co-Authored-By trailer; reword it on ${from} first.`);
 
 // The checks run over exactly what goes public: the new tip's tree, plus the new messages as a text file.
