@@ -2129,6 +2129,11 @@
       "action": "other_commands",
       "match": "killall node*",
       "decision": "deny"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd ../..",
+      "decision": "allow"
     }
   ]
 }
