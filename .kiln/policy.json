@@ -1449,6 +1449,11 @@
       "action": "other_commands",
       "match": "grep -n \"serveAgent\" -A60 packages/widget-sdk/src/agent.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's|^  layerDecision,$|  CHAT_POLICY,\\n  layerDecision,|' policy/policy.ts",
+      "decision": "allow"
     }
   ]
 }
