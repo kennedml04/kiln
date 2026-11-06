@@ -1584,6 +1584,11 @@
       "action": "other_commands",
       "match": "grep -i scratch",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for b in 01 02 03",
+      "decision": "allow"
     }
   ]
 }
