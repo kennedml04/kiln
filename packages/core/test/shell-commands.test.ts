@@ -32,8 +32,12 @@ test('commands that only read the worktree are reads', () => {
     "find . -path ./node_modules -prune -o -ipath '*local-first*' -print",
     'grep -n "THREAD_TYPES" -A6 packages/core/src/flow/session-manager.ts',
     'grep -H "^\\*\\*Status" .scratch/local-first/issues/*.md',
+    'grep -A1 -E "typecheck|check$"',
+    'grep -rln "chatThreadId\\|scratch-chat" packages widgets --include=*.ts --include=*.tsx',
     'sed -n 195,260p packages/core/src/db.ts',
     "sed -n '195,260p' packages/core/src/db.ts",
+    "sed -n '/^## Done/,$p' .scratch/x/story.md",
+    "sed 's/foo/bar/g' README.md",
     'git status -s',
     'git log --oneline -60',
     'git log --oneline --all -i --grep=variant',
@@ -51,6 +55,7 @@ test('commands that only read the worktree are reads', () => {
     `cd "${worktree.split('\\').join('/')}"`,
     'cd .',
     'Get-ChildItem widgets/claude-code/src',
+    'Get-Content packages/core/src/db.ts | Select-Object -First 10',
     'pwd',
   ]) {
     assert.equal(worktreeEffect(command, worktree), 'read', command);
@@ -68,6 +73,13 @@ test('commands that only change files in the worktree are writes', () => {
     'mkdir -p .scratch/demo-project',
     'mkdir .kiln',
     "cat > packages/core/test/role-modes.test.ts <<'EOF'",
+    'sed -i s/a/b/ file.ts',
+    "sed -i 's|^  layerDecision,$|  CHAT_POLICY,\\n  layerDecision,|' policy/policy.ts",
+    `sed -i "s|{ content: { decided: string\\[\\] } }\\[\\]|{ decided: string[] }[]|; s|digests.map((d) => d.content.decided)|digests.map((d) => d.decided)|" packages/core/test/scratch-chat.test.ts`,
+    `sed -i "0,/{ do: 'wait_for_message' }, { do: 'finish'/s//{ do: 'wait_for_message' }, { do: 'finish'/" packages/core/test/scratch-chat.test.ts`,
+    "sed -i '903s/.*/            digests: (() => { const store = knowledgeFor(item); return store.seed(item); })(),/' packages/core/src/flow/session-manager.ts",
+    "sed -i 's/chats\\.touch(id);/chats.touch(id, clock.now());/; s/chats\\.open(ownerOf(), text)/chats.open(ownerOf(), text, clock.now())/' packages/core/src/chats/routes.ts",
+    "sed -i.bak -e 's/a/b/g' -e '/^$/d' README.md",
   ]) {
     assert.equal(worktreeEffect(command, worktree), 'write', command);
   }
@@ -92,7 +104,15 @@ test('anything else still asks under the Project template', () => {
     'echo hi > notes.md',
     'find . -name "*.tmp" -delete',
     'find . -exec rm {} ;',
-    'sed -i s/a/b/ file.ts',
+    "sed -i 's/a/b/w /tmp/out' file.ts",
+    "sed -i 's/a/b/e' file.ts",
+    "sed -i '1r /etc/passwd' file.ts",
+    "sed -i 'e rm -rf /' file.ts",
+    "sed -i 's/a/b/' ../../other.ts",
+    "sed -i 's/a/b/'",
+    'sed -i -f edits.sed file.ts',
+    "sed -n '1w /tmp/out' file.ts",
+    'sed -i s/a/b\\/w file.ts',
     'git diff --no-index /etc/passwd x',
     'git diff --output=out.txt',
     'git -c core.pager=evil log',
@@ -107,6 +127,8 @@ test('anything else still asks under the Project template', () => {
     'for b in 07 08 09',
     "$p='packages/core/src/flow/session-manager.ts'",
     'tail -f log.txt',
+    'grep "$HOME" notes.md',
+    'grep "${x}" notes.md',
   ]) {
     assert.equal(worktreeEffect(command, worktree), undefined, command);
     assert.notEqual(bash(command)?.decision, 'allow', command);

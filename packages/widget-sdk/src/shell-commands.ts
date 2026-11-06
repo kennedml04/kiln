@@ -61,8 +61,10 @@ function words(command: string): string[] | undefined {
     const c = line[i]!;
     if (quote) {
       if (c === quote) quote = null;
-      else if (quote === '"' && (c === '$' || c === '`')) return undefined;
-      else if (quote === '"' && c === '\\' && i + 1 < line.length) current += line[++i];
+      // A variable or substitution; a `$` before the closing quote or a space is just a dollar sign.
+      else if (quote === '"' && (c === '`' || (c === '$' && /[\w{(@*#?$!-]/.test(line[i + 1] ?? '')))) return undefined;
+      // In double quotes a backslash escapes only `$`, a backquote, `"`, `\` and a newline.
+      else if (quote === '"' && c === '\\' && i + 1 < line.length && '$`"\\\n'.includes(line[i + 1]!)) current += line[++i];
       else current += c;
       continue;
     }
@@ -150,9 +152,91 @@ const PLAIN: Record<string, (args: string[]) => boolean> = {
   echo: () => true,
   which: () => true,
   sort: (a) => !a.some((w) => w === '-o' || w.startsWith('--output') || /^-[a-z]*o/i.test(w)),
-  // Print lines only: `-n` with an address-and-print script, never `-i` or a `w`/`e` command.
-  sed: (a) => a.includes('-n') && !a.some((w) => /^-[a-z]*i/.test(w) || w.startsWith('--in-place')) && a.filter((w) => !flag(w)).length > 0 && /^[\d,$]+p$|^\/[^/]*\/p$/.test(a.find((w) => !flag(w))!),
+  // Prints to stdout only: no `-i`, and a script that reads no other file and writes or runs nothing.
+  sed: (a) => !sedInPlace(a) && sedParts(a) !== undefined,
 };
+
+const sedInPlace = (args: string[]) => args.some((w) => /^-[a-zA-Z]*i/.test(w) || w.startsWith('--in-place'));
+
+/**
+ * Whether a sed script only selects, deletes, prints and substitutes lines: addresses (`12`, `$`,
+ * `/re/`, `0,/re/`), then `p`, `d`, `=`, `q`, or `s` with any delimiter and only the `g`, `p`, `i`,
+ * `I`, `m`, `M` or number flags. `w`, `r`, `e` and every other command are not judged here.
+ */
+export function isPlainSedScript(script: string): boolean {
+  let i = 0;
+  const n = script.length;
+  const skipRegex = (d: string) => {
+    for (i++; i < n && script[i] !== d; i++) if (script[i] === '\\') i++;
+    if (i >= n) return false;
+    i++;
+    return true;
+  };
+  const address = () => {
+    if (/\d/.test(script[i] ?? '')) while (/\d/.test(script[i] ?? '')) i++;
+    else if (script[i] === '$') i++;
+    else if (script[i] === '/') return skipRegex('/');
+    return true;
+  };
+  let commands = 0;
+  while (i < n) {
+    while (i < n && /[\s;]/.test(script[i]!)) i++;
+    if (i >= n) break;
+    if (!address()) return false;
+    if (script[i] === ',') {
+      i++;
+      if (!address()) return false;
+    }
+    while (script[i] === ' ' || script[i] === '!') i++;
+    const c = script[i];
+    if (c === 'p' || c === 'd' || c === '=' || c === 'q') i++;
+    else if (c === 's') {
+      const d = script[++i];
+      if (!d || /[\s\\\n]/.test(d)) return false;
+      if (!skipRegex(d)) return false;
+      i--;
+      if (!skipRegex(d)) return false;
+      while (/[gpiImM\d]/.test(script[i] ?? '')) i++;
+    } else return false;
+    while (script[i] === ' ') i++;
+    if (i < n && script[i] !== ';' && script[i] !== '\n') return false;
+    commands++;
+  }
+  return commands > 0;
+}
+
+/** Whether a command has a backslash outside quotes, which the shell would take out before sed sees it. */
+function bareBackslash(command: string): boolean {
+  let quote: string | null = null;
+  for (const c of command) {
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === '\\') return true;
+  }
+  return false;
+}
+
+/** A sed command's files, when every script in it is plain (see isPlainSedScript); else undefined. */
+function sedParts(args: string[]): string[] | undefined {
+  const scripts: string[] = [];
+  const files: string[] = [];
+  for (let k = 0; k < args.length; k++) {
+    const w = args[k]!;
+    if (w === '-e' || w === '--expression') scripts.push(args[++k] ?? '');
+    else if (w.startsWith('--expression=')) scripts.push(w.slice('--expression='.length));
+    else if (w === '-f' || w.startsWith('--file')) return undefined;
+    else if (flag(w)) {
+      if (!/^-[nErsuz]*(i[\w.]*)?$/.test(w) && !w.startsWith('--in-place') && !['--regexp-extended', '--quiet', '--silent', '--posix'].includes(w)) return undefined;
+    } else files.push(w);
+  }
+  if (!scripts.length) {
+    const first = files.shift();
+    if (first === undefined) return undefined;
+    scripts.push(first);
+  }
+  return scripts.every(isPlainSedScript) ? files : undefined;
+}
 
 /** Git subcommands that only read, with the options that would make them write or run something. */
 const GIT: Record<string, (args: string[]) => boolean> = {
@@ -181,7 +265,7 @@ const GIT: Record<string, (args: string[]) => boolean> = {
 };
 
 /** PowerShell's reading cmdlets (and their aliases). */
-const POWERSHELL = new Set(['get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-location', 'gl', 'test-path', 'resolve-path', 'get-item', 'gi', 'measure-object']);
+const POWERSHELL = new Set(['get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-location', 'gl', 'test-path', 'resolve-path', 'get-item', 'gi', 'measure-object', 'select-object', 'select', 'sort-object', 'format-table', 'ft', 'format-list', 'fl', 'out-string']);
 
 /** Git subcommands that only change the worktree, its index or its branch. */
 const GIT_WRITES: Record<string, (args: string[]) => boolean> = {
@@ -263,8 +347,9 @@ export function isReadOnlyCommand(command: string, worktree: string): boolean {
   const check = PLAIN[name];
   if (!check || !check(args)) return false;
   if (name === 'echo') return true;
-  // grep and sed take a pattern or script first; only what follows names files.
-  const files = ['grep', 'egrep', 'fgrep', 'rg', 'sed'].includes(name) ? operands(args).slice(1) : operands(args);
+  if (name === 'sed') return !bareBackslash(command) && sedParts(args)!.every((w) => staysInside(worktree, w));
+  // grep takes a pattern first; only what follows names files.
+  const files = ['grep', 'egrep', 'fgrep', 'rg'].includes(name) ? operands(args).slice(1) : operands(args);
   if (name === 'find') return files.slice(0, 1).every((w) => staysInside(worktree, w));
   return files.every((w) => staysInside(worktree, w));
 }
@@ -290,6 +375,11 @@ export function worktreeEffect(command: string, worktree: string): 'read' | 'wri
     // A commit's message is not a path; every other operand is.
     if (sub === 'commit') return 'write';
     return subArgs.filter((w) => !flag(w)).every((w) => staysInside(worktree, w)) ? 'write' : undefined;
+  }
+  // `sed -i` with a plain script edits the files it names, and nothing else.
+  if (program === 'sed' && sedInPlace(args) && !bareBackslash(command)) {
+    const files = sedParts(args);
+    return files?.length && files.every((w) => staysInside(worktree, w)) ? 'write' : undefined;
   }
   const check = FILE_WRITES[program!];
   return check && check(args) && operands.length > 0 && operands.every((w) => staysInside(worktree, w)) ? 'write' : undefined;
