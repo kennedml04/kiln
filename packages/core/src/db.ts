@@ -250,6 +250,16 @@ const MIGRATIONS: string[] = [
      archived_at TEXT,
      stories TEXT NOT NULL DEFAULT '[]'
    )`,
+  // Safe restart: what a Session needs to resume after a core restart (resume token, pool slot, the
+  // local attempt as JSON, the pending Permission decision as JSON, why it is paused). Old rows: null / 0.
+  `ALTER TABLE sessions ADD COLUMN resume_token TEXT;
+   ALTER TABLE sessions ADD COLUMN pool_slot TEXT;
+   ALTER TABLE sessions ADD COLUMN local_attempt TEXT;
+   ALTER TABLE sessions ADD COLUMN interrupted INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE sessions ADD COLUMN pending_permission TEXT;
+   ALTER TABLE sessions ADD COLUMN pause_reason TEXT;
+   ALTER TABLE sessions ADD COLUMN crash_resume_count INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE sessions ADD COLUMN failed_resume_count INTEGER NOT NULL DEFAULT 0`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

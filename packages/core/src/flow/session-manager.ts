@@ -164,6 +164,8 @@ interface Live {
   idleTimer?: ReturnType<typeof setTimeout>;
   /** Whether the Session has written a Digest since it last started or came back. */
   digested: boolean;
+  /** Why the Session is paused (saved, so a restart knows whether to resume it). */
+  pauseReason?: 'stop_all';
   /** When Stop all paused it (ms), to tell whether its Agent's cache is still warm on resume. */
   pausedAt?: number;
   /**
@@ -365,12 +367,32 @@ export function createSessionManager({
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const updateRow = db.prepare('UPDATE sessions SET state = ?, exit = ?, ended_at = ? WHERE id = ?');
+  const updateLive = db.prepare('UPDATE sessions SET interrupted = ?, local_attempt = ?, pause_reason = ? WHERE id = ?');
   const selectAll = db.prepare('SELECT * FROM sessions ORDER BY started_at, id');
   const selectProject = db.prepare('SELECT * FROM sessions WHERE project_id = ?');
   const deleteProject = db.prepare('DELETE FROM sessions WHERE project_id = ?');
 
-  // Sessions a previous core process was running cannot continue: their Agent processes are gone.
-  db.prepare(`UPDATE sessions SET state = 'stopped', ended_at = ? WHERE state IN ('running', 'paused', 'waiting')`).run(new Date().toISOString());
+  // Sessions a previous core process left alive: their Agent processes are gone, so each one is
+  // classified by what it needs to resume from its saved conversation (the resume token).
+  //  - paused for a restart, or running when the core stopped unexpectedly (once): marked to resume
+  //    (stays `paused` with pause_reason 'restart' / 'crash'; the crash-resume count is spent).
+  //  - paused by Stop all: stays paused. Waiting: stays waiting, its Ask stays open.
+  //  - no token, or a second unplanned stop: the failed-resume path (the Session ends with an error).
+  {
+    const now = new Date().toISOString();
+    const fail = db.prepare(`UPDATE sessions SET state = 'error', ended_at = ?, failed_resume_count = failed_resume_count + 1 WHERE id = ?`);
+    const markResume = db.prepare(`UPDATE sessions SET state = 'paused', pause_reason = ?, crash_resume_count = crash_resume_count + ? WHERE id = ?`);
+    const alive = db.prepare(`SELECT id, state, resume_token, pause_reason, crash_resume_count FROM sessions WHERE state IN ('running', 'paused', 'waiting') ORDER BY started_at, id`).all() as unknown as {
+      id: string; state: SessionState; resume_token: string | null; pause_reason: string | null; crash_resume_count: number;
+    }[];
+    for (const row of alive) {
+      if (!row.resume_token) fail.run(now, row.id);
+      else if (row.state === 'running') {
+        if (row.crash_resume_count === 0) markResume.run('crash', 1, row.id);
+        else fail.run(now, row.id);
+      } else if (row.state === 'paused' && row.pause_reason !== 'stop_all') markResume.run('restart', 0, row.id);
+    }
+  }
   const latest = new Map<string, SessionInfo>();
   for (const row of selectAll.all() as unknown as SessionRow[]) latest.set(row.item_id, fromRow(row));
   for (const info of latest.values()) work.setRun(info.itemId, toRun(info), { quiet: true });
@@ -380,6 +402,8 @@ export function createSessionManager({
   /** Saves a Session's state and shows it on its Item. */
   const save = (info: SessionInfo) => {
     updateRow.run(info.state, info.exit ? JSON.stringify(info.exit) : null, info.endedAt ?? null, info.id);
+    const session = live.get(info.id);
+    if (session) updateLive.run(session.interrupted ? 1 : 0, session.local ? JSON.stringify(session.local) : null, session.pauseReason ?? null, info.id);
     work.setRun(info.itemId, toRun(info));
     bus.publish('session.updated', { ...ref(info), session: info });
   };
@@ -1149,6 +1173,7 @@ export function createSessionManager({
       const { info } = session;
       info.state = 'paused';
       session.pausedAt = Date.now();
+      session.pauseReason = 'stop_all';
       save(info);
       interrupt(session);
     },
@@ -1169,6 +1194,7 @@ export function createSessionManager({
         return 'expired';
       }
       info.state = 'running';
+      session.pauseReason = undefined;
       save(info);
       widgets.sendCommand(info.widgetId, { type: 'agent.resume', sessionId: id });
       return 'resumed';
