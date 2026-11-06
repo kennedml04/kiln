@@ -849,6 +849,11 @@
       "action": "other_commands",
       "match": "sed -n 55,120p packages/core/src/flow/routes.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat packages/shell/package.json",
+      "decision": "allow"
     }
   ]
 }
