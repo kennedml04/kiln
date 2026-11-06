@@ -1014,6 +1014,11 @@
       "action": "other_commands",
       "match": "node --test packages/core/test/story-flow.test.ts 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"rerun summary\",\"timeout_ms\":1200000,\"command\":\"until grep -q \\\"^ℹ fail\\\" /tmp/t12.log 2>/dev/null; do sleep 10; done; grep -E \\\"^(✖|ℹ (pass|fail))\\\" /tmp/t12.log\"}",
+      "decision": "allow"
     }
   ]
 }
