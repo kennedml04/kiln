@@ -1849,6 +1849,11 @@
       "action": "other_commands",
       "match": "sed -i 's/chats\\.touch(id);/chats.touch(id, clock.now());/; s/chats\\.open(ownerOf(), text)/chats.open(ownerOf(), text, clock.now())/' packages/core/src/chats/routes.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's|/^/api/chats/\\[^/\\]+\\$/|/^\\\\/api\\\\/chats\\\\/[^/]+$/|' packages/core/src/access.ts",
+      "decision": "allow"
     }
   ]
 }
