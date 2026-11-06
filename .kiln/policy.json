@@ -809,6 +809,11 @@
       "action": "other_commands",
       "match": "cat docs/agents/issue-tracker.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > packages/shell/test/scoreboard.test.ts <<'XEOF'",
+      "decision": "allow"
     }
   ]
 }
