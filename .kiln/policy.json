@@ -1439,6 +1439,11 @@
       "action": "other_commands",
       "match": "cat widgets/claude-code/src/main.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > packages/widget-sdk/src/scratch-chat.ts <<'EOF'",
+      "decision": "allow"
     }
   ]
 }
