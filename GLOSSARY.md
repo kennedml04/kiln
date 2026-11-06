@@ -67,7 +67,7 @@ Where a Project's Item records live (their content and Stage). It is pluggable: 
 _Avoid_: issue tracker, backlog (a backlog is a view)
 
 **Policy**:
-The rules saying which abstract actions Sessions may take (allow, ask or deny). It is layered: Org, then Project, then Stage, and each lower layer can only tighten the one above.
+The rules saying which abstract actions Sessions may take (allow, ask or deny). It is layered: Org, then Project, then Stage, and each lower layer can only tighten the one above. A shell command that only reads the worktree (`ls`, `git log`) counts as a worktree read, and one that only changes files in it (`git add`, `mkdir`) as a worktree write.
 _Avoid_: permissions, allowlist, settings
 
 **Ask**:

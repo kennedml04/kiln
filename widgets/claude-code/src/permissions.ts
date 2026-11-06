@@ -5,7 +5,7 @@
 // for the answer before the tool may run.
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { EffectivePolicy, PolicyAction, PolicyDecision } from '@kiln/widget-sdk';
-import { decide } from '@kiln/widget-sdk';
+import { decide, shellRequest } from '@kiln/widget-sdk';
 
 /** What one tool call asks for, in Kiln's terms. */
 export interface ToolRequest {
@@ -58,59 +58,6 @@ function pathOf(input: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/** Splits a shell command line into its commands (on `&&`, `||`, `;`, `|` and newlines), outside quotes. */
-export function splitCommands(line: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let quote: string | null = null;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]!;
-    if (quote) {
-      current += c;
-      if (c === quote) quote = null;
-      else if (c === '\\' && quote === '"' && i + 1 < line.length) current += line[++i];
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      quote = c;
-      current += c;
-      continue;
-    }
-    const two = line.slice(i, i + 2);
-    if (two === '&&' || two === '||') {
-      parts.push(current);
-      current = '';
-      i++;
-      continue;
-    }
-    if (c === ';' || c === '|' || c === '\n') {
-      parts.push(current);
-      current = '';
-      continue;
-    }
-    current += c;
-  }
-  parts.push(current);
-  return parts.map((p) => p.trim()).filter(Boolean);
-}
-
-const EXTERNAL_WRITES = [/^git\s+push\b/, /^gh\s+(pr|issue)\s+(create|comment|edit|close|merge|review)\b/, /^gh\s+release\s+create\b/, /^gh\s+api\b.*-X\s*(POST|PUT|PATCH|DELETE)/i];
-
-const isKnown = (command: string, known: string[]) =>
-  known.some((k) => (k.endsWith('*') ? command.startsWith(k.slice(0, -1)) : command === k));
-
-/** One shell command's action. */
-function commandRequest(policy: EffectivePolicy, command: string): ToolRequest {
-  const action: PolicyAction = EXTERNAL_WRITES.some((re) => re.test(command))
-    ? 'external_writes'
-    : isKnown(command, policy.knownCommands)
-      ? 'known_commands'
-      : 'other_commands';
-  return { action, detail: command, decision: decide(policy, action, command) };
-}
-
-const RANK: Record<PolicyDecision, number> = { allow: 0, ask: 1, deny: 2 };
-
 /**
  * What a tool call amounts to and what the Policy says about it. `undefined` means the tool needs
  * no Kiln decision (it is harmless or a Kiln tool); a tool Kiln does not know asks. `skillFolders`
@@ -138,12 +85,8 @@ export function requestFor(
     const detail = action === 'outside_worktree' ? target : relative(worktree, target).split('\\').join('/') || '.';
     return { action, detail, decision: decide(policy, action, detail) };
   }
-  if (tool === 'Bash' || tool === 'PowerShell') {
-    const commands = splitCommands(String(input.command ?? ''));
-    if (!commands.length) return { action: 'other_commands', detail: '', decision: decide(policy, 'other_commands', '') };
-    // The strictest of its commands decides, and is the one a Permission Ask names.
-    return commands.map((c) => commandRequest(policy, c)).reduce((a, b) => (RANK[b.decision] > RANK[a.decision] ? b : a));
-  }
+  // Reads and writes inside the worktree (`ls`, `git log`, `git add`) count as such; see shellRequest.
+  if (tool === 'Bash' || tool === 'PowerShell') return shellRequest(policy, worktree, String(input.command ?? ''));
   if (tool === 'WebFetch') {
     let domain = '';
     try {
