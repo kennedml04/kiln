@@ -2054,6 +2054,11 @@
       "action": "other_commands",
       "match": "fail)\"; done",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "if (-not (Test-Path node_modules)) { npm ci 2>&1",
+      "decision": "allow"
     }
   ]
 }
