@@ -3,6 +3,7 @@
 // detail the call amounts to and looks it up in the effective Policy: allow runs it, deny blocks it,
 // and ask hands it to the permission callback, which reports a Kiln permission request and waits
 // for the answer before the tool may run.
+import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { EffectivePolicy, PolicyAction, PolicyDecision } from '@kiln/widget-sdk';
 import { decide, shellRequest } from '@kiln/widget-sdk';
@@ -25,6 +26,10 @@ const HARMLESS = new Set([
   'TaskUpdate',
   'TaskStop',
   'TaskOutput',
+  // Read or stop the Session's own background shells.
+  'BashOutput',
+  'KillShell',
+  'KillBash',
   'EnterPlanMode',
   'ExitPlanMode',
   'ToolSearch',
@@ -51,6 +56,13 @@ const inside = (root: string, path: string) => {
 };
 
 const samePathCase = (path: string) => (process.platform === 'win32' ? path.toLowerCase() : path);
+const slashes = (path: string) => path.split('\\').join('/');
+
+/**
+ * The scratch folders: the system temp folder (where Claude Code keeps background task output) and
+ * the shell's `/tmp` (the same folder in Git Bash). Files there are scratch, not the person's work.
+ */
+export const SCRATCH = [...new Set([tmpdir(), '/tmp'])];
 
 /** The file or folder a read or write tool touches, if it names one. */
 function pathOf(input: Record<string, unknown>): string | undefined {
@@ -71,7 +83,10 @@ export function requestFor(
   input: Record<string, unknown>,
   skillFolders: string[] = [],
   readRoots: string[] = [],
+  allScratch: string[] = SCRATCH,
 ): ToolRequest | undefined {
+  // A Stage that denies acting outside the worktree (a chat, a Project Thread) gets no scratch either.
+  const scratch = policy.actions.outside_worktree === 'deny' ? [] : allScratch;
   if (HARMLESS.has(tool) || tool.startsWith('mcp__kiln__')) return undefined;
   if (AROUND_KILN[tool]) return { action: 'other_commands', detail: `${tool}: ${AROUND_KILN[tool]}`, decision: 'deny' };
   // A module's MCP server: its calls are checked like a command, so rules can name a server's
@@ -89,12 +104,19 @@ export function requestFor(
       const detail = target.split('\\').join('/');
       return { action: 'worktree_read', detail, decision: decide(policy, 'worktree_read', detail) };
     }
+    // The temp folder is the Session's scratch space: reading and writing there is like the worktree.
+    if (scratch.some((root) => inside(samePathCase(resolve(root)), samePathCase(target)))) {
+      const action: PolicyAction = READS.has(tool) ? 'worktree_read' : 'worktree_write';
+      const detail = slashes(target);
+      return { action, detail, decision: decide(policy, action, detail) };
+    }
     const action: PolicyAction = !inside(samePathCase(worktree), samePathCase(target)) ? 'outside_worktree' : READS.has(tool) ? 'worktree_read' : 'worktree_write';
     const detail = action === 'outside_worktree' ? target : relative(worktree, target).split('\\').join('/') || '.';
     return { action, detail, decision: decide(policy, action, detail) };
   }
   // Reads and writes inside the worktree (`ls`, `git log`, `git add`) count as such; see shellRequest.
-  if (tool === 'Bash' || tool === 'PowerShell') return shellRequest(policy, worktree, String(input.command ?? ''));
+  // Monitor runs a shell command too (a watch loop), so it is judged the same way.
+  if (tool === 'Bash' || tool === 'PowerShell' || tool === 'Monitor') return shellRequest(policy, worktree, String(input.command ?? ''), scratch.map(slashes));
   if (tool === 'WebFetch') {
     let domain = '';
     try {

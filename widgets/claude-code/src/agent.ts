@@ -124,8 +124,15 @@ function systemAppend(start: SessionStart, cwd: string): string {
   return lines.join('\n');
 }
 
-/** Claude Code gets the Widget's environment without Kiln's credentials for the Widget. */
-const claudeEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('KILN_')));
+/**
+ * Claude Code gets the Widget's environment without Kiln's credentials for the Widget. Its shell
+ * goes back to the worktree after every command, so a `cd` in one call never makes the next call's
+ * relative paths mean something other than what Kiln judges them by.
+ */
+const claudeEnv = () => ({
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('KILN_'))),
+  CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
+});
 
 export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCodeConfig; dataDir: string }): Agent {
   const { sdk, config } = deps;

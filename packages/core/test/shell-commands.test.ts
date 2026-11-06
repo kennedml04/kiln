@@ -103,8 +103,8 @@ test('anything else still asks under the Project template', () => {
     'cd /c/Windows',
     'ls -d "$TEMP"/kiln-scratch-repo 2>&1',
     'cat ~/.ssh/id_rsa',
-    'cat x > y',
-    'echo hi > notes.md',
+    'cat x > ../y',
+    'echo hi > /etc/notes.md',
     'echo $(rm -rf packages)',
     'echo `whoami`',
     'find . -name "*.tmp" -delete',
@@ -126,17 +126,88 @@ test('anything else still asks under the Project template', () => {
     'git checkout main',
     'git commit --no-verify -m x',
     'git push',
-    "cat > /tmp/edit.mjs <<'EOF'",
+    "cat > /etc/edit.mjs <<'EOF'",
     'cat > notes.md <<EOF',
     'rg --pre ./run.sh foo',
-    'for b in 07 08 09',
     "$p='packages/core/src/flow/session-manager.ts'",
+    'cat /tmp/../etc/passwd',
+    'cat tmp/../../x',
+    'cd /tmp',
+    'timeout 120 rm -rf packages',
+    '(rm -rf packages)',
+    'FOO=1 git log',
+    'git rebase main',
+    'git merge -s ours main',
+    'git checkout packages/x.ts',
+    'pkill -f archive.test',
+    'f=$(ls -t .scratch/*/spec.md)',
     'tail -f log.txt',
     'grep "$HOME" notes.md',
     'grep "${x}" notes.md',
   ]) {
     assert.equal(worktreeEffect(command, worktree), undefined, command);
     assert.notEqual(bash(command)?.decision, 'allow', command);
+  }
+});
+
+const tmp = 'D:/scratch/Temp';
+const scratchBash = (command: string, policy = projectPolicy) => shellRequest(policy, worktree, command, [tmp, '/tmp']);
+
+test('the temp folder is scratch: reads and writes there need no Ask', () => {
+  for (const command of [
+    'tail -c 600 /tmp/full.out',
+    'grep -nE "^✖|^ℹ (fail|pass)|not ok" /tmp/t.log',
+    'sed -n 225,260p /tmp/t.log',
+    `cat "${tmp}/claude/4f73/4929/tasks/b4edr95kp.output"`,
+    `tail -14 ${tmp}/claude/4f73/4929/tasks/b4edr95kp.output`,
+    '[ -s /tmp/time8.log ]',
+  ]) {
+    assert.equal(worktreeEffect(command, worktree, [tmp, '/tmp']), 'read', command);
+    assert.equal(scratchBash(command)?.decision, 'allow', command);
+  }
+  for (const command of [
+    "cat > /tmp/edit.mjs <<'EOF'",
+    "sed -i 's/a/b/' /tmp/dbg.test.ts",
+    'git log --oneline > /tmp/log.txt 2>&1',
+    'echo hi > notes.md',
+    'cat x > y',
+    'git show master:x.ts > packages/x.ts',
+  ]) {
+    assert.equal(worktreeEffect(command, worktree, [tmp, '/tmp']), 'write', command);
+    assert.equal(scratchBash(command)?.decision, 'allow', command);
+  }
+  assert.equal(worktreeEffect('cat /tmp/x', worktree), undefined, 'no scratch folders, no scratch');
+});
+
+test('wrappers, loops and branches are judged by the commands inside them', () => {
+  const rules = effectivePolicy([
+    { actions: ORG_POLICY_DEFAULT, rules: [] },
+    { ...projectPolicyTemplate(false), rules: [{ action: 'other_commands', match: 'npm *', decision: 'allow' }, { action: 'other_commands', match: 'node *', decision: 'allow' }] },
+  ]);
+  for (const command of [
+    'timeout 120 node --test --test-name-pattern="single Unarchive" packages/core/test/archive.test.ts 2>&1',
+    '(npm test > /tmp/full.out 2>&1; echo done >> /tmp/full.out) &',
+    '(time npm run test:only > /tmp/t8.log 2>&1) 2> /tmp/time8.log',
+    '(npm ci > /tmp/ci.log 2>&1 &)',
+    "until grep -q '^done' /tmp/full.out; do sleep 10; done; grep -E \"^ℹ (pass|fail)\" /tmp/full.out",
+    'until [ -s /tmp/time8.log ]; do sleep 5; done',
+    'for f in a.md b.md; do grep -c x "$f"; done',
+    'for b in 07 08 09; do cat .scratch/x/issues/$b.md; done',
+    'if ($?) { git commit -m "Up next reorder: grill record" }',
+    'GIT_EDITOR=true git rebase --continue 2>&1',
+    'git merge --no-edit master',
+    'git stash pop',
+    'nproc',
+    'node /tmp/edit.mjs',
+  ]) {
+    assert.equal(scratchBash(command, rules)?.decision, 'allow', command);
+  }
+  for (const command of [
+    'for f in ../../secret x; do cat "$f"; done',
+    'until grep -q x /tmp/a; do rm -rf packages; done',
+    'timeout 50 git push',
+  ]) {
+    assert.notEqual(scratchBash(command, rules)?.decision, 'allow', command);
   }
 });
 

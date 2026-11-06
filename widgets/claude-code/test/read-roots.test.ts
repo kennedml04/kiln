@@ -1,4 +1,4 @@
-// Read roots and the chat Policy, through the Widget's own entry point (main.ts) with the fake SDK.
+// Read roots, the chat Policy and Monitor commands, through the Widget's own entry point (main.ts) with the fake SDK.
 // A small stand-in core serves the Widget's command stream and sends it one Session start, as the
 // core's Agent interface does; the fake SDK's log then shows which tool calls ran and which were denied.
 import { test } from 'node:test';
@@ -106,4 +106,27 @@ test('the network is allowed in a chat, and denied when the Org layer denies it'
   const fetchStep: FakeStep = { tool: 'WebFetch', input: { url: 'https://example.com/page', prompt: 'read it' } };
   assert.deepEqual(await runSession(t, [fetchStep], [], chatPolicy(), folder), [['WebFetch', 'ran']]);
   assert.deepEqual(await runSession(t, [fetchStep], [], chatPolicy({ network: 'deny' }), folder), [['WebFetch', 'denied']]);
+});
+
+test('a Monitor command is judged like a Bash command, and a Stage that denies outside work gets no temp scratch', async (t) => {
+  const folder = tempDir(t, 'kiln-monitor-wt');
+  const elsewhere = join(tempDir(t, 'kiln-monitor-other'), 'x.txt');
+  writeFileSync(elsewhere, 'x');
+  const policy = effectivePolicy([{ actions: { ...ORG_POLICY_DEFAULT, other_commands: 'deny', outside_worktree: 'deny' }, rules: [] }]);
+  const outcomes = await runSession(
+    t,
+    [
+      { tool: 'Monitor', input: { command: 'until [ -s out.log ]; do sleep 1; done', description: 'wait' } },
+      { tool: 'Monitor', input: { command: 'rm -rf out.log', description: 'clean' } },
+      { tool: 'Read', input: { file_path: elsewhere } },
+    ],
+    [],
+    policy,
+    folder,
+  );
+  assert.deepEqual(outcomes, [
+    ['Monitor', 'ran'],
+    ['Monitor', 'denied'],
+    ['Read', 'denied'],
+  ]);
 });
