@@ -1884,6 +1884,11 @@
       "action": "other_commands",
       "match": "sed -i '168s/.*/  const sweepChats = () => void chats.sweep(clock.now()).then((r) => appendFileSync(\"C:\\/tmp\\/sweep.log\", JSON.stringify(r) + \"\\\\n\")).catch((e) => appendFileSync(\"C:\\/tmp\\/sweep.log\", String(e.stack) + \"\\\\n\"));/' packages/core/src/server.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls C:/tmp/sweep.log",
+      "decision": "allow"
     }
   ]
 }
