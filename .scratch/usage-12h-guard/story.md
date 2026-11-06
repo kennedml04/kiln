@@ -6,6 +6,8 @@ blocked-by: []
 ---
 The per-Session share of the week (`perSession.share`) kept pausing ordinary Sessions, and the person was answering its Asks every time, so it was raised from 5% to 20% as a stopgap. What the person actually wants is a guard against runaway spend across the whole Budget: if Kiln's Sessions together use more than 20% of the weekly plan within any 12 hours, the work pauses and one Ask comes up. Otherwise Kiln stays quiet and the person watches usage themselves.
 
+**The per-Session share check is wrong today.** On 2026-11-05 it asked "Session share of the week reached (22 of 20 % of week)" on a fix-round Session when the whole account's week reading was 22%: it compares the account-wide week total, not what that Session used. Raised to 100 (off in effect) until this Story ships. The guard must measure the use Kiln's Sessions actually caused (a reading delta per Session, summed over the 12 hours), and a test must show a Session that used little never trips it however high the week total is.
+
 Kiln measures quota per Session against the week and 5-hour windows (`packages/core/src/budgets/quota.ts`, `kinds.ts`); a rolling 12-hour Budget-scoped limit is new.
 
 ## To grill
