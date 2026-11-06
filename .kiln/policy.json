@@ -959,6 +959,11 @@
       "action": "other_commands",
       "match": "sed -n 35,60p .kiln/policy.json",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git fetch -q 2>&1",
+      "decision": "allow"
     }
   ]
 }
