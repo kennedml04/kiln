@@ -180,3 +180,20 @@ test('raise_ask works in a chat: the Ask has no Project and shows in Needs you',
   assert.equal(asks[0]!.itemId, `chat:${opened.chat.id}`);
   assert.equal(asks[0]!.projectId, '');
 });
+
+test("another Member gets 404 on someone else's chat, reading or patching it; an Admin can open it", async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale', env: { KILN_KNOWLEDGE_DIR: tempDir(t, 'kiln-knowledge') } });
+  await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }, { do: 'finish', reason: 'error' }] });
+  await kiln.api('PUT', '/api/users/mo', { role: 'member' });
+  await kiln.api('PUT', '/api/users/mia', { role: 'member' });
+  const mo = kiln.as('mo');
+  const mia = kiln.as('mia');
+  const { chat } = await mo.api<OpenChatResult>('POST', '/api/chats', { text: 'Mine only' });
+
+  assert.equal((await mia.request('GET', `/api/chats/${chat.id}`)).status, 404);
+  assert.equal((await mia.request('GET', `/api/chats/${chat.id}/thread`)).status, 404);
+  assert.equal((await mia.request('PATCH', `/api/chats/${chat.id}`, { title: 'Taken' })).status, 404);
+  assert.equal((await mia.request('POST', `/api/chats/${chat.id}/messages`, { text: 'hi' })).status, 404);
+  assert.equal((await mo.request('PATCH', `/api/chats/${chat.id}`, { title: 'Still mine' })).status, 200);
+  assert.equal((await kiln.api<ScratchChat>('GET', `/api/chats/${chat.id}`)).title, 'Still mine');
+});

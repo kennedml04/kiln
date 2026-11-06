@@ -110,7 +110,8 @@ export async function handleChatRoute(
     if (!match) return false;
     const id = decodeURIComponent(match[1]!);
     const chat = chats.get(id);
-    if (!chat) throw new WorkError(404, `No chat "${id}"`);
+    // Only the owner and Admins see a chat: anyone else gets the same 404 as for a chat that does not exist.
+    if (!chat || (chat.ownerId !== ownerOf() && access.caller(req).role !== 'admin')) throw new WorkError(404, `No chat "${id}"`);
     const part = match[2];
     if (req.method === 'GET') {
       if (!part) return (sendJson(res, 200, chat), true);
