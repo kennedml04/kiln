@@ -1074,6 +1074,11 @@
       "action": "other_commands",
       "match": "npm run check 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "node --test --test-concurrency=2 packages/core/test/setup.test.ts packages/core/test/role-modes.test.ts packages/core/test/variant-picker.test.ts packages/core/test/variants.test.ts packages/shell/test/setup-wizard.test.ts packages/shell/test/scoreboard.test.ts packages/shell/test/models-page.test.ts 2>&1",
+      "decision": "allow"
     }
   ]
 }
