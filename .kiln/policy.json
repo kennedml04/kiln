@@ -604,6 +604,11 @@
       "action": "other_commands",
       "match": "head -30",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "for b in 03 07 08 09 10 11",
+      "decision": "allow"
     }
   ]
 }
