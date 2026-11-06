@@ -1034,6 +1034,11 @@
       "action": "other_commands",
       "match": "grep -E \"^(✖|ℹ (pass|fail))\" /tmp/t12.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git commit -qm \"The scoreboard, role modes in Settings, and docs (local-first 12)\"",
+      "decision": "allow"
     }
   ]
 }
