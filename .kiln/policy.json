@@ -1409,6 +1409,11 @@
       "action": "other_commands",
       "match": "grep -n \"projects()\\|  projects\\b\\|items(\" work/work.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src/chats",
+      "decision": "allow"
     }
   ]
 }
