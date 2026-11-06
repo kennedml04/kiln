@@ -1909,6 +1909,11 @@
       "action": "other_commands",
       "match": "\"03 ancestor: $LASTEXITCODE\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -First 8",
+      "decision": "allow"
     }
   ]
 }
