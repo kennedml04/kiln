@@ -1494,6 +1494,11 @@
       "action": "other_commands",
       "match": "grep -E \"^ℹ (tests|pass|fail)|✖|error|banned\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 436,446p packages/core/src/flow/session-manager.ts",
+      "decision": "allow"
     }
   ]
 }
