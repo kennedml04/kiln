@@ -10,7 +10,7 @@ Update the README (local-first, Add a model, local-only) and `GLOSSARY.md` (vari
 
 **Status:** in-review
 
-**Stage:** review
+**Stage:** implementing
 
 - [ ] The scoreboard shows every number the picker uses, and a pin set there takes effect
 - [ ] Role modes can be changed in Settings
