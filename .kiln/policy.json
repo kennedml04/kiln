@@ -634,6 +634,11 @@
       "action": "other_commands",
       "match": "git merge kiln/ticket/local-first/07 -m \"Merge local-first 07 (picker) for the scoreboard\" 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff --name-only --diff-filter=U",
+      "decision": "allow"
     }
   ]
 }
