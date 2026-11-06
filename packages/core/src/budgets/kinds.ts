@@ -140,6 +140,12 @@ export const subscriptionKind: BudgetKind<SubscriptionBudgetConfig> = {
     const d = SUBSCRIPTION_DEFAULTS;
     const perSession = (input.perSession ?? {}) as Record<string, unknown>;
     if (typeof perSession !== 'object') throw new WorkError(400, '"perSession" must be {share, turns}');
+    const guard = (input.guard ?? {}) as Record<string, unknown>;
+    if (typeof guard !== 'object' || guard === null) throw new WorkError(400, '"guard" must be {share, hours}');
+    const hours = guard.hours ?? d.guard.hours;
+    if (typeof hours !== 'number' || !Number.isInteger(hours) || hours < 1 || hours > 168) {
+      throw new WorkError(400, '"guard.hours" must be a whole number of hours from 1 to 168');
+    }
     const label = input.fableLabel ?? d.fableLabel;
     if (typeof label !== 'string' || !label.trim()) throw new WorkError(400, '"fableLabel" must be the Fable window\'s model label');
     const fableModels = input.fableModels;
@@ -153,6 +159,7 @@ export const subscriptionKind: BudgetKind<SubscriptionBudgetConfig> = {
       },
       paceAhead: percentPoints(input.paceAhead, 'paceAhead', d.paceAhead, { allowZero: true }),
       reserve: percentPoints(input.reserve, 'reserve', d.reserve, { allowZero: true }),
+      guard: { share: percentPoints(guard.share, 'guard.share', d.guard.share, { allowZero: true }), hours },
       fableLabel: label.trim(),
       ...(fableModels ? { fableModels: fableModels as string[] } : {}),
     };

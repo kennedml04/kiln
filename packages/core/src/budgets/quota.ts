@@ -118,6 +118,8 @@ export interface QuotaStore {
   rollup(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, by: string): QuotaRollup[];
   /** A Session's attributed share of a window (subagents included), in percent points. */
   sessionShare(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, sessionId: string): number;
+  /** Kiln's attributed share of a window's changes whose later reading was taken at or after `since`, in percent points (0 if none). */
+  attributedSince(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, since: Date): number;
   /** The Budget's windows now: the latest reading of each, unknown when there is none or it has reset. */
   windows(budgetId: string, config: SubscriptionBudgetConfig): QuotaWindowState[];
 }
@@ -143,16 +145,18 @@ export function createQuotaStore(db: DatabaseSync, clock: Clock): QuotaStore {
   );
 
   /** Every turn's attributed share of the window's measured changes. */
-  const attribute = (budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId) => {
+  const attribute = (budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, since?: Date) => {
     const shares: { turn: TurnRow; percent: number }[] = [];
     const readings = windowReadings.all(budgetId, window) as unknown as ReadingRow[];
     for (let i = 1; i < readings.length; i++) {
       const before = readings[i - 1]!;
       const after = readings[i]!;
       // After a reset the window started again from zero, so the new reading is all new use.
-      const reset = after.resets_at !== before.resets_at && Date.parse(after.resets_at ?? '') > Date.parse(before.resets_at ?? '');
+      // resets_at jitters by milliseconds between readings; a real reset moves it by hours or days.
+      const reset = Date.parse(after.resets_at ?? '') - Date.parse(before.resets_at ?? '') > 3_600_000;
       const change = reset ? after.percent! : after.percent! - before.percent!;
       if (change <= 0) continue;
+      if (since && Date.parse(after.taken_at) < since.getTime()) continue;
       const turns = (turnsBetween.all(budgetId, before.after_record, after.after_record) as unknown as TurnRow[]).filter(
         (t) => window !== 'fable' || onFable(config, t.model),
       );
@@ -216,6 +220,10 @@ export function createQuotaStore(db: DatabaseSync, clock: Clock): QuotaStore {
     sessionShare(budgetId, config, window, sessionId) {
       const shares = attribute(budgetId, config, window).filter((s) => s.turn.session === sessionId);
       return round(shares.reduce((sum, s) => sum + s.percent, 0));
+    },
+
+    attributedSince(budgetId, config, window, since) {
+      return round(attribute(budgetId, config, window, since).reduce((sum, s) => sum + s.percent, 0));
     },
 
     windows(budgetId, config) {

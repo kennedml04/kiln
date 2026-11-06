@@ -11,6 +11,10 @@
 //                       Stage's fallback model ("Use <model>" / "Wait for the reset" / "Stop").
 //   overage   The plan reports paid overage (or its used credits rose): the Budget's work pauses
 //             behind a blocking Continue / Stop Ask.
+//   guard     Kiln's own attributed share of the week, summed over a rolling `guard.hours`, passes the
+//             mark (starts at `guard.share`): all the Budget's work pauses behind one blocking Ask
+//             ("Continue for another N%" raises the mark by N above the total; "Stop" ends the Sessions and
+//             new starts stay held until the total falls to the mark). The person's own use never counts.
 //
 // A window with no current reading is unknown and its rules are off: Kiln never guesses.
 // Holds and their Asks live in memory; answers that waive a rule for the week are stored.
@@ -32,7 +36,7 @@ export interface SubscriptionBudget {
   models: string[];
 }
 
-type Rule = 'reserve' | 'overage' | 'pace';
+type Rule = 'reserve' | 'overage' | 'pace' | 'guard';
 
 interface RuleHold {
   key: string;
@@ -82,6 +86,7 @@ export interface SubscriptionRules {
   close(): void;
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
 const pct = (n: number | null) => `${Math.round((n ?? 0) * 10) / 10}%`;
 
 export function createSubscriptionRules(deps: SubscriptionRulesDeps): SubscriptionRules {
@@ -94,6 +99,9 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
   const waived = (budgetId: string, rule: string, period: string) => !!selectWaiver.get(budgetId, rule, budgetId, period);
 
   const holds = new Map<string, RuleHold>();
+  /** The guard's mark per Budget (absent: `guard.share`), and the Budgets whose guard was Stopped and still holds new starts. */
+  const guardMarks = new Map<string, number>();
+  const guardStopped = new Set<string>();
   /** The pace Ask raised for each Budget and week, so it is asked once a week. */
   const paceAsks = new Map<string, string>();
   /** Fable Sessions moved to a fallback model: re-queued once they have stopped. */
@@ -214,6 +222,32 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
     changed();
   };
 
+  const guardTotal = (budget: SubscriptionBudget) =>
+    quota.attributedSince(budget.id, budget.config, 'week', new Date(clock.now().getTime() - budget.config.guard.hours * 3_600_000));
+
+  /** The runaway guard: re-arms the mark, lifts a Stop once the total has fallen, trips when the total passes the mark. */
+  const checkGuard = (budget: SubscriptionBudget, at?: { itemId: string; projectId: string }) => {
+    const { share, hours } = budget.config.guard;
+    if (!share) {
+      guardMarks.delete(budget.id);
+      guardStopped.delete(budget.id);
+      return;
+    }
+    const total = guardTotal(budget);
+    if (total <= share) guardMarks.delete(budget.id);
+    const mark = guardMarks.get(budget.id) ?? share;
+    if (total <= mark) guardStopped.delete(budget.id);
+    if (total <= mark || !at || guardStopped.has(budget.id)) return;
+    const name = budget.name;
+    holdAll(budget, 'guard', 'week', at, {
+      question: `${name}: Kiln used ${round1(total)}% of the week in the last ${hours} hours, over its ${round1(mark)}% guard. Continue all ${name} work?`,
+      why: "Kiln paused all the Budget's work; nothing was stopped. Your own use outside Kiln doesn't count.",
+      options: [`Continue for another ${share}%`, 'Stop'],
+      recommendation: 'Stop',
+      blocking: true,
+    });
+  };
+
   /** Checks every rule against the Budget's windows: raises new holds, lifts the ones whose window reset. */
   const evaluate = (budget: SubscriptionBudget, at?: { itemId: string; projectId: string }, overage?: boolean) => {
     const windows = windowsOf(budget);
@@ -227,6 +261,7 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
       const w = win(hold.window);
       if (!w.known || !w.atReserve) release(hold, { answerAs: hold.window === 'fable' ? 'Wait for the reset' : hold.window === '5h' ? 'Wait' : 'Continue' });
     }
+    checkGuard(budget, at);
     if (!at) return;
 
     const fiveHour = win('5h');
@@ -272,6 +307,9 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
       .flatMap((b) => windowsOf(b))
       .map((w) => (w.known && w.resetsAt ? Date.parse(w.resetsAt) : NaN))
       .filter((t) => t > now);
+    // The guard's total falls as old changes roll off: look again every few minutes while one is on.
+    const guarded = budgets().some((b) => b.config.guard.share > 0);
+    if (guarded) resets.push(now + 300_000);
     if (!resets.length) return;
     timer = setTimeout(tick, Math.min(2_147_000_000, Math.min(...resets) - now + 1_000));
     timer.unref();
@@ -299,10 +337,11 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
 
   return {
     startHold(budget, { itemId, projectId, model, attended }) {
+      if (guardStopped.has(budget.id)) return `${budget.name}: Kiln's use of the week is over its guard (stopped)`;
       for (const hold of holds.values()) {
         if (hold.budgetId !== budget.id) continue;
         if (hold.window === 'fable' && !onFable(budget.config, model)) continue;
-        const what = hold.rule === 'overage' ? 'paid overage' : `the ${hold.window === '5h' ? '5-hour window' : hold.window === 'fable' ? 'Fable window' : 'week'} is at its reserve`;
+        const what = hold.rule === 'overage' ? 'paid overage' : hold.rule === 'guard' ? "Kiln's use of the week is over its guard" : `the ${hold.window === '5h' ? '5-hour window' : hold.window === 'fable' ? 'Fable window' : 'week'} is at its reserve`;
         return `${budget.name}: ${what}`;
       }
       const ahead = !attended && pace(budget);
@@ -373,6 +412,17 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
         poke();
         return true;
       }
+      if (hold.rule === 'guard') {
+        const budget = budgets().find((b) => b.id === hold.budgetId);
+        if (ask.answer === 'Stop' || !budget) {
+          guardStopped.add(hold.budgetId);
+          stopAll(hold);
+        } else {
+          guardMarks.set(budget.id, guardTotal(budget) + budget.config.guard.share);
+          release(hold);
+        }
+        return true;
+      }
       if (ask.answer === 'Stop') return (stopAll(hold), true);
       if (hold.window === '5h') return true; // Wait: resumes by itself at the reset.
       addWaiver.run(hold.budgetId, hold.rule === 'overage' ? 'overage' : 'week-reserve', hold.budgetId, hold.period);
@@ -381,7 +431,7 @@ export function createSubscriptionRules(deps: SubscriptionRulesDeps): Subscripti
     },
 
     held(budgetId) {
-      if ([...holds.values()].some((h) => h.budgetId === budgetId)) return true;
+      if (guardStopped.has(budgetId) || [...holds.values()].some((h) => h.budgetId === budgetId)) return true;
       const budget = budgets().find((b) => b.id === budgetId);
       const ahead = budget && pace(budget);
       return !!ahead && !waived(budgetId, 'pace', ahead.resetsAt ?? 'unknown');

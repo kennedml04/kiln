@@ -40,6 +40,8 @@ export interface SubscriptionBudgetConfig {
   paceAhead: number;
   /** Percent of each window kept for the person's own use. */
   reserve: number;
+  /** The runaway guard: Kiln's attributed share of the week over a rolling `hours` may not pass `share` percent points (0 = off). */
+  guard: { share: number; hours: number };
   /** The model label a model-scoped weekly reading carries for Fable (`QuotaReading.model`). */
   fableLabel: string;
   /** The Budget's models that run on Fable. Unset: any model whose id contains "fable". */
@@ -51,6 +53,7 @@ export const SUBSCRIPTION_DEFAULTS: SubscriptionBudgetConfig = {
   perSession: { share: 5, turns: 150 },
   paceAhead: 10,
   reserve: 10,
+  guard: { share: 20, hours: 12 },
   fableLabel: 'Fable',
 };
 
@@ -280,10 +283,10 @@ export type QuotaRecordedEvent = KilnEvent<'quota.recorded', { reading: QuotaRea
  */
 export type QuotaHoldEvent = KilnEvent<
   'quota.hold',
-  { budgetId: string; rule: 'reserve' | 'overage' | 'pace'; window: QuotaWindowId; askIds: string[]; paused: string[]; itemId: string; projectId: string }
+  { budgetId: string; rule: 'reserve' | 'overage' | 'pace' | 'guard'; window: QuotaWindowId; askIds: string[]; paused: string[]; itemId: string; projectId: string }
 >;
 /** A window rule lifted (the window reset, went unknown, or a person continued) and its Sessions were released. */
-export type QuotaReleasedEvent = KilnEvent<'quota.released', { budgetId: string; rule: 'reserve' | 'overage'; window: QuotaWindowId; released: string[] }>;
+export type QuotaReleasedEvent = KilnEvent<'quota.released', { budgetId: string; rule: 'reserve' | 'overage' | 'guard'; window: QuotaWindowId; released: string[] }>;
 /** Sent on every SSE connection and whenever usage, settings or holds change. */
 export type BudgetsUpdatedEvent = KilnEvent<'budgets.updated', { budgets: BudgetInfo[] }>;
 /** A cap was reached: the work it covers is paused and a blocking Ask is raised. */

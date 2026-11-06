@@ -268,3 +268,82 @@ test("a Session's share of the week pauses it at the per-Session cap and raises 
   assert.deepEqual(ask.options, ['Continue', 'Stop']);
   assert.equal((await kiln.api<SessionInfo>('GET', `/api/sessions/${session!.id}`)).state, 'waiting');
 });
+
+// The runaway guard: Kiln's attributed share of the week over a rolling window.
+const T0 = Date.parse('2026-11-08T09:00:00.000Z');
+const wk = (percent: number, minutes = 0, resetsAt = '2026-11-09T09:00:00.000Z') =>
+  ({ do: 'quota', reading: { window: 'week', percent, resetsAt, takenAt: new Date(T0 + minutes * 60_000).toISOString() } }) as const;
+const guardSetup = (t: Parameters<typeof startTestKiln>[0], script: FakeAgentScript) =>
+  setup(t, script, { perSession: { share: 100, turns: 150 } }).then(async (s) => {
+    await setClock(s.kiln, '2026-11-08T09:30:00.000Z');
+    return s;
+  });
+const guardAsks = async (kiln: TestKiln) => (await kiln.api<Ask[]>('GET', '/api/asks')).filter((a) => a.raisedBy.kind === 'budget' && /Kiln used/.test(a.question));
+const settle = async (events: Events, n: number) => {
+  for (let i = 0; i < n; i++) await nextWhere(events, 'quota.recorded');
+};
+
+test('a small Session never trips the guard however high the week total is, whatever resets_at jitters by', async (t) => {
+  const jitter = (percent: number, ms: number) => wk(percent, 0, new Date(Date.parse('2026-11-09T09:00:00.000Z') + ms).toISOString());
+  const { kiln, events, ticket } = await setup(t, [jitter(89, 293), turn(1_000), jitter(90, 957), { do: 'wait_for_message' }], { perSession: { share: 100, turns: 150 } });
+  await setClock(kiln, '2026-11-08T09:30:00.000Z');
+  const { session } = await start(kiln, ticket);
+  await settle(events, 2);
+  assert.deepEqual(await guardAsks(kiln), []);
+  assert.equal(await sessionState(kiln, session!.id), 'waiting', 'not paused by the guard');
+  const rollup = await kiln.api<QuotaRollup[]>('GET', '/api/usage/quota?budget=home&window=week&by=session');
+  assert.deepEqual(rollup.map((r) => r.percent), [1]);
+});
+
+test("the person's own use outside Kiln never trips the guard", async (t) => {
+  const { kiln, events, ticket } = await guardSetup(t, [wk(10), wk(60, 5), { do: 'wait_for_message' }]);
+  await start(kiln, ticket);
+  await settle(events, 2);
+  assert.deepEqual(await guardAsks(kiln), []);
+});
+
+test('Kiln use over the guard pauses running Sessions, holds new starts and raises one Ask; Continue lifts the mark by another 20%', async (t) => {
+  const { kiln, agent, events, ticket, addTicket } = await guardSetup(t, [
+    wk(10), turn(1_000), wk(35, 5), wk(36, 6), { do: 'wait_for_message' },
+    turn(1_000), wk(50, 10), { do: 'wait_for_message' },
+    turn(1_000), wk(70, 15), { do: 'wait_for_message' },
+  ]);
+  const { session } = await start(kiln, ticket);
+  const hold = await nextWhere<QuotaHoldEvent>(events, 'quota.hold', (e) => e.payload.rule === 'guard');
+  assert.deepEqual(hold.payload.paused, [session!.id]);
+  const ask = await kiln.api<Ask>('GET', `/api/asks/${hold.payload.askIds[0]}`);
+  assert.deepEqual([ask.blocking, ask.options], [true, ['Continue for another 20%', 'Stop']]);
+  assert.match((await start(kiln, await addTicket('Another'))).entry?.held ?? '', /guard/);
+  assert.equal((await guardAsks(kiln)).length, 1, 'one Ask however many readings follow');
+
+  await kiln.api('POST', `/api/asks/${ask.id}/answer`, { answer: 'Continue for another 20%' });
+  await nextWhere<QuotaReleasedEvent>(events, 'quota.released', (e) => e.payload.rule === 'guard');
+  await agent.sendMessage(session!.id, { kind: 'text', text: 'go on' });
+  await settle(events, 3);
+  assert.equal((await guardAsks(kiln)).filter((a) => a.state === 'open').length, 0, '40 of 45: under the new mark');
+  await agent.sendMessage(session!.id, { kind: 'text', text: 'more' });
+  await nextWhere<QuotaHoldEvent>(events, 'quota.hold', (e) => e.payload.rule === 'guard');
+  assert.equal((await guardAsks(kiln)).filter((a) => a.state === 'open').length, 1, 'a new single Ask over the new mark');
+});
+
+test('Stop ends the paused Sessions; new starts stay held, with no new Ask, until the total rolls off', async (t) => {
+  const { kiln, events, ticket, addTicket } = await guardSetup(t, [wk(10), turn(1_000), wk(35, 5), { do: 'wait_for_message' }]);
+  const { session } = await start(kiln, ticket);
+  const hold = await nextWhere<QuotaHoldEvent>(events, 'quota.hold', (e) => e.payload.rule === 'guard');
+  await kiln.api('POST', `/api/asks/${hold.payload.askIds[0]}/answer`, { answer: 'Stop' });
+  await nextWhere(events, 'session.updated', (e: KilnEvent) => (e.payload as { session: { id: string; state: string } }).session.id === session!.id && (e.payload as { session: { state: string } }).session.state === 'stopped');
+  const next = await addTicket('Next');
+  assert.match((await start(kiln, next)).entry?.held ?? '', /guard/);
+  assert.equal((await guardAsks(kiln)).filter((a) => a.state === 'open').length, 0, 'no new Ask');
+
+  await setClock(kiln, '2026-11-08T22:00:00.000Z');
+  assert.equal((await start(kiln, await addTicket('Later'))).entry?.held ?? undefined, undefined, 'the 25 points rolled off the 12 hours');
+});
+
+test('the same use spread over more than 12 hours does not trip the guard', async (t) => {
+  const { kiln, events, ticket } = await guardSetup(t, [wk(10), turn(1_000), wk(25, 5), turn(1_000), wk(40, 13 * 60), { do: 'wait_for_message' }]);
+  await setClock(kiln, '2026-11-08T23:00:00.000Z');
+  await start(kiln, ticket);
+  await settle(events, 3);
+  assert.deepEqual(await guardAsks(kiln), []);
+});
