@@ -1659,6 +1659,11 @@
       "action": "other_commands",
       "match": "grep -rn \"roles\" packages/shell/src --include=*.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge-base --is-ancestor kiln/ticket/scratch-chat/01 HEAD",
+      "decision": "allow"
     }
   ]
 }
