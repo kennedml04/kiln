@@ -1289,6 +1289,11 @@
       "action": "other_commands",
       "match": "ls node_modules >/dev/null 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 500,580p packages/core/src/budgets/usage.ts",
+      "decision": "allow"
     }
   ]
 }
