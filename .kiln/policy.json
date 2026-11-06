@@ -1779,6 +1779,11 @@
       "action": "other_commands",
       "match": "ls packages/shell/src packages/core/src packages/core/src/chats 2>/dev/null",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls packages/core/src packages/core/src/chats packages/core/test",
+      "decision": "allow"
     }
   ]
 }
