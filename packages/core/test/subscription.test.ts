@@ -85,6 +85,28 @@ test("quota readings are stored, and a change is split across concurrent Session
   );
 });
 
+test('resets_at jitter of milliseconds is not a reset: 89 to 90 attributes 1, not 90', async (t) => {
+  const { kiln, events, ticket } = await setup(t, [
+    week(89, '2026-11-09T09:00:00.293Z'), turn(1_000), week(90, '2026-11-09T09:00:00.957Z'), { do: 'wait_for_message' },
+  ]);
+  await start(kiln, ticket);
+  await nextWhere(events, 'quota.recorded');
+  await nextWhere(events, 'quota.recorded');
+  const rollup = await kiln.api<QuotaRollup[]>('GET', '/api/usage/quota?budget=home&window=week&by=session');
+  assert.deepEqual(rollup.map((r) => r.percent), [1]);
+});
+
+test('resets_at moving by days is a real reset: the new reading is all new use', async (t) => {
+  const { kiln, events, ticket } = await setup(t, [
+    week(89, '2026-11-09T09:00:00.000Z'), turn(1_000), week(3, '2026-11-16T09:00:00.000Z'), { do: 'wait_for_message' },
+  ]);
+  await start(kiln, ticket);
+  await nextWhere(events, 'quota.recorded');
+  await nextWhere(events, 'quota.recorded');
+  const rollup = await kiln.api<QuotaRollup[]>('GET', '/api/usage/quota?budget=home&window=week&by=session');
+  assert.deepEqual(rollup.map((r) => r.percent), [3]);
+});
+
 const setClock = (kiln: TestKiln, now: string) => kiln.api<{ now: string }>('POST', '/api/test/clock', { now });
 
 test('ahead of pace, new unattended Sessions hold behind a blocking Ask while running ones carry on', async (t) => {
