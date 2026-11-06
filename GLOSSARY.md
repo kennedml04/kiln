@@ -54,6 +54,10 @@ _Avoid_: checkpoint, sign-off
 The single conversation history of one Item or Project, across all its Stages. People talk to the Item or Project through its Thread, never to a particular Agent. A Project's Thread can read everything and propose changes, but never makes them itself.
 _Avoid_: chat tab
 
+**Scratch chat**:
+A Session that belongs to no Project and no Item, opened from the header for a one-off question. It has its own small Thread, no Stage, worktree or Exit, reads every Project and the web, and changes nothing. Make it a Story turns it into a grill-stage Story; Save as a note keeps an answer in the Knowledge store.
+_Avoid_: scratch card, quick chat
+
 **Session**:
 One agent run working on an item for one Stage, started fresh and seeded with the item's artifacts. A Thread holds many Sessions in order.
 _Avoid_: card run
