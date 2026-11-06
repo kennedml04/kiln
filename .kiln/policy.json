@@ -1654,6 +1654,11 @@
       "action": "other_commands",
       "match": "git log --oneline --no-merges -8 --format='%h %s'",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -rn \"roles\" packages/shell/src --include=*.tsx",
+      "decision": "allow"
     }
   ]
 }
