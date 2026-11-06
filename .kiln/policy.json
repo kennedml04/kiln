@@ -1644,6 +1644,11 @@
       "action": "other_commands",
       "match": "grep -n \"role\\|Role\" packages/shell/src/work/ModelsPage.tsx",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge --abort",
+      "decision": "allow"
     }
   ]
 }
