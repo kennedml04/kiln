@@ -2069,6 +2069,11 @@
       "action": "other_commands",
       "match": "grep -E \"^✔|^✖\" /tmp/t8.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git checkout -q 2cf45ba",
+      "decision": "allow"
     }
   ]
 }
