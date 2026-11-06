@@ -1969,6 +1969,11 @@
       "action": "other_commands",
       "match": "git show master:packages/widget-sdk/src/scratch-chat.ts > scratch-chat.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > /tmp/fix.py <<'EOF'\nimport re\np='packages/core/src/db.ts'\ns=open(p,encoding='utf8').read()\ns=s.replace(\"<<<<<<< HEAD\\n\",\"\")\ns=re.sub(r\"=======\\n(  // Scratch chats)\",r\"     )`,\\n\\1\",s)\ns=re.sub(r\">>>>>>> 696cc91[^\\n]*\\n\",\"\",s)\nopen(p,'w',encoding='utf8').write(s)\nEOF\npython /tmp/fix.py; sed -n 238,262p packages/core/src/db.ts",
+      "decision": "allow"
     }
   ]
 }
