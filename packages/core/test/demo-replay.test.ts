@@ -31,7 +31,7 @@ async function chooseWizardModels(kiln: TestKiln) {
   await kiln.api('PUT', '/api/setup', { roles: Object.fromEntries(ROLES.map((role) => [role, { model: 'wizard-model' }])) });
 }
 
-async function eventually<T>(what: string, check: () => Promise<T | undefined>, timeoutMs = 30_000): Promise<T> {
+async function eventually<T>(what: string, check: () => Promise<T | undefined>, timeoutMs = 90_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const value = await check();

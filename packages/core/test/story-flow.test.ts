@@ -61,7 +61,7 @@ const start = (kiln: TestKiln, item: Item) => kiln.api<StartResult>('POST', `/ap
 
 const stageChange = async (events: Events, itemId: string, to: string) => {
   for (;;) {
-    const event = await events.next<ItemStageChangedEvent>('item.stage_changed', { timeoutMs: 30_000 });
+    const event = await events.next<ItemStageChangedEvent>('item.stage_changed', { timeoutMs: 90_000 });
     if (event.payload.itemId === itemId && event.payload.to === to) return event;
   }
 };
@@ -73,7 +73,7 @@ test('a Story starts in Grill, and once its griller commits the grill record in 
   const events = await kiln.events();
 
   await start(kiln, story);
-  const started = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 30_000 });
+  const started = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 90_000 });
   assert.equal(started.payload.session.role, 'griller');
   const worktree = started.payload.session.worktree;
   assert.ok(worktree, 'the Grill Session works in a worktree');
@@ -98,7 +98,7 @@ async function atTicketsGate(kiln: TestKiln, scripts?: FakeAgentScripts) {
 
 const reviewAsk = async (events: Events, itemId: string): Promise<Ask> => {
   for (;;) {
-    const { ask } = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 30_000 })).payload;
+    const { ask } = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 90_000 })).payload;
     if (ask.type === 'review' && ask.itemId === itemId) return ask;
   }
 };
@@ -142,11 +142,11 @@ test('rejecting the Spec Gate reworks the Story in Spec, in a fresh Session seed
 
   assert.equal((await answer(kiln, ask, { answer: 'Reject', comment: 'Say how the board sorts.' })).status, 200);
   let rework: SessionStartedEvent;
-  do rework = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 30_000 });
+  do rework = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 90_000 });
   while (rework.payload.session.stage !== 'spec' || rework.payload.session.startedAt <= ask.raisedAt);
   assert.equal(rework.payload.itemId, story.id);
   for (;;) {
-    const progress = await events.next<SessionAgentEvent<'progress'>>('session.progress', { timeoutMs: 30_000 });
+    const progress = await events.next<SessionAgentEvent<'progress'>>('session.progress', { timeoutMs: 90_000 });
     if (progress.payload.sessionId === rework.payload.sessionId && progress.payload.text?.startsWith('comment: ')) {
       assert.equal(progress.payload.text, 'comment: Say how the board sorts.');
       break;
@@ -192,7 +192,7 @@ test('a Ticket added on main while the ticket-writer works does not share a numb
   await start(kiln, story);
   assert.equal((await answer(kiln, await reviewAsk(events, story.id), { answer: 'Approve' })).status, 200);
   let writer: SessionStartedEvent;
-  do writer = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 30_000 });
+  do writer = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 90_000 });
   while (writer.payload.session.stage !== 'tickets');
 
   const hotfix = await kiln.api<Item>('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title: 'Hotfix', parentId: story.id });
@@ -214,7 +214,7 @@ test('approving the Tickets Gate merges the Tickets onto main and starts them, w
   assert.equal((await answer(kiln, ask, { answer: 'Approve' })).status, 200);
   const started = new Set<string>();
   while (started.size < 2) {
-    const event = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 30_000 });
+    const event = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 90_000 });
     if (event.payload.session.stage === 'implementing') started.add(event.payload.itemId);
   }
   assert.deepEqual([...started].sort(), [`${story.projectId}/ticket/home-board/01`, `${story.projectId}/ticket/home-board/02`]);

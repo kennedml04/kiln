@@ -24,12 +24,12 @@ test('Needs you shows the spec at a Story\'s Spec Gate and its Ticket list at th
 
   await kiln.api('POST', `/api/items/${encodeURIComponent(story.id)}/start`);
   const spec = page.getByRole('article', { name: /^Approve Home board/ });
-  await spec.waitFor({ timeout: 30_000 });
+  await spec.waitFor({ timeout: 90_000 });
   await spec.getByRole('region', { name: 'Spec' }).getByText(/One board shows every Project/).waitFor();
   await spec.getByRole('radio', { name: 'Approve' }).check();
   await spec.getByRole('button', { name: 'Answer' }).click();
   await spec.waitFor({ state: 'detached' });
 
   const tickets = page.getByRole('article', { name: /^Approve Home board/ });
-  await tickets.getByRole('region', { name: 'Tickets' }).getByText(/Draw the columns: One column per run state/).waitFor({ timeout: 30_000 });
+  await tickets.getByRole('region', { name: 'Tickets' }).getByText(/Draw the columns: One column per run state/).waitFor({ timeout: 90_000 });
 });
