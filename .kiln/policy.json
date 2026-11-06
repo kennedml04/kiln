@@ -1089,6 +1089,11 @@
       "action": "other_commands",
       "match": "sed -n 215,330p packages/core/test/story-flow.test.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"stageChange\" -A8 packages/core/test/story-flow.test.ts",
+      "decision": "allow"
     }
   ]
 }
