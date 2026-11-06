@@ -1224,6 +1224,11 @@
       "action": "other_commands",
       "match": "cat packages/core/src/local/routing.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat .scratch/local-first/reviews/10-local-only-retries-and-split.md 2>/dev/null",
+      "decision": "allow"
     }
   ]
 }
