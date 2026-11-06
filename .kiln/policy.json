@@ -1984,6 +1984,11 @@
       "action": "other_commands",
       "match": "for b in master kiln/ticket/scratch-chat/01 kiln/ticket/scratch-chat/06 kiln/ticket/scratch-chat/07",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd /tmp",
+      "decision": "allow"
     }
   ]
 }
