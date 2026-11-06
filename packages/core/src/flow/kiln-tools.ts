@@ -9,7 +9,7 @@
 // it cannot reach another Item through them. A Project Thread Session gets read tools that take
 // any Item id in its Project (and none outside it), and no tool that writes to the Project: it
 // proposes changes through raise_ask's `proposal`, which Kiln applies only when a person accepts.
-import { ASK_TYPES, projectOfThread, PROPOSAL_KINDS, type Ask, type Digest, type Item, type Project, type Proposal, type RaiseAskRequest, type SessionInfo } from '@kiln/widget-sdk';
+import { ASK_TYPES, chatOfThread, projectOfThread, PROPOSAL_KINDS, type Ask, type Digest, type Item, type Project, type Proposal, type RaiseAskRequest, type SessionInfo } from '@kiln/widget-sdk';
 
 export const KILN_TOOLS_PATH = '/api/kiln-tools';
 
@@ -45,7 +45,25 @@ export interface ProjectToolsScope {
   writeDigest(input: unknown): Digest;
 }
 
-export type KilnToolsScope = ItemToolsScope | ProjectToolsScope;
+/**
+ * What a Scratch chat Session's tools act on: every registered Project, read-only. It has no
+ * proposal tools. `draftStory` fills the Make it a Story draft and throws when none is pending.
+ */
+export interface ChatToolsScope {
+  kind: 'chat';
+  projects(): Pick<Project, 'id' | 'name'>[];
+  /** A Project's Items; throws for an unknown Project. */
+  items(projectId: string): Item[];
+  /** Any Item in any Project; throws when there is none. */
+  item(itemId: string): Item;
+  artifacts(itemId: string): { name: string; content: string }[];
+  digests(itemId: string): string[];
+  raiseAsk(request: RaiseAskRequest): Ask;
+  writeDigest(input: unknown): Digest;
+  draftStory(input: { title: string; description: string }): void;
+}
+
+export type KilnToolsScope = ItemToolsScope | ProjectToolsScope | ChatToolsScope;
 
 interface ToolResult {
   content: { type: 'text'; text: string }[];
@@ -243,9 +261,64 @@ const PROJECT_TOOLS: Tool<ProjectToolsScope>[] = [
   writeDigestTool,
 ];
 
+const projectTool = (name: string) => PROJECT_TOOLS.find((t) => t.name === name)! as unknown as Tool<ChatToolsScope>;
+
+const CHAT_TOOLS: Tool<ChatToolsScope>[] = [
+  {
+    name: 'list_projects',
+    title: 'List the Projects',
+    description: 'Every registered Project (id and name).',
+    inputSchema: { type: 'object', properties: {} },
+    call(scope) {
+      const projects = scope.projects();
+      return text(JSON.stringify(projects), { projects });
+    },
+  },
+  {
+    name: 'list_items',
+    title: "List a Project's Items",
+    description: "One Project's Items (kind, title, Stage, run state, parent and children).",
+    inputSchema: { type: 'object', properties: { projectId: { type: 'string', description: 'A Project id from list_projects.' } }, required: ['projectId'] },
+    call(scope, input) {
+      const items = scope.items(String(input.projectId ?? '')).map(itemView);
+      return text(JSON.stringify(items), { items });
+    },
+  },
+  projectTool('read_item'),
+  projectTool('read_artifacts'),
+  projectTool('read_digests'),
+  {
+    name: 'raise_ask',
+    title: 'Raise an Ask',
+    description:
+      'Ask the person a Question or Decision. A blocking Ask pauses you until it is answered; a non-blocking one lets you carry on with your recommendation.',
+    inputSchema: { type: 'object', properties: ASK_PROPERTIES, required: ['type', 'question', 'why', 'recommendation', 'blocking'] },
+    call: (scope, input) => askRaised(scope.raiseAsk(input as unknown as RaiseAskRequest)),
+  },
+  {
+    name: 'draft_story',
+    title: 'Draft the Story',
+    description:
+      'Only while the person has asked to make this chat a Story: give a short title and a short story.md description that sums up what was agreed (not the transcript), written for someone who has not seen this chat. It creates nothing; the person edits and accepts it.',
+    inputSchema: {
+      type: 'object',
+      properties: { title: { type: 'string' }, description: { type: 'string' } },
+      required: ['title', 'description'],
+    },
+    call(scope, input) {
+      const title = typeof input.title === 'string' ? input.title.trim() : '';
+      const description = typeof input.description === 'string' ? input.description.trim() : '';
+      if (!title || !description) throw new Error('A Story draft needs a title and a description');
+      scope.draftStory({ title, description });
+      return text('Draft handed to the person to edit and accept. Nothing is created until they do.');
+    },
+  },
+  writeDigestTool,
+];
+
 /** The tools this Session gets: its kind's list, less any its scope does not offer. */
 const toolsOf = (scope: KilnToolsScope): Tool<KilnToolsScope>[] =>
-  ((scope.kind === 'project' ? PROJECT_TOOLS : ITEM_TOOLS) as Tool<KilnToolsScope>[]).filter((tool) => !tool.offered || tool.offered(scope));
+  ((scope.kind === 'project' ? PROJECT_TOOLS : scope.kind === 'chat' ? CHAT_TOOLS : ITEM_TOOLS) as Tool<KilnToolsScope>[]).filter((tool) => !tool.offered || tool.offered(scope));
 
 interface JsonRpcMessage {
   jsonrpc?: string;
@@ -274,7 +347,9 @@ export async function answerKilnTools(scope: KilnToolsScope, message: unknown): 
         capabilities: { tools: {} },
         serverInfo: { name: 'kiln', title: 'Kiln tools', version: '0.1.0' },
         instructions:
-          scope.kind === 'project'
+          scope.kind === 'chat'
+            ? 'Kiln tools for this chat, read-only across every Project: list Projects and Items, read Items, artifacts and Digests, raise Asks, and write your Digest before you finish.'
+            : scope.kind === 'project'
             ? "Kiln tools for the Project, read-only: read its Items, their artifacts and Digests, raise Asks to propose changes, and write your Digest before you finish."
             : 'Kiln tools for your Item: raise an Ask when you need a person, read your Item and its artifacts, and write your Digest before you finish.',
       });
@@ -306,4 +381,8 @@ export const calledTool = (message: unknown): string | undefined => {
 
 /** What a Session's Kiln tools call is audited against: its Item, or its Project for a Project Thread Session. */
 export const kilnToolsTarget = (session: Pick<SessionInfo, 'itemId' | 'projectId'>) =>
-  projectOfThread(session.itemId) !== undefined ? `project:${session.projectId}` : `item:${session.itemId}`;
+  chatOfThread(session.itemId) !== undefined
+    ? session.itemId
+    : projectOfThread(session.itemId) !== undefined
+      ? `project:${session.projectId}`
+      : `item:${session.itemId}`;

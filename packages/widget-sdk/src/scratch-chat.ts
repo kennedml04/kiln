@@ -19,3 +19,26 @@ export const CHAT_POLICY: Required<PolicyLayer> = {
   actions: { ...PROJECT_THREAD_POLICY.actions, network: 'allow' },
   rules: [],
 };
+
+const PREFIX = 'chat:';
+
+/** The id a Scratch chat's Sessions, Thread entries and Asks carry as their `itemId`. */
+export const chatThreadId = (id: string) => `${PREFIX}${id}`;
+
+/** The chat a subject id belongs to, or undefined for any other id. */
+export const chatOfThread = (threadId: string): string | undefined =>
+  threadId.startsWith(PREFIX) && !threadId.includes('/') && threadId.length > PREFIX.length ? threadId.slice(PREFIX.length) : undefined;
+
+/** A Scratch chat as the API shows it. */
+export interface ScratchChat {
+  id: string;
+  title: string;
+  ownerId: string;
+  createdAt: string;
+  lastMessageAt: string;
+  pinned: boolean;
+  archivedAt?: string;
+  /** The Item ids of Stories made from this chat. */
+  stories: string[];
+  running: boolean;
+}

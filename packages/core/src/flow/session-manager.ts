@@ -16,6 +16,7 @@ import {
   PROJECT_THREAD_ROLE,
   PROJECT_THREAD_STAGE,
   projectOfThread,
+  chatOfThread,
   projectThreadId,
 } from '@kiln/widget-sdk';
 import type {
@@ -50,7 +51,7 @@ import { checkExit, exitFeedback, grillPathOf, readProjectSettings, specPathOf }
 import { findingsPathOf, type Gates } from './gates.ts';
 import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
 import { modeOf, ticketSize, type Routing } from '../local/routing.ts';
-import type { KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
+import type { ChatToolsScope, KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
 import { digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
 
 export interface SessionManager {
@@ -284,6 +285,11 @@ export interface SessionManagerDeps {
   local?: () => { routing: Routing; variants: () => Variant[]; /** Whether local models are set up at all (a server is configured). */ inUse: () => boolean };
   /** Holds Items at Gate Stages once their Exit is met, and seeds rework Sessions. */
   gates?: Gates;
+  /**
+   * Scratch chats' side of draft_story: stores a Make it a Story draft for the chat, and throws
+   * when none is pending. Unset: a chat's draft_story is always refused.
+   */
+  draftStory?: (chatId: string, draft: { title: string; description: string }) => void;
   /** The `toolPaths` Setting, read each time a module check or MCP server names a tool. */
   toolPaths?: () => Record<string, string> | undefined;
 }
@@ -305,6 +311,7 @@ export function createSessionManager({
   budgetOf,
   gates,
   local,
+  draftStory,
   toolPaths = () => undefined,
 }: SessionManagerDeps): SessionManager {
   const live = new Map<string, Live>();
@@ -837,6 +844,34 @@ export function createSessionManager({
     };
   };
 
+  /** A Scratch chat Session's tools: every Project, read-only, from each default branch's checkout. */
+  const chatScope = (session: Live, chatId: string): ChatToolsScope => {
+    const projectOf = (projectId: string) => {
+      const found = work.project(projectId);
+      if (!found) throw new WorkError(404, `No Project "${projectId}"`);
+      return found;
+    };
+    const item = (itemId: string) => {
+      const found = typeof itemId === 'string' ? work.item(itemId) : undefined;
+      if (!found) throw new WorkError(404, `No Item "${itemId}"`);
+      return found;
+    };
+    return {
+      kind: 'chat',
+      projects: () => work.projects().map(({ id, name }) => ({ id, name })),
+      items: (projectId) => (projectOf(projectId), work.items(projectId)),
+      item,
+      artifacts: (itemId) => seedArtifacts(item(itemId), projectOf(item(itemId).projectId).path),
+      digests: (itemId) => knowledge.seed(item(itemId)).map(knowledge.render),
+      raiseAsk: (request) => raiseAsk(session, request),
+      writeDigest: (input) => recordDigest(session, digestContent(input), 'session'),
+      draftStory: (draft) => {
+        if (!draftStory) throw new Error('No Make it a Story draft is pending for this chat');
+        draftStory(chatId, draft);
+      },
+    };
+  };
+
   const list = (): SessionInfo[] => {
     const rows = (selectAll.all() as unknown as SessionRow[]).map(fromRow);
     return rows.map((row) => live.get(row.id)?.info ?? row);
@@ -993,6 +1028,8 @@ export function createSessionManager({
       const session = [...live.values()].find((s) => s.toolsToken === token);
       if (!session || !ACTIVE.has(session.info.state)) return undefined;
       const { info } = session;
+      const chatId = chatOfThread(info.itemId);
+      if (chatId !== undefined) return { session: info, scope: chatScope(session, chatId) };
       if (projectOfThread(info.itemId) !== undefined) return { session: info, scope: projectScope(session) };
       const item = () => {
         const found = subjectOf(info.itemId);
