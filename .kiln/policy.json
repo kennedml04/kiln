@@ -899,6 +899,11 @@
       "action": "other_commands",
       "match": "sed -n 5,12p README.md",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff HEAD~1 local-first-03 -- packages/core/src/flow/session-manager.ts packages/core/src/server.ts",
+      "decision": "allow"
     }
   ]
 }
