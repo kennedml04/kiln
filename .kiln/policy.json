@@ -1649,6 +1649,11 @@
       "action": "other_commands",
       "match": "git merge --abort",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git log --oneline --no-merges -8 --format='%h %s'",
+      "decision": "allow"
     }
   ]
 }
