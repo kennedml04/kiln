@@ -1974,6 +1974,11 @@
       "action": "other_commands",
       "match": "cat > /tmp/fix.py <<'EOF'\nimport re\np='packages/core/src/db.ts'\ns=open(p,encoding='utf8').read()\ns=s.replace(\"<<<<<<< HEAD\\n\",\"\")\ns=re.sub(r\"=======\\n(  // Scratch chats)\",r\"     )`,\\n\\1\",s)\ns=re.sub(r\">>>>>>> 696cc91[^\\n]*\\n\",\"\",s)\nopen(p,'w',encoding='utf8').write(s)\nEOF\npython /tmp/fix.py; sed -n 238,262p packages/core/src/db.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat > /tmp/fix2.py <<'EOF'\nimport re\np='packages/widget-sdk/src/scratch-chat.ts'\ns=open(p,encoding='utf8').read()\n# take theirs (commit) for helpers/types but master's policy\nhead_policy=\"\"\"/**\n * The Stage Policy every Scratch chat Session runs under: the Project Thread's read-only Policy\n * with the network allowed. Being a Stage layer it can only tighten the Org layer, so an Org\n * Policy that denies `network` still wins. Chats raise no Permission Asks: what is not allowed here\n * is `deny`, never `ask`.\n */\nexport const CHAT_POLICY: Required<PolicyLayer> = {\n  actions: { ...PROJECT_THREAD_POLICY.actions, network: 'allow' },\n  rules: [],\n};\n\"\"\"\n# split blocks\nblocks=re.split(r\"<<<<<<< HEAD\\n(.*?)=======\\n(.*?)>>>>>>> [^\\n]*\\n\",s,flags=re.S)\n# blocks: pre, h1,t1, mid, h2,t2, post\npre,h1,t1,mid,h2,t2,post=blocks\nt1=t1.replace(\"import type { PolicyLayer } from './policy.ts';\\n\",\"import type { PolicyLayer } from './policy.ts';\\nimport { PROJECT_THREAD_POLICY } from './project-thread.ts';\\n\")\n# t2 contains policy; replace policy portion\ni=t2.index(\"/**\\n * The Stage Policy\"); j=t2.index(\"/** A Scratch chat as the API\")\nt2=t2[:i]+head_policy+\"\\n\"+t2[j:]\nopen(p,'w',encoding='utf8').write(pre+t1+mid+t2+post)\nEOF\npython /tmp/fix2.py; sed -n 1,40p packages/widget-sdk/src/scratch-chat.ts",
+      "decision": "allow"
     }
   ]
 }
