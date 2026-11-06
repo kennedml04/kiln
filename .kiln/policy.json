@@ -1894,6 +1894,11 @@
       "action": "other_commands",
       "match": "Select-Object -Last 40",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Select-Object -First 10",
+      "decision": "allow"
     }
   ]
 }
