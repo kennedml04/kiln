@@ -1234,6 +1234,11 @@
       "action": "other_commands",
       "match": "sed -n 120,170p packages/core/src/local/routing.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "ls",
+      "decision": "allow"
     }
   ]
 }
