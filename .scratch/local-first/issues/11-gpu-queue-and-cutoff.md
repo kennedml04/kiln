@@ -4,7 +4,9 @@
 
 **Blocked by:** 07, 08
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] A second local Session waits while the first holds the GPU slot, and its card says so
 - [ ] With a short cutoff in the test, a waiting local-first Ticket goes to cloud as "GPU busy", and no variant's record changes
