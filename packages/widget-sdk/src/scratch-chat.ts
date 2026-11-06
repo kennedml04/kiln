@@ -5,7 +5,6 @@
 // Project Thread's, plus network access, and read every registered Project's checkout through the
 // Session's `readRoots`.
 import type { PolicyLayer } from './policy.ts';
-import { PROJECT_THREAD_POLICY } from './project-thread.ts';
 
 const PREFIX = 'chat:';
 
@@ -22,13 +21,19 @@ export const CHAT_STAGE = 'chat';
 export const CHAT_ROLE = 'chat';
 
 /**
- * The Stage Policy every Scratch chat Session runs under: the Project Thread's read-only Policy
- * with the network allowed. Being a Stage layer it can only tighten the Org layer, so an Org
- * Policy that denies `network` still wins. Chats raise no Permission Asks: what is not allowed here
- * is `deny`, never `ask`.
+ * The Stage Policy every chat Session runs under: it may read and look things up on the web, and
+ * change nothing. Being a Stage layer, it can only tighten the Org layer.
  */
 export const CHAT_POLICY: Required<PolicyLayer> = {
-  actions: { ...PROJECT_THREAD_POLICY.actions, network: 'allow' },
+  actions: {
+    worktree_read: 'allow',
+    worktree_write: 'deny',
+    known_commands: 'deny',
+    other_commands: 'deny',
+    network: 'allow',
+    external_writes: 'deny',
+    outside_worktree: 'deny',
+  },
   rules: [],
 };
 
