@@ -2019,6 +2019,11 @@
       "action": "other_commands",
       "match": "(timeout 100 node --test packages/core/test/scratch-chat.test.ts 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "timeout 280 node --test packages/shell/test/chats.test.ts 2>&1",
+      "decision": "allow"
     }
   ]
 }
