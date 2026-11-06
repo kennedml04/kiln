@@ -1429,6 +1429,11 @@
       "action": "other_commands",
       "match": "sed -n 20,45p scripts/check-banned.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git checkout packages/core/src/db.ts",
+      "decision": "allow"
     }
   ]
 }
