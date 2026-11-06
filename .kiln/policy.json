@@ -7,6 +7,31 @@
   "rules": [
     {
       "action": "other_commands",
+      "match": "npm *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "npx *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "node *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "python *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "python3 *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
       "match": "ls .scratch/ .scratch/scratch-chat .scratch/board-ux 2>&1",
       "decision": "allow"
     },
