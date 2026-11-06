@@ -964,6 +964,11 @@
       "action": "other_commands",
       "match": "git fetch -q 2>&1",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "node -e '\nconst {execSync}=require(\"child_process\");\nconst g=r=>JSON.parse(execSync(\"git show \"+r+\":.kiln/policy.json\",{maxBuffer:1e8}));\nconst o=g(\"master\"),h=g(\"HEAD\");const k=e=>e.action+\"|\"+e.match;\nconst rules=Object.keys(o).find(x=>Array.isArray(o[x]));\nconst s=new Set(o[rules].map(k));\nfor(const e of h[rules])if(!s.has(k(e)))o[rules].push(e);\nrequire(\"fs\").writeFileSync(\".kiln/policy.json\",JSON.stringify(o,null,2)+\"\\n\");\nconsole.log(rules,o[rules].length)'",
+      "decision": "allow"
     }
   ]
 }
