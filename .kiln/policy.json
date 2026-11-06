@@ -1619,6 +1619,11 @@
       "action": "other_commands",
       "match": "sed -n 95,125p packages/core/src/setup/setup.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge --no-edit kiln/ticket/scratch-chat/01 2>&1",
+      "decision": "allow"
     }
   ]
 }
