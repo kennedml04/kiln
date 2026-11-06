@@ -1139,6 +1139,11 @@
       "action": "other_commands",
       "match": "tail -12",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "head -150",
+      "decision": "allow"
     }
   ]
 }
