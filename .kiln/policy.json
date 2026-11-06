@@ -874,6 +874,11 @@
       "action": "other_commands",
       "match": "grep -n \"outside_worktree\\|Read\\b\\|'Read'\\|Glob\\|Grep\\|readOnly\\|read-only\" packages/core/src/policy/policy.ts widgets/claude-code/src/*.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -i 's|<select value={role} onChange|<select aria-label=\"Filter by role\" value={role} onChange|; s|<select value={size} onChange|<select aria-label=\"Filter by size\" value={size} onChange|' packages/shell/src/work/Scoreboard.tsx",
+      "decision": "allow"
     }
   ]
 }
