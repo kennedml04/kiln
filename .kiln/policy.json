@@ -2049,6 +2049,11 @@
       "action": "other_commands",
       "match": "sed -n 225,260p /tmp/t.log",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "fail)\"; done",
+      "decision": "allow"
     }
   ]
 }
