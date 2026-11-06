@@ -1039,6 +1039,11 @@
       "action": "other_commands",
       "match": "git commit -qm \"The scoreboard, role modes in Settings, and docs (local-first 12)\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Monitor {\"description\":\"final test result\",\"timeout_ms\":900000,\"command\":\"until grep -q \\\"^ℹ fail\\\" /tmp/t12.log; do sleep 10; done; grep -E \\\"^(✖|ℹ (pass|fail))\\\" /tmp/t12.log\"}",
+      "decision": "allow"
     }
   ]
 }
