@@ -1419,6 +1419,11 @@
       "action": "other_commands",
       "match": "grep -rln \"chatThreadId\\|/api/chats\" packages widgets --include=*.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff packages/core/src/db.ts",
+      "decision": "allow"
     }
   ]
 }
