@@ -2259,6 +2259,11 @@
       "action": "other_commands",
       "match": "sed -n 1,30p ../../testing/src/scratch.ts",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "EOF2",
+      "decision": "allow"
     }
   ]
 }
