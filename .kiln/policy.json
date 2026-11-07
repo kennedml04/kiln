@@ -2254,6 +2254,11 @@
       "action": "other_commands",
       "match": "ls ../../testing/src",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "sed -n 1,30p ../../testing/src/scratch.ts",
+      "decision": "allow"
     }
   ]
 }
