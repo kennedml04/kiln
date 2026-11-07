@@ -115,9 +115,14 @@ export async function commitsAhead(cwd: string, base: string): Promise<number> {
 }
 
 /** Where an Item's Stage-runs work: one worktree per Item, kept across its Stages until it merges. */
-export function worktreePath(dataDir: string, projectId: string, itemKey: string): string {
-  return join(dataDir, 'worktrees', projectId, itemKey.replaceAll('/', '-'));
+export function worktreePath(dataDir: string, project: { id: string; name: string; settings: { linkedProjects?: object } }, itemKey: string): string {
+  const folder = join(dataDir, 'worktrees', project.id, itemKey.replaceAll('/', '-'));
+  // A client Project's Items work in a task folder: the client's worktree sits beside its linked Projects'.
+  return Object.keys(project.settings.linkedProjects ?? {}).length ? join(folder, folderName(project.name)) : folder;
 }
+
+/** A Project name as a folder name. */
+export const folderName = (name: string): string => name.trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, '-') || 'project';
 
 /** A file's content at `rev` (default HEAD) as seen from `cwd`, or undefined when it is not there. */
 export async function fileAtHead(cwd: string, path: string, rev = 'HEAD'): Promise<string | undefined> {
@@ -198,7 +203,7 @@ const REMOVE_TRIES_MS = [100, 250, 500, 1000, 2000, 3000];
  * process works in it, and an Agent's process that was just told to stop takes a moment to exit,
  * so a failed removal is tried again for a few seconds before it gives up.
  */
-export async function removeWorktree(repo: string, path: string, branch: string): Promise<void> {
+export async function removeWorktree(repo: string, path: string, branch?: string): Promise<void> {
   for (let attempt = 0; existsSync(path); attempt++) {
     try {
       await git(repo, 'worktree', 'remove', '--force', path);
@@ -209,7 +214,7 @@ export async function removeWorktree(repo: string, path: string, branch: string)
     }
   }
   await git(repo, 'worktree', 'prune');
-  if (await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)) await git(repo, 'branch', '-d', branch);
+  if (branch && (await succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`))) await git(repo, 'branch', '-d', branch);
 }
 
 /** Uncommitted changes in `cwd` (porcelain status lines), empty when the tree is clean. */

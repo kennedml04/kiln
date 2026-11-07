@@ -114,6 +114,18 @@ export interface ProjectSettings {
   github?: GitHubSettings;
   /** The ids of the modules the Project pulls in, in order. Unset: none, today's Workflow. */
   modules?: string[];
+  /**
+   * The Projects this one consumes, by Project name (or id), pointing one way: a Session on one of
+   * this Project's Items also gets a worktree of each, side by side in a task folder.
+   */
+  linkedProjects?: Record<string, LinkedProjectSettings>;
+}
+
+export interface LinkedProjectSettings {
+  /** Run in this Project's worktree after the worktrees are made (e.g. `pnpm link ../monorepo`). */
+  link?: string;
+  /** The files in this Project the link command changes (kept for the later slices: Exit checks, landing). */
+  linkFiles?: string[];
 }
 
 export type TrackerId = 'markdown' | 'github';

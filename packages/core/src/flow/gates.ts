@@ -28,6 +28,7 @@ import type { EventBus } from '../events.ts';
 import { WorkError, type Work } from '../work/work.ts';
 import { specPathOf } from './exit-checker.ts';
 import { coAuthoredCommits, coAuthoredFix, currentBranch, defaultBranch, diffSummary, fileAtHead, git, isMerged, mergeBranch, mergeConflicts, removeWorktree, worktreePath } from './git.ts';
+import { removeTaskFolder } from './linked.ts';
 
 export interface Gates {
   /** The Gate's Stage Session met its Exit: raise the Review Ask and hold the Item until a person answers. */
@@ -188,7 +189,8 @@ export function createGates({ bus, work, asks, dataDir, policy, audit, pullReque
     // is coming, and an Agent's process working in the worktree would keep it from being removed.
     await release?.(item.id);
     try {
-      await removeWorktree(project.path, worktreePath(dataDir, project.id, item.key), branch);
+      await removeWorktree(project.path, worktreePath(dataDir, project, item.key), branch);
+      await removeTaskFolder(dataDir, project, item.key);
     } catch (err) {
       // The merge is done, so the Item still moves on; its next Stage makes the stale worktree again.
       bus.publish('item.cleanup_failed', { itemId: item.id, projectId: item.projectId, branch, error: err instanceof Error ? err.message : String(err) });
@@ -278,7 +280,8 @@ export function createGates({ bus, work, asks, dataDir, policy, audit, pullReque
     const project = work.project(record.projectId);
     if (!item || !project) return;
     await release?.(item.id);
-    await removeWorktree(project.path, worktreePath(dataDir, project.id, item.key), record.branch).catch(() => undefined);
+    await removeWorktree(project.path, worktreePath(dataDir, project, item.key), record.branch).catch(() => undefined);
+    await removeTaskFolder(dataDir, project, item.key).catch(() => undefined);
     work.setGated(item.id, false, { quiet: true });
     await work.advance(item.id);
   });

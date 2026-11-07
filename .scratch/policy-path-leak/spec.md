@@ -78,7 +78,7 @@ Sources: `.scratch/policy-path-leak/story.md`, `.scratch/policy-path-leak/grill.
 - Through `startTestKiln(t)` and `kiln.installFakeAgent`:
   - a scripted request `cat /tmp/x.txt` (an action the Policy asks about) raises an Ask without Always allow; answering Allow once lets it run;
   - answering Always allow on such an Ask by hand (the API) is refused with 409 and `.kiln/policy.json` in the temp repo is unchanged, with no new commit;
-  - a scripted `cd "<the Session's worktree>" && git status`, with the worktree under a folder shaped like a home folder (`.../Users/someone/...`), raises no Ask;
+  - a scripted `cd "<the Session's worktree>" && git status`, with the worktree under a folder shaped like a home folder (`.../Users/<name>/...`), raises no Ask;
   - Always allow on a short command commits with the subject `Kiln: always allow <action> "<match>"`; on a long or multi-line one, the subject ends `(a long rule)` and the body holds the match (read with `git log -1 --format=%B` in the temp repo).
 - The Permission review: posting a chosen rule whose match names `/tmp/x` is refused with 409 and nothing is committed.
 - No assertions on internal modules or tables beyond the exported SDK functions; core behaviour is checked through the API and the temp repo's git history.

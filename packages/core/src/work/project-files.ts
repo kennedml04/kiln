@@ -53,7 +53,7 @@ export function validateSettings(raw: unknown): { settings: ProjectSettings; err
   const errors: Omit<ProjectFileError, 'file'>[] = [];
   const settings: ProjectSettings = {};
   if (!isObject(raw)) return { settings, errors: [{ at: '', message: 'The settings must be a JSON object' }] };
-  const { testCommand, knownCommands, localOnly, mergeMode, tracker, github, modules } = raw;
+  const { testCommand, knownCommands, localOnly, mergeMode, tracker, github, modules, linkedProjects } = raw;
   if (testCommand !== undefined) {
     if (typeof testCommand === 'string' && testCommand.trim()) settings.testCommand = testCommand;
     else errors.push({ at: 'testCommand', message: 'testCommand must be a command line' });
@@ -87,6 +87,31 @@ export function validateSettings(raw: unknown): { settings: ProjectSettings; err
   if (modules !== undefined) {
     if (Array.isArray(modules) && modules.every((m) => typeof m === 'string' && m.trim())) settings.modules = modules as string[];
     else errors.push({ at: 'modules', message: 'modules must be a list of module ids' });
+  }
+  if (linkedProjects !== undefined) {
+    if (!isObject(linkedProjects)) {
+      errors.push({ at: 'linkedProjects', message: 'linkedProjects must map a Project name to its link settings' });
+    } else {
+      const checked: NonNullable<ProjectSettings['linkedProjects']> = {};
+      for (const [name, entry] of Object.entries(linkedProjects)) {
+        const at = `linkedProjects.${name}`;
+        if (!name.trim() || /[\\/]/.test(name) || name === '.' || name === '..') {
+          errors.push({ at, message: 'A linked Project is named by a Project name without slashes' });
+        } else if (!isObject(entry)) {
+          errors.push({ at, message: `${at} must be an object` });
+        } else if (entry.link !== undefined && (typeof entry.link !== 'string' || !entry.link.trim())) {
+          errors.push({ at: `${at}.link`, message: 'link must be a command line' });
+        } else if (entry.linkFiles !== undefined && !(Array.isArray(entry.linkFiles) && entry.linkFiles.every((f) => typeof f === 'string' && f.trim()))) {
+          errors.push({ at: `${at}.linkFiles`, message: 'linkFiles must be a list of file paths' });
+        } else {
+          checked[name] = {
+            ...(entry.link !== undefined ? { link: entry.link as string } : {}),
+            ...(entry.linkFiles !== undefined ? { linkFiles: entry.linkFiles as string[] } : {}),
+          };
+        }
+      }
+      if (Object.keys(checked).length) settings.linkedProjects = checked;
+    }
   }
   if (settings.tracker === 'github' && !settings.github) {
     errors.push({ at: 'github', message: 'The github Tracker needs github.repo, the "owner/name" its issues are on' });

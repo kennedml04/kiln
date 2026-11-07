@@ -58,6 +58,7 @@ import { moduleSessionKit } from '../work/skills.ts';
 import { checkExit, exitFeedback, grillPathOf, readProjectSettings, specPathOf } from './exit-checker.ts';
 import { findingsPathOf, type Gates } from './gates.ts';
 import { CO_AUTHORED_BY, defaultBranch, ensureWorktree, git, readHead, worktreePath } from './git.ts';
+import { cleanupLinked, LinkedProjectError, setupLinked, type LinkedSetup } from './linked.ts';
 import { modeOf, ticketSize, type Routing } from '../local/routing.ts';
 import type { ChatToolsScope, KilnToolsScope, ProjectToolsScope } from './kiln-tools.ts';
 import { createMarkdownKnowledgeStore, digestContent, type KnowledgeStore } from '../knowledge/markdown-store.ts';
@@ -158,6 +159,8 @@ interface Live {
   toolsToken: string;
   /** The branch the worktree started from. */
   base: string | null;
+  /** A client Item's task folder and the worktrees in it: all go when the Session ends. */
+  linked?: LinkedSetup;
   /** Finished events are handled one at a time, in order. */
   queue: Promise<void>;
   /** Stops the Session if the Agent goes quiet after Exit feedback. */
@@ -685,6 +688,10 @@ export function createSessionManager({
       if (note) digest.open.unshift(note);
       recordDigest(session, digest, 'kiln');
     }
+    if (session.linked) {
+      // The Agent's process may still be closing; the cleanup keeps what it can't remove yet for the Item's merge.
+      await cleanupLinked(session.linked, info.branch ?? undefined).catch(() => undefined);
+    }
   };
 
   const onFinished = async (session: Live, event: Extract<AgentEvent, { kind: 'finished' }>) => {
@@ -1000,11 +1007,19 @@ export function createSessionManager({
       let worktree: string | null = null;
       let branch: string | null = null;
       let base: string | null = null;
+      let linked: LinkedSetup | undefined;
       if (project && stage.worktree) {
         base = await defaultBranch(project.path);
         branch = `kiln/${item.key}`;
-        worktree = worktreePath(dataDir, project.id, item.key);
-        await ensureWorktree(project.path, worktree, branch, base);
+        worktree = worktreePath(dataDir, project, item.key);
+        if (Object.keys(project.settings.linkedProjects ?? {}).length) {
+          try {
+            linked = await setupLinked({ dataDir, all: work.projects(), client: project, itemKey: item.key, branch, clientBase: base });
+          } catch (err) {
+            if (err instanceof LinkedProjectError) throw new WorkError(409, err.message);
+            throw err;
+          }
+        } else await ensureWorktree(project.path, worktree, branch, base);
       }
       const previous = list().filter((s) => s.itemId === itemId).at(-1);
       const rework = chat ? [] : (gates?.reworkSeed(itemId, previous?.startedAt) ?? []);
@@ -1024,7 +1039,7 @@ export function createSessionManager({
       };
       insert.run(info.id, itemId, info.projectId, stage.id, stage.role, agentId, widgetId, model ?? null, worktree, branch, base, 'running', null, info.startedAt, null);
       const toolsToken = randomBytes(32).toString('base64url');
-      live.set(info.id, { info, toolsToken, base, queue: Promise.resolve(), digested: false, interrupted: false, interruptsSent: 0, ...(planned.attempt ? { local: planned.attempt } : {}) });
+      live.set(info.id, { info, toolsToken, base, ...(linked ? { linked } : {}), queue: Promise.resolve(), digested: false, interrupted: false, interruptsSent: 0, ...(planned.attempt ? { local: planned.attempt } : {}) });
       work.setRun(itemId, toRun(info));
       bus.publish('session.started', { ...ref(info), session: info });
       if (planned.note) bus.publish('session.message', { ...ref(info), from: 'kiln', text: planned.note });
@@ -1040,7 +1055,7 @@ export function createSessionManager({
             artifacts: project ? [...seedArtifacts(item, worktree ?? project.path), ...rework] : [],
             digests: (() => { const store = knowledgeFor(item); return store.seed(item).map((d) => store.render(d)); })(),
           },
-          worktree: scratch ?? worktree,
+          worktree: scratch ?? linked?.folder ?? worktree,
           kilnTools: { url: kilnToolsUrl(), headers: { authorization: `Bearer ${toolsToken}` } },
           policy: sessionPolicy,
           ...(kit.skills.length ? { skills: kit.skills } : {}),
@@ -1065,7 +1080,8 @@ export function createSessionManager({
       // The Item's last Session in this Stage, if it ended in a way its Agent can pick up again.
       const last = [...live.values()].filter((s) => s.info.itemId === itemId && s.info.stage === item.stage).at(-1);
       if (last && RESUMABLE.has(last.info.state)) {
-        if (resume && !letGo.has(last.info.id) && cacheWarm(last.info, Date.parse(last.info.endedAt!))) {
+        // A client Session's worktrees went when it ended, so it can't pick up where it left off.
+        if (resume && !last.linked && !letGo.has(last.info.id) && cacheWarm(last.info, Date.parse(last.info.endedAt!))) {
           const { info } = last;
           info.state = 'running';
           delete info.endedAt;
