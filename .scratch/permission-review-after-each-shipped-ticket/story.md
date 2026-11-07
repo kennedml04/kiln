@@ -1,6 +1,6 @@
 ---
 title: Permission review after each shipped Ticket
-stage: grill
+stage: spec
 ---
 
 The owner's words: "after every ticket is shipped do a review on all the permissions and what could be made better. Wasting a ton of time waiting on review since I can't just stare at the board all day."
