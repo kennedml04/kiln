@@ -6,14 +6,16 @@ import type { BudgetDraft, BudgetInfo, CoreStatus, DemoMode, ImportResult, Insta
 import { FolderBrowser } from './FolderBrowser.tsx';
 import { suggestRoles } from './role-defaults.ts';
 import { navigate } from './router.ts';
+import { ImportProject } from './work/ImportProject.tsx';
+import { NewProject } from './work/NewProject.tsx';
 import { api, useStore } from './store.ts';
 
 export const SETUP_PATH = '/setup';
 
-type StepName = 'Login' | 'Knowledge store' | 'Install' | 'Agents' | 'Models' | 'Workflow roles' | 'Import' | 'Demo';
-const LIVE_STEPS: readonly StepName[] = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Import'];
+type StepName = 'Login' | 'Knowledge store' | 'Install' | 'Agents' | 'Models' | 'Workflow roles' | 'Project' | 'Demo';
+const LIVE_STEPS: readonly StepName[] = ['Login', 'Knowledge store', 'Install', 'Agents', 'Models', 'Workflow roles', 'Project'];
 /** A dev instance never imports the old board's real Projects: its wizard ends with the Demo step instead. */
-const DEV_STEPS: readonly StepName[] = [...LIVE_STEPS.filter((s) => s !== 'Import'), 'Demo'];
+const DEV_STEPS: readonly StepName[] = [...LIVE_STEPS.filter((s) => s !== 'Project'), 'Demo'];
 
 /** The Demo step's choice: start the demo in one of its modes, or skip it. */
 type DemoChoice = DemoMode | 'skip';
@@ -500,6 +502,33 @@ function RolesStep(props: {
   );
 }
 
+type ProjectChoice = 'new' | 'import' | 'old-board';
+
+/** The last live step: start a Project (New or Import, the same forms as + Project) or bring in the old board's list. */
+function ProjectStep({ setup, onImported }: { setup: SetupState; onImported: () => Promise<void> }) {
+  const [choice, setChoice] = useState<ProjectChoice>();
+  const [made, setMade] = useState<string>();
+  const done = (name: string) => {
+    setMade(name);
+    setChoice(undefined);
+    void onImported();
+  };
+  return (
+    <Step title="Project">
+      <p>Start with a Project. This can be skipped: + Project on the board does the same later.</p>
+      <div className="choices" role="group" aria-label="How to start a Project">
+        <Choice type="radio" name="project-choice" checked={choice === 'new'} onChange={() => setChoice('new')} title="New" detail="Make a new Project folder and grill what you're building" />
+        <Choice type="radio" name="project-choice" checked={choice === 'import'} onChange={() => setChoice('import')} title="Import" detail="Use a folder that is already a repository, where it is" />
+        <Choice type="radio" name="project-choice" checked={choice === 'old-board'} onChange={() => setChoice('old-board')} title="From the old board" detail="Bring the old board's Projects in, once" />
+      </div>
+      {made ? <p role="status">Added {made}</p> : null}
+      {choice === 'new' ? <NewProject stay onDone={(created) => done(created.project.name)} /> : null}
+      {choice === 'import' ? <ImportProject onDone={(project) => done(project.name)} /> : null}
+      {choice === 'old-board' ? <ImportStep key={setup.oldBoard.registry ?? ''} setup={setup} onImported={onImported} /> : null}
+    </Step>
+  );
+}
+
 function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () => Promise<void> }) {
   const importable = setup.oldBoard.projects.filter((p) => !p.skip && !p.registered);
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(importable.map((p) => p.path)));
@@ -530,7 +559,7 @@ function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () =
       await onImported();
     });
   return (
-    <Step title="Import">
+    <div className="setup-old-board" role="group" aria-label="The old board">
       <p>Bring the old board's Projects into Kiln, once. The old board is only read: nothing in its folder changes.</p>
       <form
         className="setup-action"
@@ -581,7 +610,7 @@ function ImportStep({ setup, onImported }: { setup: SetupState; onImported: () =
         </p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
-    </Step>
+    </div>
   );
 }
 
@@ -830,7 +859,7 @@ export function SetupWizard() {
         />
       ) : null}
       {name === 'Workflow roles' ? <RolesStep setup={setup} budgets={budgets} roles={roles} setRoles={setRoles} suggested={suggested} dev={dev} /> : null}
-      {name === 'Import' ? <ImportStep key={setup.oldBoard.registry ?? ''} setup={setup} onImported={async () => void (await refresh())} /> : null}
+      {name === 'Project' ? <ProjectStep setup={setup} onImported={async () => void (await refresh())} /> : null}
       {name === 'Demo' ? <DemoStep choice={demo} setChoice={setDemo} /> : null}
           {error ? <p role="alert">{error}</p> : null}
           <div className="setup-buttons">

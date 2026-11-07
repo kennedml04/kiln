@@ -8,7 +8,8 @@ import { FolderBrowser } from '../FolderBrowser.tsx';
 import { itemPath, navigate } from '../router.ts';
 import { api } from '../store.ts';
 
-export function NewProject({ onDone }: { onDone: () => void }) {
+/** `stay`: the caller (the setup wizard) keeps the person where they are instead of opening the Story. */
+export function NewProject({ onDone, stay }: { onDone: (created: NewProjectResult) => void; stay?: boolean }) {
   // undefined while loading; '' when no Projects folder is set yet.
   const [projectsFolder, setProjectsFolder] = useState<string>();
   const [folderInput, setFolderInput] = useState('');
@@ -38,11 +39,11 @@ export function NewProject({ onDone }: { onDone: () => void }) {
         const saved = await api<SetupState>('PUT', '/api/setup', { projectsFolder: folderInput.trim() });
         setProjectsFolder(saved.settings.projectsFolder ?? '');
       }
-      const { item } = await api<NewProjectResult>('POST', '/api/projects/new', { name: name.trim(), description: description.trim() });
+      const created = await api<NewProjectResult>('POST', '/api/projects/new', { name: name.trim(), description: description.trim() });
       setName('');
       setDescription('');
-      onDone();
-      navigate(itemPath(item.id));
+      onDone(created);
+      if (!stay) navigate(itemPath(created.item.id));
     } catch (err) {
       setError((err as Error).message);
       if (err instanceof ApiError && err.reason === 'no-projects-folder') setProjectsFolder('');

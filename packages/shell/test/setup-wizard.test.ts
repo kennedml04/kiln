@@ -90,7 +90,8 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await next();
 
   // The one-time import from the old board.
-  await step('Import');
+  await step('Project');
+  await wizard.getByRole('radio', { name: /From the old board/ }).check();
   await wizard.getByText('No old board named. Nothing to import; this step can be skipped.').waitFor();
   await wizard.getByLabel("The old board's projects.json").fill(registry);
   await wizard.getByRole('button', { name: 'Look' }).click();
@@ -122,6 +123,55 @@ test('a fresh data folder opens the setup wizard, and finishing it leaves Budget
   await page.getByRole('link', { name: 'Settings' }).click();
   await page.getByRole('link', { name: 'Run setup again' }).click();
   await page.getByRole('region', { name: 'Set up Kiln' }).waitFor();
+});
+
+test("the last step starts a Project: New makes one and stays in the wizard, Import registers a folder", async (t) => {
+  const widgetRepo = createFakeWidgetRepo(t);
+  const kiln = await startTestKiln(t, { setup: 'fresh', env: { KILN_OLD_BOARD_REGISTRY: '' } });
+  const projects = tempDir(t, 'kiln-projects');
+  const repo = createTempRepo(t);
+  const page = await openShell(t, kiln, '/');
+  const wizard = page.getByRole('region', { name: 'Set up Kiln' });
+  const next = () => wizard.getByRole('button', { name: 'Next' }).click();
+  const step = (name: string) => wizard.getByRole('heading', { name, level: 3 }).waitFor();
+  await step('Login');
+  await next();
+  await step('Knowledge store');
+  await next();
+  await step('Install');
+  await wizard.getByRole('radio', { name: /Work/ }).check();
+  await next();
+  await step('Agents');
+  await wizard.getByLabel('Widget repo').fill(widgetRepo.path);
+  await wizard.getByRole('button', { name: 'Install Agents' }).click();
+  await wizard.getByText('Claude Code: ready').waitFor({ timeout: 20_000 });
+  await next();
+  await step('Models');
+  await next();
+  await step('Workflow roles');
+  await next();
+  await step('Project');
+
+  // New: the same form as + Project; the wizard stays put and the Project exists.
+  await wizard.getByRole('radio', { name: /^New/ }).check();
+  const form = wizard.getByRole('form', { name: 'New Project' });
+  await form.getByLabel('Projects folder').fill(projects);
+  await form.getByLabel('Name').fill('desk-bracket');
+  await form.getByLabel('Description').fill('A bracket that holds the router under the desk.');
+  await form.getByRole('button', { name: 'Create Project' }).click();
+  await wizard.getByText('Added desk-bracket').waitFor();
+  await step('Project');
+  assert.deepEqual((await kiln.api<Project[]>('GET', '/api/projects')).map((p) => p.name), ['desk-bracket']);
+
+  // Import: the same form as + Project.
+  await wizard.getByRole('radio', { name: /^Import/ }).check();
+  const importForm = wizard.getByRole('form', { name: 'Import a Project' });
+  await importForm.getByLabel('Repository path').fill(repo.path);
+  await importForm.getByRole('button', { name: 'Register Project' }).click();
+  await wizard.getByText(/^Added (?!desk-bracket)/).waitFor();
+  assert.equal((await kiln.api<Project[]>('GET', '/api/projects')).length, 2);
+  await wizard.getByRole('button', { name: 'Finish' }).click();
+  await page.waitForURL(`${kiln.url}/`);
 });
 
 test('the roles step suggests the strongest model for planning and review, a mid one for implementing, each with a lighter fallback', async (t) => {
@@ -171,7 +221,7 @@ test('the roles step suggests the strongest model for planning and review, a mid
   // A change stays when the step is left and opened again.
   await wizard.getByLabel('reviewer model', { exact: true }).selectOption('claude-haiku-test');
   await next();
-  await step('Import');
+  await step('Project');
   await wizard.getByRole('button', { name: 'Back' }).click();
   await step('Workflow roles');
   assert.equal(await wizard.getByLabel('reviewer model', { exact: true }).inputValue(), 'claude-haiku-test');
@@ -230,7 +280,7 @@ test('the wizard lets tailscale serve be, but stops on a raw TCP forward that wo
   await tcpPage.getByRole('region', { name: 'Set up Kiln' }).getByRole('alert').filter({ hasText: /raw TCP.*local Admin/ }).waitFor();
 });
 
-test('on a dev instance the wizard has no Import step: it ends with Demo', async (t) => {
+test('on a dev instance the wizard has no Project step: it ends with Demo', async (t) => {
   const kiln = await startTestKiln(t, { setup: 'fresh', devInstance: true });
   const page = await openShell(t, kiln, '/');
   const wizard = page.getByRole('region', { name: 'Set up Kiln' });
