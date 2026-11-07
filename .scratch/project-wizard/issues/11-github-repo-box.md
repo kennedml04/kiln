@@ -4,7 +4,9 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] The box is hidden without the GitHub Widget and off by default with it
 - [ ] With a fake GitHub, ticking it creates a private repo, adds the remote and pushes
