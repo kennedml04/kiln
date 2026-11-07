@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "check": "node scripts/check-lock.ts && node scripts/check-banned.ts",
     "test": "npm run check && npm run build && npm run typecheck && npm run test:only",
-    "test:only": "node --test --test-concurrency=4 --test-timeout=300000 \"packages/*/test/**/*.test.ts\" \"widgets/*/test/**/*.test.ts\"",
+    "test:only": "node --test --test-concurrency=8 --test-timeout=300000 \"packages/*/test/**/*.test.ts\" \"widgets/*/test/**/*.test.ts\"",
     "kiln": "node packages/core/src/cli.ts"
   },
   "devDependencies": {

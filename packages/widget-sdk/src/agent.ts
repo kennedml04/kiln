@@ -24,7 +24,7 @@ export interface SessionStart {
    * into the tool's own permission settings; report a `permission_request` for anything it says to ask.
    */
   policy?: EffectivePolicy;
-  /** The Kiln tools for this Session: an MCP server scoped to the Session's own Item (see kiln-tools.ts). */
+  /** The Kiln tools for this Session: an MCP server scoped to the Session's own Item (see kiln-tools.ts). An Agent without an MCP client can call its HTTP endpoint directly. */
   kilnTools?: KilnToolsEndpoint;
   /**
    * The skills the Session runs with, decided by the core. Give the Agent exactly these: copy or
@@ -35,6 +35,7 @@ export interface SessionStart {
   /**
    * MCP servers from the Project's modules, by server name, in the Claude Code entry shape. Their
    * tool calls go through `policy` like any other tool. The `kiln` server is always Kiln's own.
+   * An Agent with no MCP client ignores this and reaches Kiln's tools through `kilnTools` some other way.
    */
   mcpServers?: Record<string, ModuleMcpServer>;
 }
@@ -86,7 +87,7 @@ export interface QuotaReading {
   usingOverage: boolean;
   /**
    * The plan's paid usage credits used so far this month (Claude: `extra_usage.used_credits`), when
-   * the source reports them. Kiln treats a rise as paid overage.
+   * the source reports them. Kiln treats a rise as paid overage. Agents with no plan (a local model) report no quota readings at all.
    */
   usedCredits?: number | null;
 }

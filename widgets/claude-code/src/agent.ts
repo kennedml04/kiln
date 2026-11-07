@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { CanUseTool, HookCallback, Options, PermissionResult, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
 import { ORG_POLICY_DEFAULT } from '@kiln/widget-sdk';
-import { SCRATCH, ownFolderOf, requestFor, type ToolPlace } from './permissions.ts';
+import { SCRATCH, ownFolderOf, requestFor, type ToolPlace } from '@kiln/widget-sdk/tool-classifier';
 import { buildSkillsPlugin, removeSessionConfig, sessionConfigDir } from './skills.ts';
 import { overageCredits, readingFromRateLimit, readingsFromUsage, type UsageReply } from './quota.ts';
 import { createUsageTracker } from './usage.ts';

@@ -46,15 +46,23 @@ test('the Workflow validator accepts the role modes and rejects unknown ones', a
       { id: 'done', name: 'Done' },
     ] }],
   });
+  const readErrors = async () => {
+    const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path }).catch(() => kiln.api<Project[]>('GET', '/api/projects').then((all) => all[0]!));
+    return (await kiln.api<Project>('GET', `/api/projects/${project.id}`)).errors;
+  };
   const errorsFor = async (mode: unknown) => {
     writeRepoFile(kiln.repo, '.kiln/workflow.json', JSON.stringify(workflow(mode)));
     kiln.repo.git('add', '.');
     kiln.repo.git('commit', '-q', '-m', 'Kiln workflow');
-    const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path }).catch(() => kiln.api<Project[]>('GET', '/api/projects').then((all) => all[0]!));
-    return (await kiln.api<Project>('GET', `/api/projects/${project.id}`)).errors;
+    return readErrors();
   };
   for (const mode of ['local-first', 'cloud-only', 'local-only']) assert.deepEqual(await errorsFor(mode), [], mode);
-  const errors = await errorsFor('sometimes');
+  // The Project re-reads the committed Workflow on its own schedule: ask until it has.
+  let errors = await errorsFor('sometimes');
+  for (let i = 0; i < 20 && !errors.length; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    errors = await readErrors();
+  }
   assert.equal(errors[0]?.at, 'kinds[0].stages[0].mode');
   assert.match(errors[0]!.message, /local-first, cloud-only, local-only/);
 });
