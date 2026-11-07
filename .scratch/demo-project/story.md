@@ -1,7 +1,7 @@
 ---
 title: Demo project for dev instances
 epic: projects-and-onboarding
-stage: tickets
+stage: shipped
 blocked-by: []
 ---
 A dev instance (`kiln dev`) gets its own throwaway demo Project, so the owner can run a repeatable end-to-end check and other people can try a workflow, with no risk to a real repo. Today the dev wizard imports the real Projects from the old board, and starting an item in one of them on dev does real work in the real repo. The demo is a tiny JavaScript project, copied from a template folder in the Kiln repo into the instance's data folder. It runs in two modes: Replay (the scripted fake Agent, no model calls) and Live (the instance's real Agents). Grilled 2026-11-05; the decisions are below. The spec (`spec.md`) was approved the same day; it is split into 9 Tickets in `issues/` (01 to 04 can start at once).
