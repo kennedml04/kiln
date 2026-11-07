@@ -1,7 +1,7 @@
 ---
 title: "Always allow" must not write machine paths into the repo
 epic: board-ux
-stage: grill
+stage: spec
 blocked-by: []
 ---
 "Always allow" on a command such as `cd "<a Session worktree>"` writes a rule into `.kiln/policy.json` that matches the absolute worktree path, and commits it with that path in the subject (`packages/core/src/policy/policy.ts:191`). The path names the person's home folder, so the tree and the message both fail `scripts/check-banned.ts` and `node scripts/publish.ts` refuses to publish. Every such answer also leaves a rule that only ever matches one Session's worktree.
