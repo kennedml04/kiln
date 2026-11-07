@@ -1,0 +1,15 @@
+{
+  "id": "pi",
+  "name": "Pi",
+  "version": "0.1.0",
+  "coreApi": "^0.1.0",
+  "command": ["node", "src/main.ts"],
+  "provides": {
+    "agents": [{ "id": "pi", "name": "Pi" }]
+  },
+  "needs": {
+    "network": ["127.0.0.1", "localhost", "api.openai.com", "api.anthropic.com", "openrouter.ai"],
+    "secrets": ["apiKey"],
+    "dataFolder": true
+  }
+}
