@@ -2214,6 +2214,11 @@
       "action": "other_commands",
       "match": "\"exit $LASTEXITCODE\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cat \"$LOCALAPPDATA/Kiln/test-lock.mjs\"",
+      "decision": "allow"
     }
   ]
 }
