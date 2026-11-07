@@ -4,7 +4,9 @@
 
 **Blocked by:** 03, `.scratch/skill-and-widget-repos/issues/01`
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] A module repo added in Settings is fetched, and its modules appear in the picker with their source
 - [ ] Order decides clashes
