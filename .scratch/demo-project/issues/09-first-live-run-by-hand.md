@@ -9,7 +9,9 @@ Write down every snag as a Ticket or a retro note. Once Live passes, delete `%TE
 
 **Blocked by:** 07, 08
 
-**Status:** ready-for-human
+**Status:** in-review
+
+**Stage:** review
 
 - [x] Live reaches `shipped`, with `slugify` and its CLI on the demo repo's `main` and `node --test` passing
 - [x] Permission requests reached Needs you as Asks, and none stalled a Session silently
