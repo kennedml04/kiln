@@ -2194,6 +2194,11 @@
       "action": "other_commands",
       "match": "tr *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git rev-parse --abbrev-ref *",
+      "decision": "allow"
     }
   ]
 }
