@@ -2144,6 +2144,16 @@
       "action": "other_commands",
       "match": "git diff --stat *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd ..",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "od -c",
+      "decision": "allow"
     }
   ]
 }
