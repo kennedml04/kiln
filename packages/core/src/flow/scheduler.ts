@@ -244,7 +244,7 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
   /** Starts or queues an Item that just entered a Stage; an Agent not ready yet queues it instead of failing. */
   const admit = async (itemId: string) => {
     const item = work.item(itemId);
-    if (!item || !stageOf(item)?.role) return;
+    if (!item || item.maintenance || !stageOf(item)?.role) return;
     try {
       await enqueue(itemId);
     } catch (err) {
@@ -259,6 +259,7 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
   async function enqueue(itemId: string, options: { attended?: boolean } = {}): Promise<StartResult> {
     const item = work.item(itemId);
     if (!item) throw new WorkError(404, `No Item "${itemId}"`);
+    if (item.maintenance) throw new WorkError(409, 'The Maintenance Story stays open: it runs no Session of its own');
     const stage = stageOf(item);
     if (!stage?.role) throw new WorkError(409, `${item.title} is in a Stage that runs no Session`);
     const pool = stage.pool ?? DEFAULT_POOL;

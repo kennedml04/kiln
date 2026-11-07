@@ -100,12 +100,16 @@ test('a new Item is refused, and no file written, while the main checkout is off
   assert.equal(kiln.repo.git('rev-parse', 'HEAD'), head, 'Kiln committed nothing');
 });
 
-test('a Ticket needs a Story as its parent', async (t) => {
+test('a Ticket filed without a Story goes under the Maintenance Story; under an Epic it is refused', async (t) => {
   const kiln = await startTestKiln(t);
+  seedScratch(kiln.repo);
   const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const epic = byTitle(await kiln.api<Item[]>('GET', `/api/projects/${project.id}/items`), 'Board as home');
 
+  const orphan = await kiln.api<Item>('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title: 'Orphan' });
+  assert.ok(orphan.parentId);
   await assert.rejects(
-    kiln.api('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title: 'Orphan' }),
+    kiln.api('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title: 'Wrong', parentId: epic.id }),
     /400/,
   );
 });

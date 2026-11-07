@@ -190,6 +190,8 @@ export interface Item {
   run?: ItemRun;
   /** Set when a Reset board archived this (shipped) Item: boards hide it; it is still shipped. */
   archived?: { at: string; batchId: string };
+  /** Set on a Project's Maintenance Story: it holds Story-less Tickets, never ships and never runs a Session of its own. */
+  maintenance?: true;
 }
 
 /** POST /api/archive/reset */
@@ -249,6 +251,8 @@ export interface TrackerItem {
   description?: string;
   parentKey?: string;
   path?: string;
+  /** Set on a Story that is the Project's Maintenance Story. */
+  maintenance?: boolean;
 }
 
 export interface TrackerCreateInput {
@@ -258,6 +262,8 @@ export interface TrackerCreateInput {
   description?: string;
   /** The Stage a new record starts in: its kind's first Stage in the Project's Workflow. */
   stage?: string;
+  /** A Story that is the Project's Maintenance Story (a Tracker that cannot store the flag may ignore it). */
+  maintenance?: boolean;
   /**
    * Keys already in use in the Project beyond this checkout (the default branch's records and other
    * live worktrees'), so a numbered key is never handed out twice.

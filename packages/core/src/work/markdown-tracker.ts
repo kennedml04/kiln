@@ -147,6 +147,7 @@ function readStories(root: string, epicKeys: Set<string>, stages: StageSets): Tr
       description: firstParagraph(body),
       parentKey: epicKey && epicKeys.has(epicKey) ? epicKey : undefined,
       path: `${SCRATCH}/${slug}/${hasStory ? 'story.md' : hasSpec ? 'spec.md' : 'issues'}`,
+      ...(front.maintenance?.toLowerCase() === 'true' ? { maintenance: true } : {}),
     });
     items.push(...tickets);
   }
@@ -159,7 +160,8 @@ function readOtherKinds(root: string): TrackerItem[] {
   if (!isDir(dir)) return [];
   const items: TrackerItem[] = [];
   for (const kind of readdirSync(dir).sort()) {
-    if (LAYOUT_KINDS.has(kind) || !isDir(join(dir, kind))) continue;
+    // Tickets have a place in the layout, but a Ticket with no Story is a plain record here.
+    if ((LAYOUT_KINDS.has(kind) && kind !== 'ticket') || !isDir(join(dir, kind))) continue;
     for (const name of readdirSync(join(dir, kind)).sort()) {
       if (!name.endsWith('.md')) continue;
       const slug = name.slice(0, -3);
@@ -358,10 +360,11 @@ function newRecord(root: string, input: TrackerCreateInput): { relativePath: str
   }
   if (input.kind === 'story') {
     const epic = input.parentKey?.startsWith('epic/') ? `epic: ${input.parentKey.slice(5)}\n` : '';
+    const maintenance = input.maintenance ? 'maintenance: true\n' : '';
     return {
       key: `story/${slug}`,
       relativePath: `${SCRATCH}/${slug}/story.md`,
-      content: `---\ntitle: ${yamlValue(title)}\n${epic}stage: ${input.stage ?? 'grill'}\n---\n${paragraph(input.description)}`,
+      content: `---\ntitle: ${yamlValue(title)}\n${epic}stage: ${input.stage ?? 'grill'}\n${maintenance}---\n${paragraph(input.description)}`,
     };
   }
   if (input.kind === 'ticket' && input.parentKey?.startsWith('story/')) {

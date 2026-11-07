@@ -23,7 +23,7 @@ export function createRollUp({ bus, work, scheduler }: RollUpDeps): void {
   /** Ships the Item if its Stage rolls up, nothing holds it there, and every one of its children has shipped. */
   const check = async (itemId: string) => {
     const item = work.item(itemId);
-    if (!item || !stageOf(item)?.rollUp || item.runState !== 'backlog' || item.childIds.length === 0) return;
+    if (!item || item.maintenance || !stageOf(item)?.rollUp || item.runState !== 'backlog' || item.childIds.length === 0) return;
     const children = item.childIds.map((id) => work.item(id));
     if (!children.every((child) => child?.runState === 'shipped')) return;
     await work.advance(itemId).catch((err: unknown) => failed(item, err));
@@ -42,7 +42,7 @@ export function createRollUp({ bus, work, scheduler }: RollUpDeps): void {
     if (event.type === 'item.merged') {
       const { itemId, stage } = (event as ItemMergedEvent).payload;
       const item = work.item(itemId);
-      if (!item || item.stage !== stage || !stageOf(item)?.rollUp) return;
+      if (!item || item.maintenance || item.stage !== stage || !stageOf(item)?.rollUp) return;
       void startChildren(item).then(() => check(itemId));
     } else if (event.type === 'item.stage_changed') {
       const child = work.item((event as ItemStageChangedEvent).payload.itemId);

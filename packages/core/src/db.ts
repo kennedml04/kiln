@@ -275,6 +275,12 @@ const MIGRATIONS: string[] = [
      batch_id TEXT NOT NULL,
      archived_at TEXT NOT NULL
    )`,
+
+  // Story-first board: a Widget Tracker's Maintenance Story (it cannot hold the flag), by Tracker key.
+  `CREATE TABLE maintenance_stories (
+     project_id TEXT PRIMARY KEY,
+     story_key TEXT NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

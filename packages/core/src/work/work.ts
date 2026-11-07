@@ -187,13 +187,15 @@ const runStateOf = (workflow: Workflow, kind: string, id: string, stage: string,
 };
 
 /** Turns a Tracker's records into Items: global ids, children and run state. */
-function toItems(project: Project, records: TrackerItem[], marks: Marks): Map<string, Item> {
+function toItems(project: Project, records: TrackerItem[], marks: Marks, maintenanceKey?: string): Map<string, Item> {
   const { runs } = marks;
   const id = (key: string) => `${project.id}/${key}`;
   const keys = new Set(records.map((r) => r.key));
   const items = new Map<string, Item>();
   for (const record of records) {
-    const parentKey = record.parentKey && keys.has(record.parentKey) ? record.parentKey : undefined;
+    // A Ticket the Tracker gives no Story hangs on the Project's Maintenance Story.
+    const storyless = record.kind === 'ticket' && !record.parentKey && maintenanceKey && keys.has(maintenanceKey);
+    const parentKey = storyless ? maintenanceKey : record.parentKey && keys.has(record.parentKey) ? record.parentKey : undefined;
     items.set(id(record.key), {
       id: id(record.key),
       projectId: project.id,
@@ -207,6 +209,7 @@ function toItems(project: Project, records: TrackerItem[], marks: Marks): Map<st
       parentId: parentKey ? id(parentKey) : undefined,
       childIds: [],
       path: record.path,
+      ...(record.kind === 'story' && (record.maintenance || record.key === maintenanceKey) ? { maintenance: true as const } : {}),
       ...(runs.has(id(record.key)) ? { run: runs.get(id(record.key)) } : {}),
       ...(marks.archived.has(id(record.key)) ? { archived: marks.archived.get(id(record.key))! } : {}),
     });
@@ -267,12 +270,46 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
     return main;
   };
 
+  const storyKindOf = (entry: Entry) => {
+    const ticket = entry.project.workflow.kinds.find((k) => k.id === 'ticket');
+    return ticket?.parentKind === 'story' && entry.project.workflow.kinds.some((k) => k.id === 'story');
+  };
+  const storedKey = db.prepare('SELECT story_key FROM maintenance_stories WHERE project_id = ?');
+  const storeKey = db.prepare('INSERT OR REPLACE INTO maintenance_stories (project_id, story_key) VALUES (?, ?)');
+  /** The key of the Project's Maintenance Story among `recs`, if it has one. */
+  const maintenanceKeyOf = (entry: Entry, recs: TrackerItem[]): string | undefined => {
+    if (entry.project.tracker === 'markdown') return recs.find((r) => r.kind === 'story' && r.maintenance)?.key;
+    const row = storedKey.get(entry.project.id) as { story_key: string } | undefined;
+    return row && recs.some((r) => r.key === row.story_key) ? row.story_key : undefined;
+  };
+  /** Writes the Project's Maintenance Story through its Tracker (and remembers it for a Widget's) and returns its key. */
+  const makeMaintenance = async (entry: Entry): Promise<string> => {
+    const first = entry.project.workflow.kinds.find((k) => k.id === 'story')?.stages[0]?.id;
+    const stage = entry.project.workflow.kinds.find((k) => k.id === 'story')?.stages.find((s) => s.id === 'tickets')?.id ?? first;
+    const key = await entry.tracker.create({
+      kind: 'story',
+      title: 'Maintenance',
+      stage,
+      maintenance: true,
+      takenKeys: [...entry.items.values()].map((i) => i.key),
+    });
+    if (entry.project.tracker !== 'markdown') storeKey.run(entry.project.id, key);
+    return key;
+  };
+
   /** Re-reads a Project's Tracker and publishes what changed. Calls queue up, one read at a time. */
   const refresh = (entry: Entry, quiet = false) =>
     (entry.refreshing = entry.refreshing.then(async () => {
       let next: Map<string, Item>;
       try {
-        next = toItems(entry.project, await records(entry), marks);
+        let recs = await records(entry);
+        let key = maintenanceKeyOf(entry, recs);
+        // The first Ticket with no Story brings the Maintenance Story into being.
+        if (!key && recs.some((r) => r.kind === 'ticket' && !r.parentKey) && storyKindOf(entry)) {
+          key = await makeMaintenance(entry).catch(() => undefined);
+          if (key) recs = await records(entry);
+        }
+        next = toItems(entry.project, recs, marks, key);
       } catch {
         return; // A half-written file; the watcher fires again when it is complete.
       }
@@ -371,6 +408,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
     const target = entry(projectId);
     const item = target.items.get(itemId);
     if (!item) throw new WorkError(404, `No Item "${itemId}"`);
+    if (item.maintenance) throw new WorkError(409, 'The Maintenance Story stays open');
     const stages = target.project.workflow.kinds.find((k) => k.id === item.kind)?.stages ?? [];
     const at = stages.findIndex((s) => s.id === item.stage);
     const next = pick(stages, at);
@@ -435,6 +473,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       for (const id of marks.runs.keys()) if (id.startsWith(prefix)) marks.runs.delete(id);
       for (const id of marks.upNext) if (id.startsWith(prefix)) marks.upNext.delete(id);
       for (const id of marks.gated) if (id.startsWith(prefix)) marks.gated.delete(id);
+      db.prepare('DELETE FROM maintenance_stories WHERE project_id = ?').run(projectId);
       for (const id of target.items.keys()) bus.publish('item.removed', { id, projectId });
       bus.publish('project.removed', { projectId });
     },
@@ -462,10 +501,24 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       if (!title) throw new WorkError(400, 'An Item needs a title');
       const kind = target.project.workflow.kinds.find((k) => k.id === request.kind);
       if (!kind) throw new WorkError(400, `The Workflow has no Item kind "${request.kind}"`);
-      const parent = request.parentId ? target.items.get(request.parentId) : undefined;
+      let parent = request.parentId ? target.items.get(request.parentId) : undefined;
       if (request.parentId && !parent) throw new WorkError(400, `No parent Item "${request.parentId}" in this Project`);
       if (parent && parent.kind !== kind.parentKind) {
         throw new WorkError(400, `A ${kind.name} cannot sit under a ${parent.kind}`);
+      }
+      if (!parent && kind.parentRequired && kind.parentKind === 'story' && storyKindOf(target)) {
+        // A Ticket filed on its own goes under the Project's Maintenance Story.
+        const found = [...target.items.values()].find((i) => i.maintenance);
+        if (found) parent = found;
+        else {
+          try {
+            await makeMaintenance(target);
+          } catch (err) {
+            throw new WorkError(409, err instanceof Error ? err.message : String(err));
+          }
+          await refresh(target);
+          parent = [...target.items.values()].find((i) => i.maintenance);
+        }
       }
       if (!parent && kind.parentRequired) {
         const parentName = target.project.workflow.kinds.find((k) => k.id === kind.parentKind)?.name ?? kind.parentKind;
