@@ -2219,6 +2219,16 @@
       "action": "other_commands",
       "match": "cat \"$LOCALAPPDATA/Kiln/test-lock.mjs\"",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Get-Process *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Get-Content *",
+      "decision": "allow"
     }
   ]
 }
