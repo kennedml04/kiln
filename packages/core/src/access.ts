@@ -75,6 +75,7 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'POST', path: '/api/archive/unarchive', role: 'member', action: 'archive.unarchive' },
   // Scheduler (ticket 14). Pool sizes are Admin settings; Stop all, resume and reordering are Member work.
   { method: 'PUT', path: /^\/api\/scheduler\/pools\/[^/]+$/, role: 'admin', action: 'pool.set_size' },
+  { method: 'PUT', path: /^\/api\/scheduler\/story-limits\/[^/]+$/, role: 'admin', action: 'scheduler.story_limit' },
   { method: 'PUT', path: '/api/scheduler/queue', role: 'member', action: 'queue.reorder' },
   { method: 'POST', path: '/api/scheduler/stop-all', role: 'member', action: 'scheduler.stop_all' },
   { method: 'POST', path: '/api/scheduler/resume', role: 'member', action: 'scheduler.resume' },

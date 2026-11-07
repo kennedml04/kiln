@@ -281,6 +281,11 @@ const MIGRATIONS: string[] = [
      project_id TEXT PRIMARY KEY,
      story_key TEXT NOT NULL
    )`,
+  // Story limits: Stories in flight per Project; no row means the default.
+  `CREATE TABLE story_limits (
+     project_id TEXT PRIMARY KEY,
+     size INTEGER NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

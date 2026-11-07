@@ -1,16 +1,18 @@
 // Core API routes for the scheduler.
 //   GET  /api/scheduler                 SchedulerState (pools, the Up next queue in start order, paused)
 //   PUT  /api/scheduler/pools/:name     {size} (Admin) -> SchedulerState
-//   PUT  /api/scheduler/queue           {order: itemId[]} sets Up next's start order -> SchedulerState
+//   PUT  /api/scheduler/story-limits/:projectId  {limit} (Admin) -> SchedulerState
+//   PUT  /api/scheduler/queue          {order: itemId[]} sets Up next's start order -> SchedulerState
 //   POST /api/scheduler/stop-all        pauses every running Session and dispatch -> SchedulerState
 //   POST /api/scheduler/resume          continues them and dispatch -> SchedulerState
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { ReorderQueueRequest, SetPoolSizeRequest } from '@kiln/widget-sdk';
+import type { ReorderQueueRequest, SetPoolSizeRequest, SetStoryLimitRequest } from '@kiln/widget-sdk';
 import { WorkError } from '../work/work.ts';
 import type { RouteHelpers } from '../work/routes.ts';
 import type { Scheduler } from './scheduler.ts';
 
-const POOL = /^\/api\/scheduler\/pools\/([^/]+)$/;
+const STORY_LIMIT = /^\/api\/scheduler\/story-limits\/([^/]+)$/;
+const POOL =/^\/api\/scheduler\/pools\/([^/]+)$/;
 
 /** Answers the request if it is a scheduler route; returns false otherwise. */
 export async function handleSchedulerRoute(
@@ -29,6 +31,12 @@ export async function handleSchedulerRoute(
     if (route === 'PUT /api/scheduler/queue') {
       const body = ((await readJson(req)) ?? {}) as Partial<ReorderQueueRequest>;
       return (sendJson(res, 200, await scheduler.reorder(body.order as string[])), true);
+    }
+    const storyLimit = STORY_LIMIT.exec(url.pathname);
+    if (storyLimit && req.method === 'PUT') {
+      const body = ((await readJson(req)) ?? {}) as Partial<SetStoryLimitRequest>;
+      const value = typeof body.limit === 'number' ? body.limit : Number.NaN;
+      return (sendJson(res, 200, await scheduler.setStoryLimit(decodeURIComponent(storyLimit[1]!), value)), true);
     }
     const pool = POOL.exec(url.pathname);
     if (pool && req.method === 'PUT') {

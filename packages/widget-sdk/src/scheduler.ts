@@ -6,6 +6,9 @@ import type { SessionInfo } from './flow.ts';
 /** The pool a Stage uses when it names none. */
 export const DEFAULT_POOL = 'agents';
 export const DEFAULT_POOL_SIZE = 3;
+/** Stories in flight per Project when none is set. */
+export const DEFAULT_STORY_LIMIT = 2;
+export const MAX_STORY_LIMIT = 10;
 
 /** A named capacity pool: at most `size` Sessions in Stages that use it run (or sit paused) at once. */
 export interface Pool {
@@ -34,6 +37,13 @@ export interface SchedulerState {
   pools: Pool[];
   /** In start order. */
   queue: QueueEntry[];
+  limits: StoryLimits;
+}
+
+/** How many Stories may be in flight: per Project (every Project listed), and across the box (the Ticket kind's first-Stage pool size). */
+export interface StoryLimits {
+  perProject: Record<string, number>;
+  boxWide: number;
 }
 
 /** `POST /api/items/:id/start`: started now (201) or queued in Up next (202). */
@@ -57,3 +67,8 @@ export interface SetPoolSizeRequest {
 
 /** Published whenever pools, the queue or the paused flag change; also sent on every SSE connection. */
 export type SchedulerUpdatedEvent = KilnEvent<'scheduler.updated', SchedulerState>;
+
+/** `PUT /api/scheduler/story-limits/:projectId` (Admin): a whole number from 0 to 10. */
+export interface SetStoryLimitRequest {
+  limit: number;
+}

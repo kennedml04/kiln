@@ -174,3 +174,24 @@ test('only an Admin can change a pool\'s size', async (t) => {
   assert.equal(refused.status, 403);
   assert.equal((await kiln.api<SchedulerState>('GET', '/api/scheduler')).pools[0]!.size, 3);
 });
+
+test('Story limits default to 2 per Project; only an Admin sets one, whole numbers 0-10; raising it is visible in the state', async (t) => {
+  const kiln = await startTestKiln(t, { login: 'tailscale' });
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  await kiln.api('PUT', '/api/users/mo', { role: 'member' });
+  const mo = kiln.as('mo');
+  const url = `/api/scheduler/story-limits/${project.id}`;
+
+  const before = await kiln.api<SchedulerState>('GET', '/api/scheduler');
+  assert.equal(before.limits.perProject[project.id], 2);
+  assert.equal(typeof before.limits.boxWide, 'number');
+
+  assert.equal((await mo.request('PUT', url, { limit: 3 })).status, 403);
+  assert.equal((await kiln.request('PUT', url, { limit: 11 })).status, 400);
+  assert.equal((await kiln.request('PUT', url, { limit: 1.5 })).status, 400);
+  assert.equal((await kiln.request('PUT', '/api/scheduler/story-limits/nope', { limit: 3 })).status, 404);
+
+  const after = await kiln.api<SchedulerState>('PUT', url, { limit: 4 });
+  assert.equal(after.limits.perProject[project.id], 4);
+  assert.equal((await kiln.api<SchedulerState>('GET', '/api/scheduler')).limits.perProject[project.id], 4);
+});

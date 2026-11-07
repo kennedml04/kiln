@@ -6,6 +6,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   DEFAULT_POOL,
   DEFAULT_POOL_SIZE,
+  DEFAULT_STORY_LIMIT,
+  MAX_STORY_LIMIT,
   type Item,
   type ItemStageChangedEvent,
   type Pool,
@@ -14,6 +16,7 @@ import {
   type SchedulerState,
   type SessionInfo,
   type SessionUpdatedEvent,
+  type StoryLimits,
   type Stage,
   type StartResult,
 } from '@kiln/widget-sdk';
@@ -33,6 +36,8 @@ export interface Scheduler {
   setPoolSize(name: string, size: number): Promise<SchedulerState>;
   /** Sets the start order of Up next (dragging on the board). Items left out keep their order after these. */
   reorder(order: string[]): Promise<SchedulerState>;
+  /** Sets how many Stories a Project may have in flight (0-10); raising it dispatches at once. */
+  setStoryLimit(projectId: string, size: number): Promise<SchedulerState>;
   /** Stop all: halts dispatch and pauses every running Session (nothing is killed) until `resume`. */
   stopAll(): Promise<SchedulerState>;
   /** Continues the Sessions Stop all paused and starts dispatching again. */
@@ -107,6 +112,10 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
   const setPriority = db.prepare('UPDATE queue SET priority = ? WHERE item_id = ?');
   const deleteEntry =db.prepare('DELETE FROM queue WHERE item_id = ?');
   const selectPools = db.prepare('SELECT name, size FROM pools ORDER BY name');
+  const selectLimits = db.prepare('SELECT project_id, size FROM story_limits');
+  const upsertLimit = db.prepare(
+    'INSERT INTO story_limits (project_id, size) VALUES (?, ?) ON CONFLICT (project_id) DO UPDATE SET size = excluded.size',
+  );
   const upsertPool = db.prepare('INSERT INTO pools (name, size) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET size = excluded.size');
 
   /** Which pools each running or paused Session holds a slot in. */
@@ -153,10 +162,26 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
 
   const activeIn = (pool: string) => [...slots.values()].filter((held) => held.includes(pool)).length;
 
+  /** Stories in flight per Project (every Project listed) and across the box: the Ticket kind's first-Stage pool, read live. */
+  const limits = (): StoryLimits => {
+    const stored = new Map(
+      (selectLimits.all() as unknown as { project_id: string; size: number }[]).map((r) => [r.project_id, r.size]),
+    );
+    const perProject: Record<string, number> = {};
+    let boxWide = 0;
+    for (const project of work.projects()) {
+      perProject[project.id] = stored.get(project.id) ?? DEFAULT_STORY_LIMIT;
+      const first = project.workflow.kinds.find((k) => k.id === 'ticket')?.stages[0];
+      if (first) boxWide = Math.max(boxWide, poolSizes().get(first.pool ?? DEFAULT_POOL) ?? 0);
+    }
+    return { perProject, boxWide };
+  };
+
   const state = (): SchedulerState => ({
     paused: isPaused(),
     pools: [...poolSizes()].map(([name, size]): Pool => ({ name, size, active: activeIn(name) })),
     queue: queue(),
+    limits: limits(),
   });
 
   const publish = () => bus.publish('scheduler.updated', state());
@@ -294,6 +319,15 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
         throw new WorkError(400, `A pool's size is a whole number from 0 to ${MAX_POOL_SIZE}`);
       }
       upsertPool.run(name, size);
+      await dispatch();
+      return state();
+    },
+    async setStoryLimit(projectId, size) {
+      if (!work.project(projectId)) throw new WorkError(404, `No Project "${projectId}"`);
+      if (!Number.isInteger(size) || size < 0 || size > MAX_STORY_LIMIT) {
+        throw new WorkError(400, `A Project's Story limit is a whole number from 0 to ${MAX_STORY_LIMIT}`);
+      }
+      upsertLimit.run(projectId, size);
       await dispatch();
       return state();
     },
