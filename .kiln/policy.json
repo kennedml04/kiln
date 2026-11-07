@@ -2164,6 +2164,11 @@
       "action": "other_commands",
       "match": "git merge-tree --write-tree --name-only *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "until *",
+      "decision": "allow"
     }
   ]
 }
