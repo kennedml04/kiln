@@ -86,7 +86,9 @@ export interface QuotaWindowState {
   /** Week only: the share of the week elapsed (0-100), and whether use is ahead of pace by more than the rule allows. */
   pace?: number;
   aheadOfPace?: boolean;
-  /** Short words, e.g. "Week: 42% used, pace 30%, resets in 2d 3h" or "5-hour window: unknown". */
+  /** Week only: signed percent - elapsed (negative is under pace). */
+  paceGap?: number;
+  /** Short words, e.g. "Week: 42% used · +12 over pace, resets in 2d 3h" or "5-hour window: unknown". */
   label: string;
 }
 

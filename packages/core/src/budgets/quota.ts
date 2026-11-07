@@ -249,7 +249,9 @@ export function createQuotaStore(db: DatabaseSync, clock: Clock): QuotaStore {
           const elapsed = Math.min(100, Math.max(0, ((now - (Date.parse(resetsAt) - WEEK_MS)) / WEEK_MS) * 100));
           state.pace = round(elapsed);
           state.aheadOfPace = percent - elapsed > config.paceAhead;
-          paceText = `, pace ${Math.round(elapsed)}%`;
+          const gap = Math.round(percent - elapsed);
+          state.paceGap = percent - elapsed;
+          paceText = gap === 0 ? ' · on pace' : gap < 0 ? ` · ${-gap} under pace` : ` · +${gap} over pace`;
         }
         state.label = `${name}: ${round(percent)}% used${paceText}${resets}`;
         return state;

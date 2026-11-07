@@ -70,7 +70,7 @@ test("a subscription Budget's header shows each window, and its page shows Fable
 
   const header = page.getByRole('banner');
   await header.getByRole('meter', { name: 'Home Week' }).waitFor();
-  await header.getByText('Week: 45% used, pace 29%, resets in 5d 0h').waitFor();
+  await header.getByText('Week: 45% used · +16 over pace, resets in 5d 0h').waitFor();
   await header.getByText('Fable: 26% used, resets in 5d 0h').waitFor();
   // No 5-hour reading (Max plans no longer have the window): no 5-hour gauge at all.
   assert.equal(await header.getByText(/5-hour/).count(), 0);
@@ -85,4 +85,30 @@ test("a subscription Budget's header shows each window, and its page shows Fable
   const week = page.getByRole('region', { name: 'Week use' });
   await week.getByRole('table', { name: 'By Stage' }).getByRole('row', { name: /5%/ }).waitFor();
   await week.getByRole('table', { name: 'By Project' }).getByRole('row', { name: /5%/ }).waitFor();
+});
+
+test('the week gauge says how far under pace the use is, without the warning colour', async (t) => {
+  const kiln = await startTestKiln(t);
+  await kiln.installFakeAgent({
+    script: [
+      { do: 'quota', reading: { window: 'week', model: null, percent: 10, resetsAt: '2026-11-09T09:00:00.000Z' } },
+      { do: 'progress', text: 'read the plan' },
+      { do: 'wait_for_message' },
+    ],
+  });
+  await kiln.api('POST', '/api/test/clock', { now: '2026-11-04T09:00:00.000Z' });
+  await kiln.api<BudgetInfo>('PUT', '/api/budgets/home', { kind: 'subscription', name: 'Home', models: ['fake-model'] });
+  seedScratch(kiln.repo);
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const page = await openShell(t, kiln, `/projects/${project.id}`);
+  await page
+    .getByRole('region', { name: 'Ticket Implementing', exact: true })
+    .getByRole('link', { name: 'Draw the columns' })
+    .click();
+  await page.getByRole('button', { name: 'Start Session' }).click();
+  await page.getByRole('log', { name: 'Thread' }).getByText('read the plan').waitFor();
+
+  const header = page.getByRole('banner');
+  await header.getByText('Week: 10% used · 19 under pace, resets in 5d 0h').waitFor();
+  assert.doesNotMatch((await header.locator('.budget-window', { hasText: 'Week:' }).getAttribute('class')) ?? '', /bwarnb/);
 });

@@ -268,7 +268,7 @@ test('a window with no current reading shows unknown and its rules are off, whil
   assert.deepEqual(
     windows.map((w) => [w.id, w.known, w.label]),
     [
-      ['week', true, 'Week: 95% used, pace 94%, resets in 10h 0m'],
+      ['week', true, 'Week: 95% used · +1 over pace, resets in 10h 0m'],
       ['5h', false, '5-hour window: unknown'],
       ['fable', false, 'Fable: unknown'],
     ],

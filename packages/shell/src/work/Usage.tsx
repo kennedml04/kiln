@@ -26,7 +26,7 @@ function WindowGauges({ budget }: { budget: BudgetInfo }) {
         {budget.name}
       </a>
       {shownWindows(budget).map((w) => (
-        <span key={w.id} className={`budget-window${w.known ? '' : ' unknown'}${w.atReserve || w.aheadOfPace ? ' warn' : ''}`}>
+        <span key={w.id} className={`budget-window${w.known ? '' : ' unknown'}${w.atReserve || w.aheadOfPace || (w.paceGap ?? 0) > 0 ? ' warn' : ''}`}>
           <meter
             aria-label={`${budget.name} ${w.name}`}
             min={0}
