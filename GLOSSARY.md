@@ -160,3 +160,10 @@ _Avoid_: card, tile, widget UI
 **Scratch chat**:
 A Session that belongs to no Project and no Item, for a one-off question. Each chat is its own small Thread, with no Stage, worktree or Exit.
 _Avoid_: scratch card, quick chat
+
+**Archived**:
+An Item hidden from the boards by a Reset board, kept in Kiln's database only; it is still shipped and still in its Tracker. A clearing rule drops the mark if the Item leaves Shipped.
+_Avoid_: deleted, closed
+
+**Shipped history**:
+The page that lists archived Items by Reset, where they can be unarchived.

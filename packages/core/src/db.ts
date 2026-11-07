@@ -260,6 +260,21 @@ const MIGRATIONS: string[] = [
    ALTER TABLE sessions ADD COLUMN pause_reason TEXT;
    ALTER TABLE sessions ADD COLUMN crash_resume_count INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE sessions ADD COLUMN failed_resume_count INTEGER NOT NULL DEFAULT 0`,
+
+  // Reset board (board-reset/01): a Kiln-only view mark on shipped Items, one batch per Reset.
+  `CREATE TABLE archive_batches (
+     id TEXT PRIMARY KEY,
+     actor_id TEXT NOT NULL,
+     actor_name TEXT,
+     at TEXT NOT NULL,
+     project_id TEXT,
+     count INTEGER NOT NULL
+   );
+   CREATE TABLE archived_items (
+     item_id TEXT PRIMARY KEY,
+     batch_id TEXT NOT NULL,
+     archived_at TEXT NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */

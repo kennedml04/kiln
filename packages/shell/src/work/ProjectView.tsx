@@ -2,6 +2,7 @@ import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import type { CreateItemRequest, Item, ItemKind, Project, Stage } from '@kiln/widget-sdk';
 import { followLink, projectThreadPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
+import { BoardMenu } from './BoardMenu.tsx';
 import { DemoControls, ReplayNote, useDemo } from './Demo.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 
@@ -125,12 +126,15 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const allItems = useStore((s) => s.items);
   const [notice, setNotice] = useState<string>();
   const demo = useDemo();
-  const items = useMemo(() => Object.values(allItems).filter((i) => i.projectId === projectId), [allItems, projectId]);
+  const items = useMemo(() => Object.values(allItems).filter((i) => i.projectId === projectId && !i.archived), [allItems, projectId]);
 
   if (!project) return <p>Loading Project…</p>;
   return (
     <>
-      <h2>{project.name}</h2>
+      <div className="board-toolbar">
+        <h2>{project.name}</h2>
+        <BoardMenu projectId={project.id} />
+      </div>
       <p className="project-path">{project.path}</p>
       <a href={projectThreadPath(project.id)} onClick={followLink}>
         Project Thread

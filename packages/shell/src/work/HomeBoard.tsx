@@ -4,6 +4,7 @@ import { followLink, projectPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { ApiError } from '../api.ts';
 import { FolderBrowser } from '../FolderBrowser.tsx';
+import { BoardMenu } from './BoardMenu.tsx';
 import { DemoControls, useDemo } from './Demo.tsx';
 import { ImportScan } from './ImportScan.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
@@ -139,7 +140,7 @@ export function HomeBoard() {
   const demo = useDemo();
   const columns = useMemo(() => {
     const grouped = new Map<RunState, Item[]>(RUN_STATES.map((r) => [r.id, []]));
-    for (const item of Object.values(items)) grouped.get(item.runState)?.push(item);
+    for (const item of Object.values(items)) if (!item.archived) grouped.get(item.runState)?.push(item);
     // Up next shows the scheduler's start order; anything it doesn't know yet goes last.
     const position = new Map((queue ?? []).map((entry, i) => [entry.itemId, i]));
     grouped.get('up-next')!.sort((a, b) => (position.get(a.id) ?? Infinity) - (position.get(b.id) ?? Infinity));
@@ -149,6 +150,10 @@ export function HomeBoard() {
 
   return (
     <>
+      <div className="board-toolbar" role="toolbar" aria-label="Board">
+        <h2>Board</h2>
+        <BoardMenu />
+      </div>
       <section className="projects" aria-label="Projects">
         <h2>Projects</h2>
         {projectList.length ? (

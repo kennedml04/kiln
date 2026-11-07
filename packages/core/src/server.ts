@@ -41,6 +41,8 @@ import { handlePolicyRoute } from './policy/routes.ts';
 import { createLoginAdapter } from './login.ts';
 import { createUserStore } from './users.ts';
 import { handleWorkRoute } from './work/routes.ts';
+import { createArchive } from './work/archive.ts';
+import { handleArchiveRoute } from './work/archive-routes.ts';
 import { createWork, WorkError } from './work/work.ts';
 import { createFolderBrowser } from './work/folders.ts';
 import { createNewProjects, handleNewProjectRoute } from './work/new-project.ts';
@@ -144,6 +146,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     widgetTracker: (project) => createWidgetTracker(bridge, project),
     installedWidgets: () => installs.list().map((w) => w.id),
   });
+  const archive = createArchive({ db, bus, work, audit });
   const policy = createPolicyEngine({
     db,
     bus,
@@ -548,6 +551,7 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
       if (await handleChatRoute(chats, sessions, scheduler, clock, access, req, res, url, { sendJson, readJson }, { work, drafts: storyDrafts, bus })) return;
       if (await handleFlowRoute(sessions, scheduler, req, res, url, { sendJson, readJson }, (entries) => linkVisibleTo(access.caller(req), chats, entries))) return;
       if (await handleNewProjectRoute(newProjects, req, res, url, { sendJson, readJson })) return;
+      if (await handleArchiveRoute(archive, access, req, res, url, { sendJson, readJson })) return;
       if (await handleWorkRoute(work, req, res, url, { sendJson, readJson }, folders)) return;
       if (await handleSecretRoute(secrets, req, res, url, panelDeps)) return;
       if (await handlePanelRoute(panels, req, res, url, panelDeps)) return;

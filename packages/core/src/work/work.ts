@@ -42,6 +42,8 @@ export interface Work {
    * through the route.
    */
   register(request: RegisterProjectRequest, options?: { id?: string }): Promise<Project>;
+  /** Resolves once the Projects stored at core start have read their Items. */
+  ready(): Promise<void>;
   /** Runs before a newly registered Project opens (e.g. writing its Project Policy template). */
   onRegister(hook: (project: Project) => void | Promise<void>): void;
   /**
@@ -76,6 +78,11 @@ export interface Work {
    * Stage (and the Stage's Status), then `item.stage_changed` is published. Returns the new Stage.
    */
   advance(itemId: string): Promise<Stage>;
+  /**
+   * Sets or clears an Item's archived mark (the archive service owns the records) and publishes
+   * `item.updated` when the Item exists. The mark is kept for an Item the Tracker doesn't list now.
+   */
+  setArchived(itemId: string, mark: { at: string; batchId: string } | undefined, options?: { quiet?: boolean }): void;
   /** Marks an Item as waiting on its Gate's Review Ask (run state Waiting), or no longer. */
   setGated(itemId: string, waiting: boolean, options?: { quiet?: boolean }): void;
   /** Moves an Item back to an earlier Stage (a rejected Gate, a merge to redo), recorded like `advance`. */
@@ -160,6 +167,8 @@ interface Marks {
   upNext: Set<string>;
   /** Items whose Gate waits on a person (set by the Gates). */
   gated: Set<string>;
+  /** Items a Reset board archived (kept by the archive service; the Tracker never sees it). */
+  archived: Map<string, { at: string; batchId: string }>;
 }
 
 /** An Item has shipped once it is in its kind's last Stage. */
@@ -199,6 +208,7 @@ function toItems(project: Project, records: TrackerItem[], marks: Marks): Map<st
       childIds: [],
       path: record.path,
       ...(runs.has(id(record.key)) ? { run: runs.get(id(record.key)) } : {}),
+      ...(marks.archived.has(id(record.key)) ? { archived: marks.archived.get(id(record.key))! } : {}),
     });
   }
   for (const item of items.values()) if (item.parentId) items.get(item.parentId)!.childIds.push(item.id);
@@ -217,7 +227,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   const registerHooks: ((project: Project) => void | Promise<void>)[] = [];
   const unregisterHooks: ((project: Project) => void | Promise<void>)[] = [];
   const deleteProject = db.prepare('DELETE FROM projects WHERE id = ?');
-  const marks: Marks = { runs: new Map(), upNext: new Set(), gated: new Set() };
+  const marks: Marks = { runs: new Map(), upNext: new Set(), gated: new Set(), archived: new Map() };
   const projectOf = (base: ProjectBase, last: Workflow | undefined, previous?: Workflow) =>
     withFiles(base, last, previous, options.installedWidgets?.());
   const insertProject = db.prepare(
@@ -322,12 +332,13 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
     return entry;
   };
 
+  const opening: Promise<unknown>[] = [];
   const rows = db.prepare('SELECT * FROM projects ORDER BY registered_at, id').all() as unknown as ProjectRow[];
   for (const row of rows) {
     const base = { id: row.id, name: row.name, path: row.path, registeredAt: row.registered_at };
     const project = projectOf(base, row.workflow_from_file ? (JSON.parse(row.workflow) as Workflow) : undefined);
     store(project);
-    void open(project, true);
+    opening.push(open(project, true).catch(() => undefined));
   }
   // A module's needed Widget may have come or gone: the Projects' errors say so at once.
   if (options.installedWidgets) {
@@ -409,6 +420,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       for (const item of opened.items.values()) bus.publish('item.created', { item });
       return view(project);
     },
+    ready: async () => void (await Promise.all(opening)),
     onRegister(hook) {
       registerHooks.push(hook);
     },
@@ -500,6 +512,17 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       if (waiting) marks.upNext.add(itemId);
       else marks.upNext.delete(itemId);
       remark(itemId, options);
+    },
+    setArchived(itemId, mark, options) {
+      if (mark) marks.archived.set(itemId, mark);
+      else marks.archived.delete(itemId);
+      const target = entries.get(itemId.split('/')[0]!);
+      const item = target?.items.get(itemId);
+      if (!target || !item) return;
+      const { archived: _old, ...rest } = item;
+      const next: Item = mark ? { ...rest, archived: mark } : rest;
+      target.items.set(itemId, next);
+      if (!options?.quiet) bus.publish('item.updated', { item: next });
     },
     setGated(itemId, waiting, options) {
       if (waiting) marks.gated.add(itemId);

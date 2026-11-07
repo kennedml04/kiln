@@ -188,7 +188,48 @@ export interface Item {
   path?: string;
   /** Its latest Session, worktree, branch and Exit status, once one has started. */
   run?: ItemRun;
+  /** Set when a Reset board archived this (shipped) Item: boards hide it; it is still shipped. */
+  archived?: { at: string; batchId: string };
 }
+
+/** POST /api/archive/reset */
+export interface ArchiveResetRequest {
+  /** Only this Project's shipped Items; omitted: every Project. */
+  projectId?: string;
+}
+export interface ArchiveResetResponse {
+  batchId: string;
+  count: number;
+  itemIds: string[];
+}
+
+/** POST /api/archive/unarchive: give `batchId` or `itemIds`, not both. */
+export interface UnarchiveRequest {
+  batchId?: string;
+  itemIds?: string[];
+}
+export interface UnarchiveResponse {
+  /** The Items put back. */
+  itemIds: string[];
+}
+
+/** One Reset, with the Items of it that are still archived. */
+export interface ArchiveBatch {
+  id: string;
+  actor: { id: string; name?: string };
+  at: string;
+  /** Unset for a Reset of every Project. */
+  projectId?: string;
+  /** How many Items the Reset archived (some may be unarchived since). */
+  count: number;
+  items: Item[];
+}
+export interface ArchiveHistoryResponse {
+  batches: ArchiveBatch[];
+}
+
+export type ArchiveResetEvent = KilnEvent<'archive.reset', { batchId: string; projectId?: string; count: number }>;
+export type ArchiveUnarchivedEvent = KilnEvent<'archive.unarchived', { batchId?: string; itemIds: string[] }>;
 
 /** POST /api/projects/:id/items */
 export interface CreateItemRequest {

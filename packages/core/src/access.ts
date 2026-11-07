@@ -70,6 +70,9 @@ export const ACCESS_RULES: AccessRule[] = [
   { method: 'POST', path: /^\/api\/chats\/[^/]+\/story-draft$/, role: 'member', action: 'chat.story_draft' },
   { method: 'DELETE', path: /^\/api\/chats\/[^/]+\/story-draft$/, role: 'member', action: 'chat.story_draft_cancel' },
   { method: 'POST', path: /^\/api\/chats\/[^/]+\/story$/, role: 'member', action: 'chat.make_story' },
+  // Reset board (board-reset): resetting and unarchiving are Member work; reading the history needs Viewer.
+  { method: 'POST', path: '/api/archive/reset', role: 'member', action: 'archive.reset' },
+  { method: 'POST', path: '/api/archive/unarchive', role: 'member', action: 'archive.unarchive' },
   // Scheduler (ticket 14). Pool sizes are Admin settings; Stop all, resume and reordering are Member work.
   { method: 'PUT', path: /^\/api\/scheduler\/pools\/[^/]+$/, role: 'admin', action: 'pool.set_size' },
   { method: 'PUT', path: '/api/scheduler/queue', role: 'member', action: 'queue.reorder' },

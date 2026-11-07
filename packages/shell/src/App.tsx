@@ -6,6 +6,7 @@ import { NEEDS_YOU_PATH, NeedsYouLink, NeedsYouPage } from './NeedsYou.tsx';
 import { followLink, usePath } from './router.ts';
 import { SETUP_PATH, SetupWizard } from './SetupWizard.tsx';
 import { useStore, type ConnectionState } from './store.ts';
+import { ToastArea } from './toast.tsx';
 import { setTheme, useTheme } from './theme.ts';
 import { WIDGET_ROUTE, WidgetPage, WidgetsNav, WidgetsPage } from './WidgetsPage.tsx';
 import { ChatView, ChatsLink, NewChatButton, NewChatView } from './work/Chats.tsx';
@@ -130,6 +131,7 @@ export function App() {
   const isAdmin = me?.role === 'admin';
   return (
     <div className="app">
+      <ToastArea />
       <header className="sidebar">
         <Brand />
         <nav className="nav" aria-label="Main">
