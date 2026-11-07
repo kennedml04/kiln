@@ -7,6 +7,7 @@ import type {
   CreateItemRequest,
   Item,
   ItemRun,
+  ProjectFileError,
   Project,
   RegisterProjectRequest,
   RunState,
@@ -102,6 +103,10 @@ interface Entry {
   unwatch: () => void;
   unwatchRecords: () => void;
   refreshing: Promise<void>;
+  /** What is wrong in the Tracker's records now; shown among the Project's errors. */
+  trackerErrors: ProjectFileError[];
+  /** Problems the Tracker found in its latest read, not yet shown. */
+  pendingProblems?: ProjectFileError[];
 }
 
 interface ProjectRow {
@@ -157,6 +162,19 @@ const slugify = (text: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'project';
 
+/** The Project with the Tracker's record problems added to the errors its `.kiln` files give. */
+function withTrackerErrors(project: Project, problems: ProjectFileError[]): Project {
+  const own = project.errors.filter((e) => !problems.includes(e) && !trackerProblems.has(e));
+  const next: Project = { ...project, errors: [...own, ...problems] };
+  for (const problem of problems) trackerProblems.add(problem);
+  if (project.errors.length === next.errors.length && project.errors.every((e, i) => JSON.stringify(e) === JSON.stringify(next.errors[i]))) return project;
+  const own2 = ownWorkflows.get(project);
+  if (own2) ownWorkflows.set(next, own2);
+  return next;
+}
+/** Errors that came from Item records, so a re-read of the `.kiln` files can drop them. */
+const trackerProblems = new WeakSet<ProjectFileError>();
+
 const ACTIVE = new Set(['running', 'paused']);
 
 /** Runtime marks the core keeps beside the Tracker's records. */
@@ -208,6 +226,10 @@ function toItems(project: Project, records: TrackerItem[], marks: Marks, mainten
       description: record.description,
       parentId: parentKey ? id(parentKey) : undefined,
       childIds: [],
+      ...(record.blockedByKeys?.some((k) => keys.has(k))
+        ? { blockedBy: record.blockedByKeys.filter((k) => keys.has(k)).map(id) }
+        : {}),
+      ...(record.maintenance ? { maintenance: true as const } : {}),
       path: record.path,
       ...(record.kind === 'story' && (record.maintenance || record.key === maintenanceKey) ? { maintenance: true as const } : {}),
       ...(runs.has(id(record.key)) ? { run: runs.get(id(record.key)) } : {}),
@@ -315,6 +337,15 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       }
       const previous = entry.items;
       entry.items = next;
+      if (entry.pendingProblems) {
+        entry.trackerErrors = entry.pendingProblems;
+        entry.pendingProblems = undefined;
+        const shown = withTrackerErrors(entry.project, entry.trackerErrors);
+        if (JSON.stringify(shown) !== JSON.stringify(entry.project)) {
+          entry.project = shown;
+          if (!quiet) bus.publish('project.updated', { project: view(shown) });
+        }
+      }
       if (quiet) return;
       for (const [id, item] of next) {
         const before = previous.get(id);
@@ -328,7 +359,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
 
   /** Re-reads the Project's `.kiln` files; when they changed it, publishes `project.updated` and re-reads its Items. */
   const reload = (entry: Entry) => {
-    const next = projectOf(entry.project, ownWorkflows.get(entry.project), entry.project.workflow);
+    const next = withTrackerErrors(projectOf(entry.project, ownWorkflows.get(entry.project), entry.project.workflow), entry.trackerErrors);
     if (JSON.stringify(next) === JSON.stringify(entry.project)) return;
     const trackerChanged = next.tracker !== entry.project.tracker;
     entry.project = next;
@@ -343,7 +374,12 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
   };
 
   const trackerOf = (entry: Entry): Tracker => {
-    if (entry.project.tracker === 'markdown') return createMarkdownTracker(entry.project.path, { workflow: () => entry.project.workflow });
+    if (entry.project.tracker === 'markdown') {
+      return createMarkdownTracker(entry.project.path, {
+        workflow: () => entry.project.workflow,
+        onProblems: (problems) => (entry.pendingProblems = problems),
+      });
+    }
     if (!options.widgetTracker) throw new Error(`This core has no ${entry.project.tracker} Tracker`);
     return options.widgetTracker(() => entry.project);
   };
@@ -356,6 +392,7 @@ export function createWork(db: DatabaseSync, bus: EventBus, options: WorkOptions
       unwatch: () => undefined,
       unwatchRecords: () => undefined,
       refreshing: Promise.resolve(),
+      trackerErrors: [],
     };
     entry.tracker = trackerOf(entry);
     entries.set(project.id, entry);

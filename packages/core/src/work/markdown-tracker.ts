@@ -12,7 +12,7 @@
 // kind's first Stage (or its last, when the record says it shipped).
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { Tracker, TrackerCreateInput, TrackerItem, Workflow } from '@kiln/widget-sdk';
+import type { ProjectFileError, Tracker, TrackerCreateInput, TrackerItem, Workflow } from '@kiln/widget-sdk';
 import { currentBranch, defaultBranch, git } from '../flow/git.ts';
 import { DEFAULT_WORKFLOW } from './default-workflow.ts';
 
@@ -65,7 +65,36 @@ function firstParagraph(body: string): string | undefined {
 
 /** A `**Name:** value` or `Name: value` field line. */
 const field = (body: string, name: string) =>
-  new RegExp(`^(?:\\*\\*${name}:\\*\\*|${name}:)\\s*(.+)$`, 'mi').exec(body)?.[1]?.trim();
+  new RegExp(`^(?:\\*\\*${name}:\\*\\*|${name}:)[ \\t]*(.+)$`, 'mi').exec(body)?.[1]?.trim();
+
+/** Problems found in Item records while reading; they become Project file errors. */
+type Problems = ProjectFileError[];
+
+/** The `Blocked by` tokens of a Ticket: ticket numbers, optionally `<story>/` first. */
+const BLOCKER = /^(?:([\w.-]+)\/)?#?(\d+)(?:-[\w.-]*)?$/;
+
+/** Resolves a Ticket's `Blocked by` line to Ticket keys; what matches nothing is reported and left out. */
+function resolveBlockers(line: string | undefined, story: string, file: string, known: Set<string>, problems: Problems): string[] | undefined {
+  // Prose in brackets ("01 (safe git fetches)") is a note, not a blocker.
+  const text = line?.replace(/\([^)]*\)/g, ' ').trim();
+  if (!text || /^(none\b|n\/a|-|—)/i.test(text)) return undefined;
+  const keys: string[] = [];
+  for (const token of text.split(/[\s,;]+/).filter(Boolean)) {
+    const match = BLOCKER.exec(token.replace(/[.`*]+$/g, '').replace(/^`/, ''));
+    const found = match
+      ? [...known].find((key) => {
+          const [, s, n] = key.split('/');
+          return s === (match[1] ?? story) && Number(n) === Number(match[2]);
+        })
+      : undefined;
+    if (found) {
+      if (!keys.includes(found)) keys.push(found);
+    } else {
+      problems.push({ file, at: 'Blocked by', message: `Blocked by "${token}" matches no Ticket` });
+    }
+  }
+  return keys.length ? keys : undefined;
+}
 
 const read = (file: string) => readFileSync(file, 'utf8');
 const isDir = (path: string) => existsSync(path) && statSync(path).isDirectory();
@@ -98,6 +127,9 @@ function storyStage(stages: StageSets, front: Record<string, string>, hasSpec: b
   return hasSpec ? 'spec' : 'grill';
 }
 
+/** Each Ticket's raw `Blocked by` line, until every Story's Tickets are read. */
+const blockedLines = new WeakMap<TrackerItem, string>();
+
 function readTickets(root: string, story: string, stages: StageSets): TrackerItem[] {
   const dir = join(root, SCRATCH, story, 'issues');
   if (!isDir(dir)) return [];
@@ -110,7 +142,8 @@ function readTickets(root: string, story: string, stages: StageSets): TrackerIte
       const status = field(body, 'Status');
       const stage = field(body, 'Stage')?.toLowerCase();
       const title = heading(body)?.replace(/^\d+:\s*/, '') || name.slice(0, -3);
-      return {
+      const blocked = field(body, 'Blocked by');
+      const record: TrackerItem = {
         key: `ticket/${story}/${number}`,
         kind: 'ticket',
         title,
@@ -120,10 +153,12 @@ function readTickets(root: string, story: string, stages: StageSets): TrackerIte
         parentKey: `story/${story}`,
         path: `${SCRATCH}/${story}/issues/${name}`,
       };
+      if (blocked !== undefined) blockedLines.set(record, blocked);
+      return record;
     });
 }
 
-function readStories(root: string, epicKeys: Set<string>, stages: StageSets): TrackerItem[] {
+function readStories(root: string, epicKeys: Set<string>, stages: StageSets, problems: Problems): TrackerItem[] {
   const scratch = join(root, SCRATCH);
   if (!isDir(scratch)) return [];
   const items: TrackerItem[] = [];
@@ -146,10 +181,19 @@ function readStories(root: string, epicKeys: Set<string>, stages: StageSets): Tr
       stage: storyStage(stages, front, hasSpec, tickets.length > 0),
       description: firstParagraph(body),
       parentKey: epicKey && epicKeys.has(epicKey) ? epicKey : undefined,
+      ...(front.maintenance?.toLowerCase() === 'true' ? { maintenance: true as const } : {}),
       path: `${SCRATCH}/${slug}/${hasStory ? 'story.md' : hasSpec ? 'spec.md' : 'issues'}`,
       ...(front.maintenance?.toLowerCase() === 'true' ? { maintenance: true } : {}),
     });
     items.push(...tickets);
+  }
+  const known = new Set(items.filter((i) => i.kind === 'ticket').map((i) => i.key));
+  for (const item of items) {
+    const line = blockedLines.get(item);
+    if (item.kind !== 'ticket' || line === undefined) continue;
+    const story = item.parentKey!.slice('story/'.length);
+    const keys = resolveBlockers(line, story, item.path!, known, problems);
+    if (keys) item.blockedByKeys = keys;
   }
   return items;
 }
@@ -193,10 +237,10 @@ function settle(records: TrackerItem[], workflow: Workflow): TrackerItem[] {
 }
 
 /** Reads every Item record in the repo at `root`, with the Stages of the Project's Workflow. */
-export function readScratch(root: string, workflow: Workflow = DEFAULT_WORKFLOW): TrackerItem[] {
+export function readScratch(root: string, workflow: Workflow = DEFAULT_WORKFLOW, problems: Problems = []): TrackerItem[] {
   const stages = stageSets(workflow);
   const epics = readEpics(root, stages);
-  return settle([...epics, ...readStories(root, new Set(epics.map((e) => e.key)), stages), ...readOtherKinds(root)], workflow);
+  return settle([...epics, ...readStories(root, new Set(epics.map((e) => e.key)), stages, problems), ...readOtherKinds(root)], workflow);
 }
 
 export interface MarkdownTrackerOptions {
@@ -207,6 +251,8 @@ export interface MarkdownTrackerOptions {
    * with the branch. Otherwise `root` is the main checkout, and new Items go only on its default branch.
    */
   sessionCheckout?: boolean;
+  /** Told, after each read, what is wrong in the Item records (empty when nothing is). */
+  onProblems?: (problems: ProjectFileError[]) => void;
 }
 
 /** The markdown Tracker for the repo at `root`. */
@@ -214,7 +260,10 @@ export function createMarkdownTracker(root: string, options: MarkdownTrackerOpti
   const workflow = options.workflow ?? (() => DEFAULT_WORKFLOW);
   return {
     async list() {
-      return readScratch(root, workflow());
+      const problems: Problems = [];
+      const records = readScratch(root, workflow(), problems);
+      options.onProblems?.(problems);
+      return records;
     },
     watch(onChange) {
       // `.scratch` is watched recursively; the repo root only to see `.scratch` appear or go.

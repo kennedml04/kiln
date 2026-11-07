@@ -184,6 +184,10 @@ export interface Item {
   description?: string;
   parentId?: string;
   childIds: string[];
+  /** Ids of the Items that must ship before this one starts (a Ticket's `Blocked by`). */
+  blockedBy?: string[];
+  /** Set on a Project's Maintenance Story, the home of Tickets filed without a Story. */
+  maintenance?: true;
   /** Repo-relative path of the Item's record, for Trackers that keep files. */
   path?: string;
   /** Its latest Session, worktree, branch and Exit status, once one has started. */
@@ -250,6 +254,10 @@ export interface TrackerItem {
   status?: string;
   description?: string;
   parentKey?: string;
+  /** Keys of the Items that must ship first. Unset: none. */
+  blockedByKeys?: string[];
+  /** Set on a Project's Maintenance Story. */
+  maintenance?: true;
   path?: string;
   /** Set on a Story that is the Project's Maintenance Story. */
   maintenance?: boolean;
@@ -295,3 +303,17 @@ export type ProjectUpdatedEvent = KilnEvent<'project.updated', { project: Projec
 export type ItemCreatedEvent = KilnEvent<'item.created', { item: Item }>;
 export type ItemUpdatedEvent = KilnEvent<'item.updated', { item: Item }>;
 export type ItemRemovedEvent = KilnEvent<'item.removed', { id: string; projectId: string }>;
+
+/** The longest a Story's why line gets, in characters. */
+export const STORY_WHY_MAX = 140;
+
+/**
+ * The one line of why a Story gives its Tickets: the first sentence of its description, cut to
+ * 140 characters with an ellipsis. No description gives nothing.
+ */
+export function storyWhy(description?: string): string | undefined {
+  const text = description?.replace(/\s+/g, ' ').trim();
+  if (!text) return undefined;
+  const sentence = /^.*?[.!?](?=\s|$)/.exec(text)?.[0] ?? text;
+  return sentence.length > STORY_WHY_MAX ? `${sentence.slice(0, STORY_WHY_MAX - 1).trimEnd()}…` : sentence;
+}
