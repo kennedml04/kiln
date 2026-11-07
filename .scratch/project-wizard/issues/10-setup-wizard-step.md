@@ -4,7 +4,9 @@
 
 **Blocked by:** 08, 09
 
-**Status:** ready-for-agent
+**Status:** in-review
+
+**Stage:** review
 
 - [ ] The wizard's last step can create a new Project, import a folder, or import from the old board's list
 - [ ] The dev instance still shows the Demo step
