@@ -18,6 +18,7 @@ import { ProjectThreadView } from './work/ProjectThreadView.tsx';
 import { ProjectView } from './work/ProjectView.tsx';
 import { SettingsPage } from './work/SettingsPage.tsx';
 import { StopAll } from './work/StopAll.tsx';
+import { SHIPPED_PATH, ShippedHistory } from './work/ShippedHistory.tsx';
 import { BUDGET_ROUTE, BudgetGauges, BudgetPage } from './work/Usage.tsx';
 
 const LABELS: Record<ConnectionState, string> = {
@@ -88,6 +89,7 @@ function NoAccess({ me }: { me: Me }) {
 
 const PROJECT_ROUTE = /^\/projects\/([^/]+)\/?$/;
 const PROJECT_THREAD_ROUTE = /^\/projects\/([^/]+)\/thread\/?$/;
+const PROJECT_SHIPPED_ROUTE = /^\/projects\/([^/]+)\/shipped\/?$/;
 const CHAT_ROUTE = /^\/chats\/([^/]+)\/?$/;
 const ITEM_ROUTE = /^\/items\/([^/]+)\/?$/;
 
@@ -103,6 +105,9 @@ function Page({ isAdmin }: { isAdmin: boolean }) {
   if (path === MODELS_PATH && isAdmin) return <ModelsPage />;
   if (path === SETUP_PATH && isAdmin) return <SetupWizard />;
   if (path === '/widgets') return <WidgetsPage isAdmin={isAdmin} />;
+  if (path === SHIPPED_PATH) return <ShippedHistory />;
+  const projectShipped = PROJECT_SHIPPED_ROUTE.exec(path);
+  if (projectShipped) return <ShippedHistory projectId={decodeURIComponent(projectShipped[1]!)} />;
   const widget = WIDGET_ROUTE.exec(path);
   if (widget) return <WidgetPage widgetId={decodeURIComponent(widget[1]!)} isAdmin={isAdmin} />;
   const project = PROJECT_ROUTE.exec(path);

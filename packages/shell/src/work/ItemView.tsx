@@ -149,6 +149,16 @@ export function ItemView({ itemId }: { itemId: string }) {
   const thread = useStore((s) => s.threads[itemId] ?? NO_ENTRIES);
   const [error, setError] = useState<string>();
   const [starting, setStarting] = useState(false);
+  const role = useStore((s) => s.me?.role);
+  const canAct = role === 'admin' || role === 'member';
+  const unarchive = async () => {
+    setError(undefined);
+    try {
+      await api('POST', '/api/archive/unarchive', { itemIds: [itemId] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   useEffect(() => {
     let live = true;
@@ -179,6 +189,16 @@ export function ItemView({ itemId }: { itemId: string }) {
   return (
     <article className="item-view">
       <h2>{item.title}</h2>
+      {item.archived ? (
+        <p className="archived-badge">
+          <span className="badge">Archived {new Date(item.archived.at).toLocaleString()}</span>{' '}
+          {canAct ? (
+            <button type="button" onClick={() => void unarchive()}>
+              Unarchive
+            </button>
+          ) : null}
+        </p>
+      ) : null}
       {project ? (
         <a href={projectPath(project.id)} onClick={followLink}>
           {project.name}
