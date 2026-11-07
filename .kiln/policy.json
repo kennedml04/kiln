@@ -2234,6 +2234,11 @@
       "action": "other_commands",
       "match": "s=open(p,encoding='utf8').read()",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "grep -n \"Blocked by:\" ../../../../.scratch/*/issues/*.md",
+      "decision": "allow"
     }
   ]
 }
