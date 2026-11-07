@@ -2154,6 +2154,16 @@
       "action": "other_commands",
       "match": "od -c",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge-tree --write-tree *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git merge-tree --write-tree --name-only *",
+      "decision": "allow"
     }
   ]
 }
