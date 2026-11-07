@@ -8,9 +8,9 @@ Later slices (separate tickets) cover the Exit checks, review and landing, parti
 
 **Blocked by:** None.
 
-**Status:** in-review
+**Status:** done
 
-**Stage:** review
+**Stage:** shipped
 
 - [ ] A Session on a client Item gets a worktree of the client and of each linked Project, side by side, on one branch name
 - [ ] A monorepo Item's Session opens only the monorepo, as today
