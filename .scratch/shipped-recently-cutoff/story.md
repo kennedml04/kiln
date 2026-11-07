@@ -2,7 +2,7 @@
 title: A cut-off for "Shipped recently"
 epic: board-ux
 stage: spec
-blocked-by: []
+blocked-by: [shipped-newest-first]
 ---
 The Shipped column keeps everything that ever shipped, so it grows without end and buries what shipped this week. It needs a cut-off: show only recently shipped Items, with the rest one click away.
 
