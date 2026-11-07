@@ -1,0 +1,7 @@
+# 03: Review: fold literal rules into patterns
+
+**What to build:** Spec section 3 (build after the minutes/info-only Ticket; it shares its ordering and data). Each review looks at the Project layer's allow rules; where 2+ rules of one action share a rulePattern that differs from each of them, propose a fold as a numbered item in the same single Ask (Apply all / some / Skip all), sorted after new rules by rules replaced. No fold when rulePattern is undefined, the pattern names a local folder or matches a kill by name, or alwaysAllowOffered is false; lone literals are never removed; a proposed new rule equal to the fold's pattern merges into one item. Add PolicyEngine changeRules(project,{add,remove},message) (or addRules with remove), same 409 on uncommitted changes, one commit touching only .kiln/policy.json, message 'Kiln: Permission review allows N command shapes and folds M rules into K', audit detail lists applied and folded. A fold alone raises the Ask only when the merge's review looked at at least one answered Permission Ask. A skipped fold is not re-proposed (compare earlier permission_review Asks' data in the Project; open Asks count as offered) until its literal set grows. Tests: three literals + one new Ask -> one fold; Apply all leaves one pattern; Apply some of only new rules leaves literals; skip then fourth literal re-offers; rm / git reset literals never fold.
+
+**Blocked by:** None
+
+**Status:** needs-triage
