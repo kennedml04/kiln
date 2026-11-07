@@ -6,7 +6,7 @@
 
 **Status:** in-review
 
-**Stage:** review
+**Stage:** implementing
 
 - [ ] A module repo added in Settings is fetched, and its modules appear in the picker with their source
 - [ ] Order decides clashes
