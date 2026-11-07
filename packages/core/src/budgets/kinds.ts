@@ -132,16 +132,16 @@ const percentPoints = (value: unknown, name: string, fallback: number, { allowZe
 /**
  * A flat plan (Claude Max), measured in plan usage. Turns carry no cost in its unit: a Session's
  * quota cost is its attributed share of the windows' measured changes (quota.ts). The window rules
- * (pace, reserves, overage) live in subscription-rules.ts; these are the per-Session caps.
+ * (pace, reserves, overage) live in subscription-rules.ts; the per-Session cap is turns; the runaway guard's settings are `guard`.
  */
 export const subscriptionKind: BudgetKind<SubscriptionBudgetConfig> = {
   id: 'subscription',
   configure(input) {
     const d = SUBSCRIPTION_DEFAULTS;
     const perSession = (input.perSession ?? {}) as Record<string, unknown>;
-    if (typeof perSession !== 'object') throw new WorkError(400, '"perSession" must be {share, turns}');
+    if (typeof perSession !== 'object') throw new WorkError(400, '"perSession" must be {turns}');
     const guard = (input.guard ?? {}) as Record<string, unknown>;
-    if (typeof guard !== 'object' || guard === null) throw new WorkError(400, '"guard" must be {share, hours}');
+    if (typeof guard !== 'object' || guard === null || Array.isArray(guard)) throw new WorkError(400, '"guard" must be {share, hours}');
     const hours = guard.hours ?? d.guard.hours;
     if (typeof hours !== 'number' || !Number.isInteger(hours) || hours < 1 || hours > 168) {
       throw new WorkError(400, '"guard.hours" must be a whole number of hours from 1 to 168');
@@ -153,13 +153,11 @@ export const subscriptionKind: BudgetKind<SubscriptionBudgetConfig> = {
       throw new WorkError(400, '"fableModels" must list model ids');
     }
     return {
-      perSession: {
-        share: percentPoints(perSession.share, 'perSession.share', d.perSession.share),
-        turns: positive(perSession.turns, 'perSession.turns', d.perSession.turns),
-      },
+      // An old `perSession.share` is ignored, not rejected.
+      perSession: { turns: positive(perSession.turns, 'perSession.turns', d.perSession.turns) },
+      guard: { share: percentPoints(guard.share, 'guard.share', d.guard.share, { allowZero: true }), hours },
       paceAhead: percentPoints(input.paceAhead, 'paceAhead', d.paceAhead, { allowZero: true }),
       reserve: percentPoints(input.reserve, 'reserve', d.reserve, { allowZero: true }),
-      guard: { share: percentPoints(guard.share, 'guard.share', d.guard.share, { allowZero: true }), hours },
       fableLabel: label.trim(),
       ...(fableModels ? { fableModels: fableModels as string[] } : {}),
     };
@@ -167,7 +165,6 @@ export const subscriptionKind: BudgetKind<SubscriptionBudgetConfig> = {
   unit: () => '% of week',
   turnCost: () => null,
   limits: (config) => [
-    { id: 'session-share', name: 'Session share of the week', scope: 'session', measure: 'quota', window: 'week', cap: config.perSession.share },
     { id: 'session-turns', name: 'Session turn limit', scope: 'session', measure: 'turns', cap: config.perSession.turns },
   ],
 };

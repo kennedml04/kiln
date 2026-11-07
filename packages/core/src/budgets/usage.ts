@@ -271,8 +271,8 @@ export function createUsageService({ db, bus, work, sessions, asks, clock, poke,
       let used: number;
       if (spec.used) used = spec.used({ budgetId: budget.id, ...target, now });
       else if (spec.measure === 'quota') {
-        // Only Session-scoped quota shares exist so far (the per-Session share of the week).
-        used = spec.scope === 'session' && target.sessionId ? quota.sessionShare(budget.id, budget.config as unknown as SubscriptionBudgetConfig, spec.window ?? 'week', target.sessionId) : 0;
+        // No kind has a quota-measured limit now (the per-Session share is gone).
+        used = 0;
       } else if (spec.measure === 'minutes') used = Math.floor(Math.max(0, now.getTime() - sessionStart(key)) / 60_000);
       else {
         const args: string[] = [budget.id, key];

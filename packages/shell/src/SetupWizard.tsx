@@ -26,7 +26,7 @@ const LIMIT_FIELDS: Record<BudgetDraft['kind'], { label: string; path: string[] 
     { label: 'Credits per Session', path: ['perSession', 'cost'] },
   ],
   subscription: [
-    { label: 'Share of the week per Session (%)', path: ['perSession', 'share'] },
+    { label: 'Runaway guard: share of the week in 12 hours (%, 0 = off)', path: ['guard', 'share'] },
     { label: 'Reserve kept for you (%)', path: ['reserve'] },
   ],
   local: [

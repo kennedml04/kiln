@@ -34,26 +34,29 @@ export const METERED_DEFAULTS: MeteredBudgetConfig = {
  * quota readings report it. The windows are the 5-hour window, the week, and Fable's weekly allowance.
  */
 export interface SubscriptionBudgetConfig {
-  /** Per Session, counting its subagents: its share of the week (percent points), and turns. */
-  perSession: { share: number; turns: number };
+  /** Per Session, counting its subagents: turns. */
+  perSession: { turns: number };
+  /**
+   * The runaway guard: if Kiln's Sessions together use more than `share` percent points of the week
+   * within any `hours` hours, the Budget's work pauses behind one Ask. `share` 0 turns it off.
+   */
+  guard: { share: number; hours: number };
   /** The pace rule: no new unattended Session while weekly use is more than this many points ahead of the week elapsed. */
   paceAhead: number;
   /** Percent of each window kept for the person's own use. */
   reserve: number;
-  /** The runaway guard: Kiln's attributed share of the week over a rolling `hours` may not pass `share` percent points (0 = off). */
-  guard: { share: number; hours: number };
   /** The model label a model-scoped weekly reading carries for Fable (`QuotaReading.model`). */
   fableLabel: string;
   /** The Budget's models that run on Fable. Unset: any model whose id contains "fable". */
   fableModels?: string[];
 }
 
-/** Home's Claude Max defaults: 5% of the week or 150 turns per Session, the 10-point pace rule, 10% reserves. */
+/** Home's Claude Max defaults: 150 turns per Session, a 20%-in-12-hours guard, the 10-point pace rule, 10% reserves. */
 export const SUBSCRIPTION_DEFAULTS: SubscriptionBudgetConfig = {
-  perSession: { share: 5, turns: 150 },
+  perSession: { turns: 150 },
+  guard: { share: 20, hours: 12 },
   paceAhead: 10,
   reserve: 10,
-  guard: { share: 20, hours: 12 },
   fableLabel: 'Fable',
 };
 

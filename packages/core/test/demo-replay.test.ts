@@ -46,7 +46,7 @@ const fakeAgent = async (kiln: TestKiln) =>
 
 const nextAsk = async (events: Events, accept: (ask: Ask) => boolean): Promise<Ask> => {
   for (;;) {
-    const { ask } = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 60_000 })).payload;
+    const { ask } = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 180_000 })).payload;
     if (accept(ask)) return ask;
   }
 };

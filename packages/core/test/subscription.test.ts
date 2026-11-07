@@ -1,6 +1,6 @@
 // The subscription Budget (ticket 17): a flat plan measured in plan usage. Agents report quota
 // readings per window; Kiln stores them, attributes each Session's share of the change, and
-// enforces the per-Session share, the pace rule, the reserves and paid overage.
+// enforces the guard settings, the pace rule, the reserves and paid overage.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
@@ -275,20 +275,23 @@ test('a window with no current reading shows unknown and its rules are off, whil
   );
 });
 
-test("a Session's share of the week pauses it at the per-Session cap and raises a blocking Ask", async (t) => {
-  const { kiln, events, ticket } = await setup(t, [week(10), turn(1_000), week(12), turn(1_000), week(14), { do: 'wait_for_message' }], {
-    perSession: { share: 4 },
-  });
-  const { session } = await start(kiln, ticket);
-  const reached = await nextWhere<BudgetLimitReachedEvent>(events, 'budget.limit_reached');
-  assert.equal(reached.payload.limit.id, 'session-share');
-  assert.deepEqual([reached.payload.limit.used, reached.payload.limit.cap], [4, 4]);
-  assert.match(reached.payload.limit.unit, /% of week/);
-  assert.deepEqual(reached.payload.paused, [session!.id]);
-  const ask = await kiln.api<Ask>('GET', `/api/asks/${reached.payload.askId}`);
-  assert.equal(ask.blocking, true);
-  assert.deepEqual(ask.options, ['Continue', 'Stop']);
-  assert.equal((await kiln.api<SessionInfo>('GET', `/api/sessions/${session!.id}`)).state, 'waiting');
+test('perSession.share is ignored: stored config has no share and there is no session-share limit', async (t) => {
+  const { kiln } = await setup(t, [], { perSession: { share: 5, turns: 150 } });
+  const budgets = await kiln.api<{ id: string; kind: string; config: Record<string, any>; limits?: { id: string }[] }[]>('GET', '/api/budgets');
+  const home = budgets.find((b) => b.kind === 'subscription')!;
+  assert.deepEqual(home.config.perSession, { turns: 150 });
+  assert.deepEqual(home.config.guard, { share: 20, hours: 12 });
+  assert.equal(JSON.stringify(home).includes('session-share'), false);
+});
+
+test('guard settings: 0 is accepted, bad values are a 400 naming the field', async (t) => {
+  const { kiln } = await setup(t, []);
+  const put = (guard: unknown) => kiln.api('PUT', '/api/budgets/home', { kind: 'subscription', name: 'Home', models: ['fake-model'], guard });
+  const ok = (await put({ share: 0 })) as { config: { guard: unknown } };
+  assert.deepEqual(ok.config.guard, { share: 0, hours: 12 });
+  for (const [guard, field] of [[{ share: -1 }, 'guard.share'], [{ share: 101 }, 'guard.share'], [{ share: 'x' }, 'guard.share'], [{ hours: 0 }, 'guard.hours'], [{ hours: 169 }, 'guard.hours'], [{ hours: 1.5 }, 'guard.hours'], [{ hours: 'x' }, 'guard.hours']] as const) {
+    await assert.rejects(put(guard), (e: Error) => e.message.includes(field), JSON.stringify(guard));
+  }
 });
 
 // The runaway guard: Kiln's attributed share of the week over a rolling window.

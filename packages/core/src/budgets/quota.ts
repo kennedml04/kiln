@@ -116,8 +116,6 @@ export interface QuotaStore {
   readings(filter: { budget?: string; session?: string }): QuotaReadingRecord[];
   /** Each key's attributed share of a window's changes. */
   rollup(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, by: string): QuotaRollup[];
-  /** A Session's attributed share of a window (subagents included), in percent points. */
-  sessionShare(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, sessionId: string): number;
   /** Kiln's attributed share of a window's changes whose later reading was taken at or after `since`, in percent points (0 if none). */
   attributedSince(budgetId: string, config: SubscriptionBudgetConfig, window: QuotaWindowId, since: Date): number;
   /** The Budget's windows now: the latest reading of each, unknown when there is none or it has reset. */
@@ -215,11 +213,6 @@ export function createQuotaStore(db: DatabaseSync, clock: Clock): QuotaStore {
         if (key !== null) totals.set(key, (totals.get(key) ?? 0) + percent);
       }
       return [...totals].map(([key, percent]) => ({ key, window, percent: round(percent), approximate: true as const }));
-    },
-
-    sessionShare(budgetId, config, window, sessionId) {
-      const shares = attribute(budgetId, config, window).filter((s) => s.turn.session === sessionId);
-      return round(shares.reduce((sum, s) => sum + s.percent, 0));
     },
 
     attributedSince(budgetId, config, window, since) {
