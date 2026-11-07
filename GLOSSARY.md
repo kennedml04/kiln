@@ -117,7 +117,7 @@ A Session that keeps spending without making progress. Kiln's runaway guards are
 _Avoid_: loop, runaway cost
 
 **Stall**:
-A Session that has gone several turns (8 by default) with no new commit and no artifact change, or that repeats the same tool call with the same arguments. Kiln pauses it and raises an Ask. A Session that keeps finishing with its Exit unmet is bounded by this rule too: each unmet Exit round with nothing new made counts as a turn. There is no separate cap on Exit rounds.
+A Session that has gone several turns (8 by default) with no new commit and no artifact change, or that repeats the same tool call with the same arguments. Kiln pauses it and raises an Ask. A Session that keeps finishing with its Exit unmet is bounded by this rule too: each unmet Exit round with nothing new made counts as a turn. Two more stall rules catch a Session that keeps committing but gets nowhere: the same Exit check unmet several times in a row (3 by default), and too much running time in one Stage (60 minutes by default). Both count per Item per Stage visit, across fresh Sessions.
 _Avoid_: hang, stuck (a stalled Session is still running)
 
 **Variant**:

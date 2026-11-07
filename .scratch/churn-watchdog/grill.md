@@ -29,8 +29,16 @@ On 2026-11-06 seven Implementing Sessions ran for two to three hours each on twe
 - The watchdog applies to every Stage that runs a Session, not only Implementing.
 - "Same check in a row": if a different check fails, or the Exit is met, the run starts over.
 
-## Still open (for the Spec)
+## Decisions from the second Session (2026-11-06)
 
-- Where the per-Item-per-Stage counts live: stored, so they survive a core restart (likely), or rebuilt from `exit.checked` and `session.updated` events.
-- Whether to extend the stall rule's Ask and `session.stalled` event with new `StallRule` values (`'exit'`, `'time'`) or add a separate event. Extending looks simplest.
-- Glossary: maybe add "Churn" to `GLOSSARY.md` if the Spec uses the word.
+6. **The counts are stored.** The per-Item-per-Stage counts (unmet checks in a row, running time in the Stage) live in the core's database, so a core restart (for example Restart when idle) does not give a churning Item a fresh N and a fresh 60 minutes. The Running card's elapsed time and "Exit not met ×N" badge read the same stored numbers. They are not rebuilt from events, and they are not kept in memory only like today's stall rule.
+7. **Extend `session.stalled`.** `StallRule` (`packages/widget-sdk/src/runaway.ts`) gets two new values: `'exit'` (the same check unmet N times in a row) and `'time'` (the running-time limit). The watchdog publishes `session.stalled` and uses the stall hold (`runaway:stall`) and the runaway Ask recipient, so anything that already handles stalls picks it up. There is no separate event.
+8. **No new glossary term.** The watchdog's two rules are stall rules, so `GLOSSARY.md` **Stall** now describes them (and no longer says "There is no separate cap on Exit rounds"). "Churn" is used only as the story's name, not as a defined term.
+9. **Follow-up story filed:** `.scratch/serialize-exit-checks/story.md` (stage `grill`). `.scratch/test-run-lock/` already caps full test runs for this repo with a slot wrapper in its `npm test` and raises the Exit check timeout to 45 minutes. The follow-up covers what that story leaves out: core-side slots for command Exit checks in any Project, "waiting for a test slot" on the card, and fuller failure output in the Exit feedback.
+
+## Notes for the Spec
+
+- The new settings go through `mergeSettings` in `packages/core/src/budgets/runaway.ts`. Both are whole numbers of 1 or more (checks, and minutes), so they fit its existing check. Suggested names: `exitUnmetInRow` (3) and `stageMinutes` (60).
+- Today's watches are per Session and live in memory (`watches` Map, deleted when a Session ends). The new counts are keyed by Item and Stage visit, so a context-alarm renewal or restart keeps them.
+- `exit.checked` carries `exit.stage` and `exit.checks` (`ExitCheckResult[]`), so the Stage and the failing checks come from the payload. When several checks fail in one round, the Spec should count each check's own run (any check reaching N fires the rule) and not need the whole set to repeat.
+- Queued time for an Exit check, once `serialize-exit-checks` exists, is not running time (decision 3).
