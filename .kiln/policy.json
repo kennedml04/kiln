@@ -2229,6 +2229,11 @@
       "action": "other_commands",
       "match": "Get-Content *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "s=open(p,encoding='utf8').read()",
+      "decision": "allow"
     }
   ]
 }
