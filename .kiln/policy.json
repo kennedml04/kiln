@@ -2189,6 +2189,11 @@
       "action": "other_commands",
       "match": "Select *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "tr *",
+      "decision": "allow"
     }
   ]
 }
