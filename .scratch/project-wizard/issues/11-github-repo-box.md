@@ -6,7 +6,7 @@
 
 **Status:** in-review
 
-**Stage:** review
+**Stage:** implementing
 
 - [ ] The box is hidden without the GitHub Widget and off by default with it
 - [ ] With a fake GitHub, ticking it creates a private repo, adds the remote and pushes
