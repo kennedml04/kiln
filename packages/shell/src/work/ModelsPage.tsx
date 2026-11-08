@@ -4,6 +4,9 @@
 // server's entry, reloads it and smoke-tests the model.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
+  BudgetInfo,
+  RoleModel,
+  SetupState,
   AddVariantRequest,
   HuggingFaceFile,
   HuggingFaceFiles,
@@ -15,6 +18,7 @@ import type {
   VariantList,
   VariantSettings,
 } from '@kiln/widget-sdk';
+import { suggestRoles } from '../role-defaults.ts';
 import { followLink } from '../router.ts';
 import { api, useStore } from '../store.ts';
 
@@ -630,6 +634,7 @@ export function ModelsPage() {
           Back to Settings
         </a>
       </p>
+      <ChatRole />
       <h3>Local server</h3>
       {settings ? (
         <LocalServerForm
@@ -654,5 +659,75 @@ export function ModelsPage() {
       <AddModel key={formKey} prefill={prefill} variants={list?.variants ?? []} modelsFolder={settings?.modelsFolder} onSaved={reload} />
       {error ? <p role="alert">{error}</p> : null}
     </section>
+  );
+}
+
+/** The `chat` role's model: Scratch chats run on it. Opening a chat with none gives the message below. */
+function ChatRole() {
+  const [budgets, setBudgets] = useState<BudgetInfo[]>([]);
+  const [role, setRole] = useState<RoleModel>({ model: '' });
+  const [suggested, setSuggested] = useState(false);
+  const [status, setStatus] = useState<string>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    Promise.all([api<SetupState>('GET', '/api/setup'), api<BudgetInfo[]>('GET', '/api/budgets')]).then(
+      ([state, list]) => {
+        setBudgets(list);
+        const current = state.settings.roles ?? {};
+        const filled = suggestRoles(['chat'], list, current);
+        setRole(filled.chat ?? { model: '' });
+        setSuggested(filled !== current);
+      },
+      (err: Error) => setError(err.message),
+    );
+  }, []);
+  const options = budgets.flatMap((b) => b.models.map((m) => ({ model: m, budget: b.name })));
+  const save = async () => {
+    setError(undefined);
+    try {
+      await api('PUT', '/api/setup', { roles: { chat: role } });
+      setStatus('Saved');
+      setSuggested(false);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  return (
+    <>
+      <h3>Chat role</h3>
+      <p className="setup-hint">
+        {suggested ? 'Suggested: a local model if there is one, else the lightest model. ' : ''}
+        Scratch chats run on this model. Choose a model for the chat role here.
+      </p>
+      <div className="setup-role">
+        <label>
+          <span className="visually-hidden">chat model</span>
+          <select aria-label="chat model" value={role.model} onChange={(e) => setRole({ ...role, model: e.target.value })}>
+            <option value="">Choose a model</option>
+            {options.map((o) => (
+              <option key={o.model} value={o.model}>
+                {o.model} ({o.budget})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="visually-hidden">chat fallback</span>
+          <select aria-label="chat fallback" value={role.fallbackModel ?? ''} onChange={(e) => setRole({ ...role, fallbackModel: e.target.value || undefined })}>
+            <option value="">No fallback</option>
+            {options.map((o) => (
+              <option key={o.model} value={o.model}>
+                {o.model} ({o.budget})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" disabled={!role.model} onClick={() => void save()}>
+          Save
+        </button>
+        {status ? <span role="status">{status}</span> : null}
+        {error ? <span role="alert">{error}</span> : null}
+      </div>
+    </>
   );
 }

@@ -107,7 +107,7 @@ test('setup finds Obsidian when it is installed, and sees a vault in the Knowled
 test('setup cannot finish until there is a Budget and every default Workflow role has a model', async (t) => {
   const kiln = await startTestKiln(t, { setup: 'fresh' });
   const state = await kiln.api<SetupState>('GET', '/api/setup');
-  assert.deepEqual(state.roles.map((r) => r.role).sort(), ['griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer']);
+  assert.deepEqual(state.roles.map((r) => r.role).sort(), ['chat', 'griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer']);
 
   const early = await kiln.request<{ error: string }>('POST', '/api/setup/complete');
   assert.equal(early.status, 409);
@@ -127,7 +127,7 @@ test('setup cannot finish until there is a Budget and every default Workflow rol
   assert.match(half.body.error, /reviewer/);
 
   await kiln.api('PUT', '/api/setup', {
-    roles: { reviewer: { model: 'small-model' }, griller: { model: 'big-model' }, 'spec-writer': { model: 'big-model' }, 'ticket-writer': { model: 'big-model' } },
+    roles: { chat: { model: 'small-model' }, reviewer: { model: 'small-model' }, griller: { model: 'big-model' }, 'spec-writer': { model: 'big-model' }, 'ticket-writer': { model: 'big-model' } },
   });
   const done = await kiln.api<SetupState>('POST', '/api/setup/complete');
   assert.equal(done.completed, true);
@@ -138,7 +138,7 @@ test('setup cannot finish until there is a Budget and every default Workflow rol
 /** Every default Workflow role on a model of a Budget, as the wizard's Workflow roles step saves them. */
 async function chooseEveryRole(kiln: Awaited<ReturnType<typeof startTestKiln>>) {
   await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model'] });
-  const roles = ['griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
+  const roles = ['chat', 'griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
   await kiln.api('PUT', '/api/setup', { roles: Object.fromEntries(roles.map((role) => [role, { model: 'big-model' }])) });
 }
 
@@ -352,4 +352,14 @@ test('setup is Admin work', async (t) => {
   assert.equal((await member.request('GET', '/api/setup')).status, 403);
   assert.equal((await member.request('PUT', '/api/setup', { install: 'home' })).status, 403);
   assert.equal((await member.request('POST', '/api/setup/import', {})).status, 403);
+});
+
+test('the chat role is a Kiln role beside the Workflow roles, and takes a model like any other', async (t) => {
+  const kiln = await startTestKiln(t, { setup: 'fresh' });
+  const state = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.ok(state.roles.some((r) => r.role === 'chat'));
+  await kiln.api('PUT', '/api/budgets/claude-max', { kind: 'subscription', models: ['big-model', 'small-model'] });
+  await kiln.api('PUT', '/api/setup', { roles: { chat: { model: 'small-model' } } });
+  const after = await kiln.api<SetupState>('GET', '/api/setup');
+  assert.equal(after.settings.roles?.chat?.model, 'small-model');
 });

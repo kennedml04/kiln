@@ -8,7 +8,7 @@ import { join, relative } from 'node:path';
 import type { BudgetInfo, CoreStatus, DemoState, Item, Project, SessionInfo, SetupState, StartResult, WidgetInfo } from '@kiln/widget-sdk';
 import { startTestKiln, type TestKiln } from '@kiln/testing';
 
-const ROLES = ['griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
+const ROLES = ['chat', 'griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
 
 /** A Budget with the fake Agent's model, chosen for the given roles. */
 async function chooseModels(kiln: TestKiln, roles = ROLES) {

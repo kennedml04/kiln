@@ -32,6 +32,11 @@ function pick(all: Candidate[], heavy: boolean): Candidate | undefined {
   return pool.find((c) => c.tier === 2) ?? pool[0];
 }
 
+/** The chat role: a local model if any, else the lightest (Haiku-tier) model, else the default mid model. */
+function pickChat(all: Candidate[]): Candidate | undefined {
+  return all.find((c) => c.local) ?? all.find((c) => c.tier === 1) ?? pick(all, false);
+}
+
 /** A model in another Budget, else a lighter one in the same Budget, else none. */
 function fallback(all: Candidate[], main: Candidate): string | undefined {
   const sorted = [...all].sort(byStrength);
@@ -48,7 +53,7 @@ export function suggestRoles(roles: string[], budgets: BudgetInfo[], current: Re
   if (!all.length || !missing.length) return current;
   const next = { ...current };
   for (const role of missing) {
-    const main = pick(all, HEAVY_ROLES.has(role))!;
+    const main = (role === 'chat' ? pickChat(all) : pick(all, HEAVY_ROLES.has(role)))!;
     const backup = fallback(all, main);
     next[role] = { model: main.model, ...(backup ? { fallbackModel: backup } : {}) };
   }

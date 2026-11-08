@@ -106,7 +106,7 @@ test('in a Project with no Stories, the New Item form says a Ticket needs one fi
 });
 
 const DEMO_STORY = 'Add `slugify(title)`';
-const ROLES = ['griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
+const ROLES = ['chat', 'griller', 'implementer', 'reviewer', 'spec-writer', 'ticket-writer'];
 
 /** Records every browser dialog: the demo's confirmation is in the page, so there must be none. */
 const noBrowserDialogs = (page: Page) => {

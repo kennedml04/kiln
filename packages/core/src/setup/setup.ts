@@ -109,6 +109,8 @@ const defaultRoles = (): SetupState['roles'] => {
       if (stage.role) roles.set(stage.role, [...(roles.get(stage.role) ?? []), `${kind.name}: ${stage.name}`]);
     }
   }
+  // Kiln's own role, beside the Workflow's: Scratch chats run on `chat`.
+  if (!roles.has('chat')) roles.set('chat', ['Scratch chat']);
   return [...roles].map(([role, stages]) => ({ role, stages }));
 };
 
