@@ -19,12 +19,13 @@ import {
   type SessionUpdatedEvent,
   type StoryLimits,
   type Stage,
+  type StoryEntry,
   type StartResult,
 } from '@kiln/widget-sdk';
 import type { EventBus } from '../events.ts';
 import { WorkError, type Work } from '../work/work.ts';
-import { storyEntries } from './story-entries.ts';
 import type { SessionManager } from './session-manager.ts';
+import { startOrder } from './start-order.ts';
 
 export interface Scheduler {
   /**
@@ -36,8 +37,8 @@ export interface Scheduler {
   state(): SchedulerState;
   /** Sets how many Sessions a pool runs at once; queued Items start at once if it grew. Returns the new state. */
   setPoolSize(name: string, size: number): Promise<SchedulerState>;
-  /** Sets how many Stories a Project may have in flight (0-10); raising it dispatches at once. */
-  setStoryLimit(projectId: string, size: number): Promise<SchedulerState>;
+  /** Sets how many Stories a Project may have in flight (0-10). Raising it starts held Tickets at once. */
+  setStoryLimit(projectId: string, limit: number): Promise<SchedulerState>;
   /**
    * Sets the Story order (dragging on the board). Ids are Story ids; Ticket ids are accepted for one
    * release and move their Story. With `projectId` only that Project's Stories change places, within
@@ -119,16 +120,16 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
   const setPosition = db.prepare('UPDATE story_order SET position = ? WHERE story_id = ?');
   const deleteStory = db.prepare('DELETE FROM story_order WHERE story_id = ?');
   const deleteProjectStories = db.prepare('DELETE FROM story_order WHERE project_id = ?');
+  const selectLimit = db.prepare('SELECT size FROM story_limits WHERE project_id = ?');
+  const upsertLimit = db.prepare(
+    'INSERT INTO story_limits (project_id, size) VALUES (?, ?) ON CONFLICT (project_id) DO UPDATE SET size = excluded.size',
+  );
   const insertEntry = db.prepare(
     `INSERT INTO queue (item_id, project_id, stage, pool, priority, seq, enqueued_at)
      VALUES (?, ?, ?, ?, 0, (SELECT COALESCE(MAX(seq), 0) + 1 FROM queue), ?)`,
   );
   const deleteEntry =db.prepare('DELETE FROM queue WHERE item_id = ?');
   const selectPools = db.prepare('SELECT name, size FROM pools ORDER BY name');
-  const selectLimits = db.prepare('SELECT project_id, size FROM story_limits');
-  const upsertLimit = db.prepare(
-    'INSERT INTO story_limits (project_id, size) VALUES (?, ?) ON CONFLICT (project_id) DO UPDATE SET size = excluded.size',
-  );
   const upsertPool = db.prepare('INSERT INTO pools (name, size) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET size = excluded.size');
 
   /** Which pools each running or paused Session holds a slot in. */
@@ -185,18 +186,126 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
     }
   }
 
-  const queue = () => {
+  /** What the scheduler works out about one Story every time it looks; nothing of it is stored. */
+  interface Facts {
+    story: Item;
+    tickets: Item[];
+    unshipped: Item[];
+    started: boolean;
+    parked: boolean;
+    inFlight: boolean;
+  }
+
+  const shipped = (item: Item) => item.runState === 'shipped';
+  /** A Ticket waits on a person: a blocking Ask, a Gate decision, a "Your move" Stage, or another Story's Ticket. */
+  const waitsOnPerson = (ticket: Item, seen: Set<string> = new Set()): boolean => {
+    if (ticket.runState === 'running') return false;
+    if (ticket.runState === 'waiting') return true;
+    const stage = stageOf(ticket);
+    if (stage && !stage.role) return true;
+    // Blocked only by Tickets that are themselves waiting on a person (or belong to another Story).
+    // Tickets that only block each other wait on nobody, so their Story keeps its slot.
+    seen.add(ticket.id);
+    const open = (ticket.blockedBy ?? []).map((id) => work.item(id)).filter((b): b is Item => !!b && !shipped(b));
+    return (
+      open.length > 0 &&
+      open.every((b) => b.parentId !== ticket.parentId || (!seen.has(b.id) && waitsOnPerson(b, seen)))
+    );
+  };
+
+  const storyFacts = (): Map<string, Facts> => {
+    const facts = new Map<string, Facts>();
+    for (const story of work.items()) {
+      if (story.kind !== 'story' || shipped(story)) continue;
+      const tickets = story.childIds.map((id) => work.item(id)).filter((i): i is Item => !!i && i.kind === 'ticket');
+      const unshipped = tickets.filter((t) => !shipped(t));
+      const started = tickets.some((t) => t.run);
+      const parked = started && unshipped.length > 0 && unshipped.every((t) => waitsOnPerson(t));
+      facts.set(story.id, { story, tickets, unshipped, started, parked, inFlight: started && !parked && unshipped.length > 0 });
+    }
+    return facts;
+  };
+
+  const storyIdFor = (itemId: string, facts: Map<string, Facts>): string | undefined => {
+    if (facts.has(itemId)) return itemId;
+    const parent = work.item(itemId)?.parentId;
+    return parent && facts.has(parent) ? parent : undefined;
+  };
+
+  /** A Ticket's number within its Story: the last part of its key. */
+  const ticketNumber = (itemId: string) => {
+    const n = Number(work.item(itemId)?.key.split('/').pop());
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+
+  const blockedHold = (ticket: Item): string | undefined => {
+    for (const id of ticket.blockedBy ?? []) {
+      const blocker = work.item(id);
+      if (!blocker || shipped(blocker)) continue;
+      const [, story, number] = blocker.key.split('/');
+      if (number === undefined) return `Blocked by ${blocker.title}`;
+      return `Blocked by ${blocker.parentId === ticket.parentId ? number : `${story}/${number}`}`;
+    }
+    return undefined;
+  };
+
+  const storyLimitOf = (projectId: string) =>
+    (selectLimit.get(projectId) as { size: number } | undefined)?.size ?? DEFAULT_STORY_LIMIT;
+  const ticketPool = (projectId: string): string | undefined => {
+    const kind = work.project(projectId)?.workflow.kinds.find((k) => k.id === 'ticket');
+    return kind ? (kind.stages[0]?.pool ?? DEFAULT_POOL) : undefined;
+  };
+  /** The box-wide cap on Stories in flight: the size of the pool the Ticket kind's first Stage uses. */
+  const boxCap = (projectId: string) => {
+    const pool = ticketPool(projectId);
+    return pool === undefined ? Infinity : (poolSizes().get(pool) ?? 0);
+  };
+
+  /**
+   * Why a Ticket may not start under the Story rules, or undefined. `claimed`: Stories that earlier
+   * entries of this pass would put in flight (they count against the limits though not started yet).
+   */
+  const storyHold = (ticket: Item, pool: string, facts: Map<string, Facts>, claimed: Set<string>): string | undefined => {
+    const storyId = storyIdFor(ticket.id, facts);
+    const f = storyId ? facts.get(storyId) : undefined;
+    if (!storyId || !f) return undefined;
+    if (f.inFlight || claimed.has(storyId)) {
+      const share = Math.max(1, (poolSizes().get(pool) ?? 0) - 1);
+      const held = [...slots].filter(
+        ([sessionId, pools]) => pools.includes(pool) && f.tickets.some((t) => t.id === sessions.session(sessionId)?.itemId),
+      ).length;
+      return held >= share ? "Story already holds its share of the pool" : undefined;
+    }
+    const flying = [...facts.values()].filter((x) => x.inFlight || claimed.has(x.story.id));
+    const inProject = flying.filter((x) => x.story.projectId === ticket.projectId).length;
+    return inProject < storyLimitOf(ticket.projectId) && flying.length < boxCap(ticket.projectId) ? undefined : 'Waiting for a Story slot';
+  };
+
+  /** The queue in start order, each entry with the reason it is held now, if any. */
+  const queue = (): QueueEntry[] => {
     const order = positions();
-    const rank = (e: QueueEntry) => order.get(storyKeyOf(e.itemId))?.position ?? Number.MAX_VALUE;
-    const entries = (selectQueue.all() as unknown as QueueRow[]).map(toEntry);
-    // Stable: entries of one Story (and unordered ones) stay in the order they queued.
-    return entries
-      .map((entry, i) => ({ entry, i, rank: rank(entry) }))
-      .sort((a, b) => a.rank - b.rank || a.i - b.i)
-      .map(({ entry }) => {
-        const held = heldBy(entry);
-        return held ? { ...entry, held } : entry;
-      });
+    const facts = storyFacts();
+    const entries = (selectQueue.all() as unknown as QueueRow[]).map((row) => {
+      const storyId = storyIdFor(row.item_id, facts);
+      return { ...toEntry(row), ...(storyId ? { storyId } : {}) };
+    });
+    const places = [...facts.values()].map((f) => ({
+      storyId: f.story.id,
+      started: f.started,
+      position: order.get(f.story.id)?.position ?? Number.MAX_VALUE,
+    }));
+    const claimed = new Set<string>();
+    return startOrder(entries, places, ticketNumber).map((entry) => {
+      const item = work.item(entry.itemId);
+      let held: string | undefined;
+      if (item?.kind === 'ticket') held = blockedHold(item);
+      held ??= heldBy(entry);
+      if (!held && item?.kind === 'ticket') {
+        held = storyHold(item, entry.pool, facts, claimed);
+        if (!held && entry.storyId) claimed.add(entry.storyId);
+      }
+      return held ? { ...entry, held } : entry;
+    });
   };
 
   const poolSizes = (): Map<string, number> => {
@@ -208,36 +317,54 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
 
   const activeIn = (pool: string) => [...slots.values()].filter((held) => held.includes(pool)).length;
 
-  /** Stories in flight per Project (every Project listed) and across the box: the Ticket kind's first-Stage pool, read live. */
-  const limits = (): StoryLimits => {
-    const stored = new Map(
-      (selectLimits.all() as unknown as { project_id: string; size: number }[]).map((r) => [r.project_id, r.size]),
-    );
-    const perProject: Record<string, number> = {};
-    let boxWide = 0;
-    for (const project of work.projects()) {
-      perProject[project.id] = stored.get(project.id) ?? DEFAULT_STORY_LIMIT;
-      const first = project.workflow.kinds.find((k) => k.id === 'ticket')?.stages[0];
-      if (first) boxWide = Math.max(boxWide, poolSizes().get(first.pool ?? DEFAULT_POOL) ?? 0);
-    }
-    return { perProject, boxWide };
+  const storyEntries = (entries: QueueEntry[]): StoryEntry[] => {
+    const facts = storyFacts();
+    const order = positions();
+    const queued = new Set(entries.map((e) => e.storyId).filter((id): id is string => !!id));
+    const ticketsRunning = (f: Facts) => f.tickets.filter((t) => t.runState === 'running').map((t) => t.id);
+    // A Story's own Session (Grill, Spec, Tickets) shows as the Story itself running.
+    const running = (f: Facts) => (f.story.runState === 'running' && !ticketsRunning(f).length ? [f.story.id] : ticketsRunning(f));
+    return [...facts.values()]
+      .filter((f) => queued.has(f.story.id) || f.inFlight || f.parked || running(f).length > 0)
+      .sort(
+        (a, b) =>
+          Number(b.started) - Number(a.started) ||
+          (order.get(a.story.id)?.position ?? Number.MAX_VALUE) - (order.get(b.story.id)?.position ?? Number.MAX_VALUE),
+      )
+      .map((f): StoryEntry => {
+        const next = entries.find(
+          (e) => e.storyId === f.story.id && e.itemId !== f.story.id && !e.held?.startsWith('Blocked by'),
+        )?.itemId;
+        return {
+          storyId: f.story.id,
+          projectId: f.story.projectId,
+          inFlight: f.inFlight,
+          parked: f.parked,
+          started: f.started,
+          maintenance: f.story.maintenance === true,
+          shipped: f.tickets.length - f.unshipped.length,
+          total: f.tickets.length,
+          running: running(f),
+          waiting: f.unshipped.filter((t) => waitsOnPerson(t)).map((t) => t.id),
+          ...(next ? { next } : {}),
+        };
+      });
   };
 
-  const state = (): SchedulerState => ({
-    paused: isPaused(),
-    pools: [...poolSizes()].map(([name, size]): Pool => ({ name, size, active: activeIn(name) })),
-    queue: queue(),
-    stories: storyEntries({
-      items: work.items(),
-      queue: queue(),
-      order: (selectStoryOrder.all() as unknown as { story_id: string; project_id: string; position: number }[]).map((r) => ({
-        storyId: r.story_id,
-        projectId: r.project_id,
-        position: r.position,
-      })),
-    }),
-    limits: limits(),
-  });
+  const state = (): SchedulerState => {
+    const entries = queue();
+    const projects = work.projects().filter((p) => ticketPool(p.id) !== undefined);
+    return {
+      paused: isPaused(),
+      pools: [...poolSizes()].map(([name, size]): Pool => ({ name, size, active: activeIn(name) })),
+      queue: entries,
+      stories: storyEntries(entries),
+      limits: {
+        perProject: Object.fromEntries(work.projects().map((p) => [p.id, storyLimitOf(p.id)])),
+        boxWide: projects.length ? boxCap(projects[0]!.id) : (poolSizes().get(DEFAULT_POOL) ?? 0),
+      },
+    };
+  };
 
   const publish = () => bus.publish('scheduler.updated', state());
 
@@ -250,6 +377,8 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
   };
 
   const launch = async (itemId: string, pools: string[]): Promise<SessionInfo> => {
+    const item = work.item(itemId);
+    if (item) joinOrder(itemId, item.projectId);
     const session = await sessions.start(itemId);
     slots.set(session.id, pools);
     return session;
@@ -262,7 +391,13 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       return;
     }
     const blocked = new Set<string>();
-    for (const entry of queue()) {
+    // The queue is read again after every start: a start changes which Stories are in flight and
+    // how many slots each holds.
+    const skipped = new Set<string>();
+    for (;;) {
+      const entry = queue().find((e) => !skipped.has(e.itemId));
+      if (!entry) break;
+      skipped.add(entry.itemId);
       const pools = poolsOf(entry, entry.pool);
       if (blocked.has(entry.pool) || !hasRoom(pools)) continue;
       const item = work.item(entry.itemId);
@@ -272,7 +407,7 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
         work.setUpNext(entry.itemId, false);
         continue;
       }
-      // Held by a guard: it keeps its place, and the next Items in the pool may still start.
+      // Held by a guard, Blocked by, or the Story rules: it keeps its place, and the next entries may still start.
       if (entry.held) continue;
       try {
         await launch(entry.itemId, pools);
@@ -301,7 +436,8 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
         slots.delete(session.id);
         void dispatch();
       }
-    } else if (event.type === 'widget.ready' || event.type === 'widget.approved') {
+    } else if (event.type === 'widget.ready' || event.type === 'widget.approved' || event.type === 'ask.raised' || event.type === 'ask.answered') {
+      // An Ask or its answer can park or unpark a Story.
       void dispatch();
     } else if (event.type === 'project.removed') {
       // An unregistered Project's Items leave Up next, so none starts if the folder is registered again.
@@ -318,6 +454,8 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       // An Item entering a Stage that runs a Session (its Exit was met, or a Gate sent it back, maybe
       // to the Gate's own Stage) joins the queue by itself; nobody has to press Start.
       const { itemId, projectId } = (event as ItemStageChangedEvent).payload;
+      // A Ticket changing Stage can ship, park or unpark its Story, or unblock another Ticket.
+      if (event.type === 'item.stage_changed') void dispatch();
       const changed = work.item(itemId);
       if (changed?.kind === 'story' && changed.runState === 'shipped') deleteStory.run(itemId);
       void admit(itemId).catch((err: unknown) => {
@@ -356,7 +494,10 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
     if (options.attended) attended.add(itemId);
     const pools = poolsOf({ itemId, projectId: item.projectId }, pool);
     const waitingFirst = queue().some((e) => !e.held && poolsOf(e, e.pool).some((p) => pools.includes(p)));
-    if (!isPaused() && hasRoom(pools) && !waitingFirst && !heldBy({ itemId, projectId: item.projectId })) {
+    // A person starting a Ticket does not skip the Story rules, only the guards for unattended work.
+    const storyBlocked =
+      item.kind === 'ticket' && (blockedHold(item) ?? storyHold(item, pool, storyFacts(), new Set())) !== undefined;
+    if (!isPaused() && hasRoom(pools) && !waitingFirst && !storyBlocked && !heldBy({ itemId, projectId: item.projectId })) {
       attended.delete(itemId);
       const session = await launch(itemId, pools);
       publish();
@@ -384,12 +525,12 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       await dispatch();
       return state();
     },
-    async setStoryLimit(projectId, size) {
+    async setStoryLimit(projectId, limit) {
       if (!work.project(projectId)) throw new WorkError(404, `No Project "${projectId}"`);
-      if (!Number.isInteger(size) || size < 0 || size > MAX_STORY_LIMIT) {
-        throw new WorkError(400, `A Project's Story limit is a whole number from 0 to ${MAX_STORY_LIMIT}`);
+      if (!Number.isInteger(limit) || limit < 0 || limit > MAX_STORY_LIMIT) {
+        throw new WorkError(400, `Stories in flight is a whole number from 0 to ${MAX_STORY_LIMIT}`);
       }
-      upsertLimit.run(projectId, size);
+      upsertLimit.run(projectId, limit);
       await dispatch();
       return state();
     },

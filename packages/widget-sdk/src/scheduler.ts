@@ -7,8 +7,6 @@ import type { SessionInfo } from './flow.ts';
 export const DEFAULT_POOL = 'agents';
 export const DEFAULT_POOL_SIZE = 3;
 /** Stories in flight per Project when none is set. */
-export const DEFAULT_STORY_LIMIT = 2;
-export const MAX_STORY_LIMIT = 10;
 
 /** A named capacity pool: at most `size` Sessions in Stages that use it run (or sit paused) at once. */
 export interface Pool {
@@ -27,22 +25,31 @@ export interface QueueEntry {
   /** No longer used for ordering (Story order is); always 0 for entries made now. */
   priority: number;
   enqueuedAt: string;
+  /** The Story the Item belongs to (the Story itself for its own entry); unset for an Item with no Story. */
+  storyId?: string;
   /** Why it may not start yet although its pool has room, e.g. a Budget's daily cap is reached. */
   held?: string;
 }
 
-/** One Story's place on the board: its progress and what is running or waiting in it. */
+/** The Stories per Project that may be in flight at once when an Admin sets none. */
+export const DEFAULT_STORY_LIMIT = 2;
+export const MAX_STORY_LIMIT = 10;
+
+/** One Story with work waiting, running or parked, as the scheduler sees it. */
 export interface StoryEntry {
   storyId: string;
   projectId: string;
+  /** Holds a Story slot: started, has unshipped Tickets and is not parked. */
   inFlight: boolean;
+  /** Started, and every unshipped Ticket waits on a person: it holds no slot. */
   parked: boolean;
+  /** At least one of its Tickets has had a Session. */
   started: boolean;
   maintenance: boolean;
-  /** Tickets shipped / all Tickets. */
+  /** Tickets shipped, of `total`. */
   shipped: number;
   total: number;
-  /** Items with a Session running now (its Tickets, or the Story itself). */
+  /** Tickets with a Session running now. */
   running: string[];
   /** Tickets waiting on a person. */
   waiting: string[];
@@ -56,15 +63,10 @@ export interface SchedulerState {
   pools: Pool[];
   /** In start order. */
   queue: QueueEntry[];
-  /** Stories with work waiting, running or parked, in the person's order. */
+  /** Stories with work waiting, running or parked, in the start order dispatch uses. */
   stories: StoryEntry[];
+  /** Stories in flight at once: per Project (default 2), and across the box (the Ticket Stage's pool size). */
   limits: StoryLimits;
-}
-
-/** How many Stories may be in flight: per Project (every Project listed), and across the box (the Ticket kind's first-Stage pool size). */
-export interface StoryLimits {
-  perProject: Record<string, number>;
-  boxWide: number;
 }
 
 /** `POST /api/items/:id/start`: started now (201) or queued in Up next (202). */
@@ -91,10 +93,16 @@ export interface SetPoolSizeRequest {
   size: number;
 }
 
-/** Published whenever pools, the queue or the paused flag change; also sent on every SSE connection. */
-export type SchedulerUpdatedEvent = KilnEvent<'scheduler.updated', SchedulerState>;
-
 /** `PUT /api/scheduler/story-limits/:projectId` (Admin): a whole number from 0 to 10. */
 export interface SetStoryLimitRequest {
   limit: number;
+}
+
+/** Published whenever pools, the queue or the paused flag change; also sent on every SSE connection. */
+export type SchedulerUpdatedEvent = KilnEvent<'scheduler.updated', SchedulerState>;
+
+/** How many Stories may be in flight: per Project, and across the box (the Ticket kind's first-Stage pool size). */
+export interface StoryLimits {
+  perProject: Record<string, number>;
+  boxWide: number;
 }

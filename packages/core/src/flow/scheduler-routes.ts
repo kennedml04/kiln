@@ -1,8 +1,8 @@
 // Core API routes for the scheduler.
 //   GET  /api/scheduler                 SchedulerState (pools, the Up next queue in start order, paused)
 //   PUT  /api/scheduler/pools/:name     {size} (Admin) -> SchedulerState
-//   PUT  /api/scheduler/story-limits/:projectId  {limit} (Admin) -> SchedulerState
 //   PUT  /api/scheduler/queue           {order: storyId[], projectId?} sets the Story order (Ticket ids map to their Story) -> SchedulerState
+//   PUT  /api/scheduler/story-limits/:projectId {limit} (Admin) -> SchedulerState
 //   POST /api/scheduler/stop-all        pauses every running Session and dispatch -> SchedulerState
 //   POST /api/scheduler/resume          continues them and dispatch -> SchedulerState
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -12,7 +12,7 @@ import type { RouteHelpers } from '../work/routes.ts';
 import type { Scheduler } from './scheduler.ts';
 
 const STORY_LIMIT = /^\/api\/scheduler\/story-limits\/([^/]+)$/;
-const POOL =/^\/api\/scheduler\/pools\/([^/]+)$/;
+const POOL = /^\/api\/scheduler\/pools\/([^/]+)$/;
 
 /** Answers the request if it is a scheduler route; returns false otherwise. */
 export async function handleSchedulerRoute(
@@ -32,11 +32,10 @@ export async function handleSchedulerRoute(
       const body = ((await readJson(req)) ?? {}) as Partial<ReorderQueueRequest>;
       return (sendJson(res, 200, await scheduler.reorder(body.order as string[], body.projectId)), true);
     }
-    const storyLimit = STORY_LIMIT.exec(url.pathname);
-    if (storyLimit && req.method === 'PUT') {
+    const limit = STORY_LIMIT.exec(url.pathname);
+    if (limit && req.method === 'PUT') {
       const body = ((await readJson(req)) ?? {}) as Partial<SetStoryLimitRequest>;
-      const value = typeof body.limit === 'number' ? body.limit : Number.NaN;
-      return (sendJson(res, 200, await scheduler.setStoryLimit(decodeURIComponent(storyLimit[1]!), value)), true);
+      return (sendJson(res, 200, await scheduler.setStoryLimit(decodeURIComponent(limit[1]!), body.limit as number)), true);
     }
     const pool = POOL.exec(url.pathname);
     if (pool && req.method === 'PUT') {

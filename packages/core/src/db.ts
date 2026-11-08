@@ -275,22 +275,21 @@ const MIGRATIONS: string[] = [
      batch_id TEXT NOT NULL,
      archived_at TEXT NOT NULL
    )`,
-
   // Story-first board: a Widget Tracker's Maintenance Story (it cannot hold the flag), by Tracker key.
   `CREATE TABLE maintenance_stories (
      project_id TEXT PRIMARY KEY,
      story_key TEXT NOT NULL
-   )`,
-  // Story limits: Stories in flight per Project; no row means the default.
-  `CREATE TABLE story_limits (
-     project_id TEXT PRIMARY KEY,
-     size INTEGER NOT NULL
    )`,
   // Story order (story-first queue 03): one list of Story ids across Projects, the person's order.
   `CREATE TABLE story_order (
      story_id TEXT PRIMARY KEY,
      project_id TEXT NOT NULL,
      position REAL NOT NULL
+   )`,
+  // Stories in flight per Project (story-first queue 04); no row means the default.
+  `CREATE TABLE story_limits (
+     project_id TEXT PRIMARY KEY,
+     size INTEGER NOT NULL
    )`,
 ];
 

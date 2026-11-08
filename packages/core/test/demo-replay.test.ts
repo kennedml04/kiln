@@ -92,22 +92,18 @@ test('Replay plays the demo Story to shipped on the fake Agent, with the wizard 
     await answer(kiln, gate, 'Approve');
   }
 
-  // Both Tickets start at once (Blocked by is not enforced: 02 carries 01's src/slugify.js, so its
-  // tests pass before 01 merges). The person approves 01's Review, waits for it to ship, then 02's.
+  // Ticket 02 is Blocked by 01, so it starts only after 01 ships. The person approves 01's Review,
+  // waits for it to ship, then does the same for 02.
   const ticketIds = [`${project.id}/ticket/slugify/01`, `${project.id}/ticket/slugify/02`];
-  const reviews = new Map<string, Ask>();
-  while (reviews.size < 2) {
-    const ask = await nextAsk(events, (a) => a.type === 'review' && ticketIds.includes(a.itemId));
-    reviews.set(ask.itemId, ask);
-  }
-  for (const id of ticketIds) assert.match(reviews.get(id)!.review!.findings, /No problems found; scripted review/);
   const shipped = (id: string) =>
     eventually(`${id} to ship`, async () => {
       const now = (await kiln.api<Item[]>('GET', `/api/projects/${project.id}/items`)).find((i) => i.id === id);
       return now?.stage === 'shipped' ? now : undefined;
     });
   for (const id of ticketIds) {
-    await answer(kiln, reviews.get(id)!, 'Approve');
+    const review = await nextAsk(events, (a) => a.type === 'review' && a.itemId === id);
+    assert.match(review.review!.findings, /No problems found; scripted review/);
+    await answer(kiln, review, 'Approve');
     await shipped(id);
   }
   await shipped(story.id);

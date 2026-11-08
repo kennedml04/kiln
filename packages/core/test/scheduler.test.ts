@@ -53,18 +53,20 @@ test('no more Sessions run at once than the default "agents: 3" pool allows; the
   const results: StartResult[] = [];
   for (const ticket of tickets) results.push(await start(kiln, ticket));
 
-  assert.deepEqual(results.map((r) => r.queued), [false, false, false, true]);
-  assert.deepEqual(await runStates(kiln, titles), ['running', 'running', 'running', 'up-next']);
+  assert.deepEqual(results.map((r) => r.queued), [false, false, true, true]);
+  assert.deepEqual(await runStates(kiln, titles), ['running', 'running', 'up-next', 'up-next']);
   const state = await kiln.api<SchedulerState>('GET', '/api/scheduler');
-  assert.deepEqual(state.pools, [{ name: 'agents', size: 3, active: 3 }]);
-  assert.deepEqual(state.queue.map((q) => q.itemId), [tickets[3]!.id]);
+  assert.deepEqual(state.pools, [{ name: 'agents', size: 3, active: 2 }]);
+  assert.deepEqual(state.queue.map((q) => q.itemId), [tickets[2]!.id, tickets[3]!.id]);
+  // One Story never holds every slot of the pool.
+  assert.equal(state.queue[0]!.held, 'Story already holds its share of the pool');
 
-  for (let i = 0; i < 3; i++) await events.next('session.started', { timeoutMs: 15_000 });
+  for (let i = 0; i < 2; i++) await events.next('session.started', { timeoutMs: 15_000 });
   await agent.stopSession(results[0]!.session!.id);
-  const fourth = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 15_000 });
+  const third = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 15_000 });
 
-  assert.equal(fourth.payload.itemId, tickets[3]!.id);
-  assert.deepEqual(await runStates(kiln, titles), ['backlog', 'running', 'running', 'running']);
+  assert.equal(third.payload.itemId, tickets[2]!.id);
+  assert.deepEqual(await runStates(kiln, titles), ['backlog', 'running', 'running', 'up-next']);
 });
 
 test('an Admin changes a pool\'s size and it takes effect at once, without a restart', async (t) => {
@@ -74,8 +76,8 @@ test('an Admin changes a pool\'s size and it takes effect at once, without a res
   for (const ticket of tickets) await start(kiln, ticket);
   assert.deepEqual(await runStates(kiln, titles), ['running', 'up-next', 'up-next']);
 
-  const grown = await kiln.api<SchedulerState>('PUT', '/api/scheduler/pools/agents', { size: 2 });
-  assert.deepEqual(grown.pools, [{ name: 'agents', size: 2, active: 2 }]);
+  const grown = await kiln.api<SchedulerState>('PUT', '/api/scheduler/pools/agents', { size: 3 });
+  assert.deepEqual(grown.pools, [{ name: 'agents', size: 3, active: 2 }]);
   assert.deepEqual(await runStates(kiln, titles), ['running', 'running', 'up-next']);
   await events.next('session.started', { timeoutMs: 15_000 });
   await events.next('session.started', { timeoutMs: 15_000 });
@@ -96,11 +98,10 @@ async function ticketsOfOwnStories(kiln: TestKiln, projectId: string, titles: st
 }
 
 test('Up next starts Stories oldest first until a person reorders them by Story id or Ticket id; then that order wins', async (t) => {
-  const { kiln, agent, tickets: seeded, events } = await setup(t, ['Running']);
+  const { kiln, tickets: seeded, events } = await setup(t, ['Running']);
   const [running] = seeded as [Item];
   const [b, c, d] = await ticketsOfOwnStories(kiln, running.projectId, ['B', 'C', 'D']) as [Item, Item, Item];
-  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 1 });
-  const first = await start(kiln, running);
+  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 0 });
   for (const ticket of [b, c, d]) await start(kiln, ticket);
   const queueOf = (state: SchedulerState) => state.queue.map((q) => q.itemId);
   assert.deepEqual(queueOf(await kiln.api<SchedulerState>('GET', '/api/scheduler')), [b.id, c.id, d.id]);
@@ -112,8 +113,7 @@ test('Up next starts Stories oldest first until a person reorders them by Story 
   do update = await events.next<SchedulerUpdatedEvent>('scheduler.updated');
   while (queueOf(update.payload).join() !== [d.id, b.id, c.id].join());
 
-  await events.next('session.started', { timeoutMs: 15_000 });
-  await agent.stopSession(first.session!.id);
+  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 1 });
   const next = await events.next<SessionStartedEvent>('session.started', { timeoutMs: 15_000 });
   assert.equal(next.payload.itemId, d.id);
   assert.deepEqual(queueOf(await kiln.api<SchedulerState>('GET', '/api/scheduler')), [b.id, c.id]);
@@ -157,7 +157,8 @@ test('Stop all pauses every running Session and the queue without killing anythi
     { do: 'tool', name: 'think', times: 200, intervalMs: 20 },
   ]);
   const [a, b, c] = tickets as [Item, Item, Item];
-  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 2 });
+  // Three slots: the Tickets' one Story may hold two of them.
+  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 3 });
   const sessionA = (await start(kiln, a)).session!;
   const sessionB = (await start(kiln, b)).session!;
   await start(kiln, c);
