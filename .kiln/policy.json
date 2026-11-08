@@ -2264,6 +2264,11 @@
       "action": "other_commands",
       "match": "EOF2",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff --stat",
+      "decision": "allow"
     }
   ]
 }
