@@ -117,3 +117,20 @@ test('an Admin asks for Restart when idle in Settings, sees it wait for the runn
   assert.equal(after.restartPending, undefined);
   assert.equal(after.pid, before.pid);
 });
+
+test('an Admin changes a Project\'s Stories in flight in Settings, and sees the box-wide cap', async (t) => {
+  const kiln = await startTestKiln(t);
+  seedScratch(kiln.repo);
+  const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+  const page = await openShell(t, kiln);
+
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByText(/At most \d+ across all Projects: the agents pool size/).waitFor();
+  const input = page.getByRole('spinbutton', { name: `${project.name} stories in flight` });
+  assert.equal(await input.inputValue(), '2');
+  await input.fill('4');
+  await page.getByRole('button', { name: `Save ${project.name}` }).click();
+
+  await page.getByRole('status').filter({ hasText: `${project.name}: 4` }).waitFor();
+  assert.equal((await kiln.api<SchedulerState>('GET', '/api/scheduler')).limits.perProject[project.id], 4);
+});

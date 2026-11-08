@@ -7,6 +7,7 @@ import {
   type OrgPolicy,
   type PolicyDecision,
   type Pool,
+  type Project,
   type RestartPending,
   type Role,
   type SchedulerState,
@@ -51,6 +52,68 @@ function PoolRow({ pool }: { pool: Pool }) {
       </button>
       {error ? <p role="alert">{error}</p> : null}
     </form>
+  );
+}
+
+function StoryLimitRow({ project, limit, canEdit }: { project: Project; limit: number; canEdit: boolean }) {
+  const [value, setValue] = useState(String(limit));
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setValue(String(limit)), [limit]);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api<SchedulerState>('PUT', `/api/scheduler/story-limits/${encodeURIComponent(project.id)}`, { limit: Number(value) });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!canEdit) {
+    return (
+      <p className="pool">
+        {project.name}: {limit}
+      </p>
+    );
+  }
+  return (
+    <form className="pool" aria-label={`${project.name} stories in flight`} onSubmit={save}>
+      <span role="status">
+        {project.name}: {limit}
+      </span>
+      <label>
+        <span className="visually-hidden">{project.name} stories in flight</span>
+        <input type="number" min={0} max={10} step={1} value={value} onChange={(e) => setValue(e.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Save {project.name}
+      </button>
+      {error ? <p role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
+function StoriesInFlight() {
+  const projectsById = useStore((s) => s.projects);
+  const projects = Object.values(projectsById);
+  const limits = useStore((s) => s.scheduler?.limits);
+  const canEdit = useStore((s) => s.me?.role === 'admin');
+  return (
+    <>
+      <h3>Stories in flight</h3>
+      <p>How many Stories each Project works on at once, from 0 to 10.</p>
+      {projects.map((p) => (
+        <StoryLimitRow key={p.id} project={p} limit={limits?.perProject[p.id] ?? 2} canEdit={canEdit} />
+      ))}
+      {limits ? (
+        <p>
+          At most {limits.boxWide} across all Projects: the agents pool size.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -463,6 +526,7 @@ export function SettingsPage() {
       {pools.map((pool) => (
         <PoolRow key={pool.name} pool={pool} />
       ))}
+      <StoriesInFlight />
       <h3>Restart</h3>
       <RestartWhenIdle />
     </section>
