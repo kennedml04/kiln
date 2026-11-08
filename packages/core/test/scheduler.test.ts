@@ -11,7 +11,7 @@ import type {
   SessionUpdatedEvent,
   StartResult,
 } from '@kiln/widget-sdk';
-import { startTestKiln, type EventStream, type FakeAgent, type FakeAgentScript, type TestKiln } from '@kiln/testing';
+import { createTempRepo, startTestKiln, type EventStream, type FakeAgent, type FakeAgentScript, type TestKiln } from '@kiln/testing';
 import { seedScratch } from '@kiln/testing/scratch';
 
 /** A seeded Project plus `count` Tickets of its Story, all in Implementing. */
@@ -85,17 +85,28 @@ test('an Admin changes a pool\'s size and it takes effect at once, without a res
   await assert.rejects(kiln.api('PUT', '/api/scheduler/pools/nope', { size: 2 }), /404/);
 });
 
-test('Up next starts oldest first until a person reorders it; then the order they set wins', async (t) => {
-  const titles = ['Running', 'B', 'C', 'D'];
-  const { kiln, agent, tickets, events } = await setup(t, titles);
-  const [running, b, c, d] = tickets as [Item, Item, Item, Item];
+/** Makes a Story of the seeded Project (by the first seeded Ticket's Project) with one Ticket each. */
+async function ticketsOfOwnStories(kiln: TestKiln, projectId: string, titles: string[]): Promise<Item[]> {
+  const tickets: Item[] = [];
+  for (const title of titles) {
+    const story = await kiln.api<Item>('POST', `/api/projects/${projectId}/items`, { kind: 'story', title: `Story ${title}` });
+    tickets.push(await kiln.api<Item>('POST', `/api/projects/${projectId}/items`, { kind: 'ticket', title, parentId: story.id }));
+  }
+  return tickets;
+}
+
+test('Up next starts Stories oldest first until a person reorders them by Story id or Ticket id; then that order wins', async (t) => {
+  const { kiln, agent, tickets: seeded, events } = await setup(t, ['Running']);
+  const [running] = seeded as [Item];
+  const [b, c, d] = await ticketsOfOwnStories(kiln, running.projectId, ['B', 'C', 'D']) as [Item, Item, Item];
   await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 1 });
   const first = await start(kiln, running);
   for (const ticket of [b, c, d]) await start(kiln, ticket);
   const queueOf = (state: SchedulerState) => state.queue.map((q) => q.itemId);
   assert.deepEqual(queueOf(await kiln.api<SchedulerState>('GET', '/api/scheduler')), [b.id, c.id, d.id]);
 
-  const reordered = await kiln.api<SchedulerState>('PUT', '/api/scheduler/queue', { order: [d.id, b.id, c.id] });
+  // A Story id moves its Story's Tickets; a Ticket id does the same (one-release shim).
+  const reordered = await kiln.api<SchedulerState>('PUT', '/api/scheduler/queue', { order: [d.parentId, b.id, c.id] });
   assert.deepEqual(queueOf(reordered), [d.id, b.id, c.id]);
   let update: SchedulerUpdatedEvent;
   do update = await events.next<SchedulerUpdatedEvent>('scheduler.updated');
@@ -107,7 +118,25 @@ test('Up next starts oldest first until a person reorders it; then the order the
   assert.equal(next.payload.itemId, d.id);
   assert.deepEqual(queueOf(await kiln.api<SchedulerState>('GET', '/api/scheduler')), [b.id, c.id]);
 
-  await assert.rejects(kiln.api('PUT', '/api/scheduler/queue', { order: [running.id] }), /409/);
+  await assert.rejects(kiln.api('PUT', '/api/scheduler/queue', { order: ['nope/none'] }), /409/);
+});
+
+test('reorder with a projectId moves only that Project Stories within their own places; other Projects Stories are a 400', async (t) => {
+  const { kiln, tickets: seeded } = await setup(t, ['Running']);
+  const projectA = seeded[0]!.projectId;
+  const repoB = createTempRepo(t);
+  const projectB = (await kiln.api<Project>('POST', '/api/projects', { path: repoB.path })).id;
+  const [a1, a2] = await ticketsOfOwnStories(kiln, projectA, ['A1', 'A2']) as [Item, Item];
+  const [b1] = await ticketsOfOwnStories(kiln, projectB, ['B1']) as [Item];
+  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 0 });
+  // Order of joining: A1, B1, A2.
+  for (const ticket of [a1, b1, a2]) await start(kiln, ticket);
+  const queueOf = (state: SchedulerState) => state.queue.map((q) => q.itemId);
+
+  const swapped = await kiln.api<SchedulerState>('PUT', '/api/scheduler/queue', { order: [a2.parentId, a1.parentId], projectId: projectA });
+  assert.deepEqual(queueOf(swapped), [a2.id, b1.id, a1.id]);
+  await assert.rejects(kiln.api('PUT', '/api/scheduler/queue', { order: [b1.parentId], projectId: projectA }), /400/);
+  await assert.rejects(kiln.api('PUT', '/api/scheduler/queue', { order: [a1.parentId], projectId: 'other' }), /400/);
 });
 
 /** Waits for the next event of `type` whose payload passes `match`. */

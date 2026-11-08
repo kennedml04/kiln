@@ -9,6 +9,7 @@ import {
   DEFAULT_STORY_LIMIT,
   MAX_STORY_LIMIT,
   type Item,
+  type ItemRemovedEvent,
   type ItemStageChangedEvent,
   type Pool,
   type ProjectRemovedEvent,
@@ -34,10 +35,14 @@ export interface Scheduler {
   state(): SchedulerState;
   /** Sets how many Sessions a pool runs at once; queued Items start at once if it grew. Returns the new state. */
   setPoolSize(name: string, size: number): Promise<SchedulerState>;
-  /** Sets the start order of Up next (dragging on the board). Items left out keep their order after these. */
-  reorder(order: string[]): Promise<SchedulerState>;
   /** Sets how many Stories a Project may have in flight (0-10); raising it dispatches at once. */
   setStoryLimit(projectId: string, size: number): Promise<SchedulerState>;
+  /**
+   * Sets the Story order (dragging on the board). Ids are Story ids; Ticket ids are accepted for one
+   * release and move their Story. With `projectId` only that Project's Stories change places, within
+   * the positions they already held.
+   */
+  reorder(order: string[], projectId?: string): Promise<SchedulerState>;
   /** Stop all: halts dispatch and pauses every running Session (nothing is killed) until `resume`. */
   stopAll(): Promise<SchedulerState>;
   /** Continues the Sessions Stop all paused and starts dispatching again. */
@@ -104,12 +109,19 @@ export interface SchedulerDeps {
 }
 
 export function createScheduler({ db, bus, work, sessions, grantedPools = () => ({}) }: SchedulerDeps): Scheduler {
-  const selectQueue = db.prepare('SELECT * FROM queue ORDER BY priority DESC, seq');
+  const selectQueue = db.prepare('SELECT * FROM queue ORDER BY seq');
+  const selectStoryOrder = db.prepare('SELECT story_id, project_id, position FROM story_order');
+  const insertStory = db.prepare(
+    `INSERT OR IGNORE INTO story_order (story_id, project_id, position)
+     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM story_order))`,
+  );
+  const setPosition = db.prepare('UPDATE story_order SET position = ? WHERE story_id = ?');
+  const deleteStory = db.prepare('DELETE FROM story_order WHERE story_id = ?');
+  const deleteProjectStories = db.prepare('DELETE FROM story_order WHERE project_id = ?');
   const insertEntry = db.prepare(
     `INSERT INTO queue (item_id, project_id, stage, pool, priority, seq, enqueued_at)
      VALUES (?, ?, ?, ?, 0, (SELECT COALESCE(MAX(seq), 0) + 1 FROM queue), ?)`,
   );
-  const setPriority = db.prepare('UPDATE queue SET priority = ? WHERE item_id = ?');
   const deleteEntry =db.prepare('DELETE FROM queue WHERE item_id = ?');
   const selectPools = db.prepare('SELECT name, size FROM pools ORDER BY name');
   const selectLimits = db.prepare('SELECT project_id, size FROM story_limits');
@@ -146,12 +158,45 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
     ...new Set([pool, ...claims.flatMap((claim) => claim(entry))]),
   ];
 
-  const queue = () =>
-    (selectQueue.all() as unknown as QueueRow[]).map((row) => {
-      const entry = toEntry(row);
-      const held = heldBy(entry);
-      return held ? { ...entry, held } : entry;
-    });
+  /**
+   * The Story an Item is ordered under: a Story itself, a Ticket's parent Story. An Item with no
+   * Story (until Maintenance Stories exist) is ordered as its own entry.
+   */
+  const storyKeyOf = (itemId: string): string => {
+    const item = work.item(itemId);
+    if (!item || item.kind === 'story') return itemId;
+    return item.parentId && work.item(item.parentId)?.kind === 'story' ? item.parentId : itemId;
+  };
+  const positions = () =>
+    new Map(
+      (selectStoryOrder.all() as unknown as { story_id: string; project_id: string; position: number }[]).map((r) => [
+        r.story_id,
+        { projectId: r.project_id, position: r.position },
+      ]),
+    );
+  /** A Story with work waiting joins the bottom of the order the first time. */
+  const joinOrder = (itemId: string, projectId: string) => void insertStory.run(storyKeyOf(itemId), projectId);
+
+  // First start after the upgrade: seed the order from the queue as it stood (oldest first, first Story wins).
+  if (!selectStoryOrder.get()) {
+    for (const row of db.prepare('SELECT * FROM queue ORDER BY priority DESC, seq').all() as unknown as QueueRow[]) {
+      joinOrder(row.item_id, row.project_id);
+    }
+  }
+
+  const queue = () => {
+    const order = positions();
+    const rank = (e: QueueEntry) => order.get(storyKeyOf(e.itemId))?.position ?? Number.MAX_VALUE;
+    const entries = (selectQueue.all() as unknown as QueueRow[]).map(toEntry);
+    // Stable: entries of one Story (and unordered ones) stay in the order they queued.
+    return entries
+      .map((entry, i) => ({ entry, i, rank: rank(entry) }))
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .map(({ entry }) => {
+        const held = heldBy(entry);
+        return held ? { ...entry, held } : entry;
+      });
+  };
 
   const poolSizes = (): Map<string, number> => {
     const sizes = new Map<string, number>([[DEFAULT_POOL, DEFAULT_POOL_SIZE]]);
@@ -255,11 +300,16 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
         deleteEntry.run(entry.itemId);
         attended.delete(entry.itemId);
       }
+      deleteProjectStories.run(projectId);
       publish();
+    } else if (event.type === 'item.removed') {
+      deleteStory.run((event as ItemRemovedEvent).payload.id);
     } else if (event.type === 'item.stage_changed' || event.type === 'item.rework') {
       // An Item entering a Stage that runs a Session (its Exit was met, or a Gate sent it back, maybe
       // to the Gate's own Stage) joins the queue by itself; nobody has to press Start.
       const { itemId, projectId } = (event as ItemStageChangedEvent).payload;
+      const changed = work.item(itemId);
+      if (changed?.kind === 'story' && changed.runState === 'shipped') deleteStory.run(itemId);
       void admit(itemId).catch((err: unknown) => {
         bus.publish('scheduler.start_failed', { itemId, projectId, error: String(err) });
       });
@@ -275,6 +325,7 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
     } catch (err) {
       if (!(err instanceof WorkError && NOT_READY.test(err.message))) throw err;
       if (queue().some((e) => e.itemId === itemId)) return;
+      joinOrder(itemId, item.projectId);
       insertEntry.run(itemId, item.projectId, item.stage, stageOf(item)?.pool ?? DEFAULT_POOL, new Date().toISOString());
       work.setUpNext(itemId, true);
       publish();
@@ -301,6 +352,7 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       publish();
       return { queued: false, session };
     }
+    joinOrder(itemId, item.projectId);
     insertEntry.run(itemId, item.projectId, item.stage, pool, new Date().toISOString());
     work.setUpNext(itemId, true);
     publish();
@@ -331,18 +383,32 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
       await dispatch();
       return state();
     },
-    async reorder(order) {
-      if (!Array.isArray(order)) throw new WorkError(400, 'Give the Up next order as a list of Item ids');
-      const entries = queue();
-      const queued = new Set(entries.map((e) => e.itemId));
-      const missing = order.find((id) => !queued.has(id));
-      if (missing) throw new WorkError(409, `"${missing}" is not waiting in Up next`);
-      const listed = new Set(order);
-      const rest = entries.filter((e) => !listed.has(e.itemId)).map((e) => e.priority);
-      const base = rest.length ? Math.max(...rest) : 0;
+    async reorder(order, projectId) {
+      if (!Array.isArray(order)) throw new WorkError(400, 'Give the Up next order as a list of Story ids');
+      const held = positions();
+      const stories: string[] = [];
+      for (const id of order) {
+        const key = held.has(id) ? id : typeof id === 'string' && work.item(id) ? storyKeyOf(id) : id;
+        if (!held.has(key)) throw new WorkError(409, `"${id}" is not waiting in Up next`);
+        if (!stories.includes(key)) stories.push(key);
+      }
+      if (projectId !== undefined) {
+        const other = stories.find((id) => held.get(id)!.projectId !== projectId);
+        if (other) throw new WorkError(400, `"${other}" is not a Story of Project "${projectId}"`);
+      }
+      const next = new Map<string, number>();
+      if (projectId === undefined) {
+        // The listed Stories take the top places, above every unlisted one.
+        const top = Math.min(0, ...[...held.values()].map((h) => h.position));
+        stories.forEach((id, i) => next.set(id, top - stories.length + i));
+      } else {
+        // The listed Stories swap among the places they held, so other Projects' Stories stay put.
+        const places = stories.map((id) => held.get(id)!.position).sort((a, b) => a - b);
+        stories.forEach((id, i) => next.set(id, places[i]!));
+      }
       db.exec('BEGIN');
       try {
-        order.forEach((id, i) => setPriority.run(base + order.length - i, id));
+        for (const [id, position] of next) setPosition.run(position, id);
         db.exec('COMMIT');
       } catch (err) {
         db.exec('ROLLBACK');

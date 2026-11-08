@@ -2,7 +2,7 @@
 //   GET  /api/scheduler                 SchedulerState (pools, the Up next queue in start order, paused)
 //   PUT  /api/scheduler/pools/:name     {size} (Admin) -> SchedulerState
 //   PUT  /api/scheduler/story-limits/:projectId  {limit} (Admin) -> SchedulerState
-//   PUT  /api/scheduler/queue          {order: itemId[]} sets Up next's start order -> SchedulerState
+//   PUT  /api/scheduler/queue           {order: storyId[], projectId?} sets the Story order (Ticket ids map to their Story) -> SchedulerState
 //   POST /api/scheduler/stop-all        pauses every running Session and dispatch -> SchedulerState
 //   POST /api/scheduler/resume          continues them and dispatch -> SchedulerState
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -30,7 +30,7 @@ export async function handleSchedulerRoute(
     if (route === 'POST /api/scheduler/resume') return (sendJson(res, 200, await scheduler.resume()), true);
     if (route === 'PUT /api/scheduler/queue') {
       const body = ((await readJson(req)) ?? {}) as Partial<ReorderQueueRequest>;
-      return (sendJson(res, 200, await scheduler.reorder(body.order as string[])), true);
+      return (sendJson(res, 200, await scheduler.reorder(body.order as string[], body.projectId)), true);
     }
     const storyLimit = STORY_LIMIT.exec(url.pathname);
     if (storyLimit && req.method === 'PUT') {

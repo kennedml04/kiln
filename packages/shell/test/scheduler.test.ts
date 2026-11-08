@@ -59,7 +59,13 @@ test('Stop all asks first, then pauses the running work and the queue; Resume co
 test('dragging within Up next changes the start order, and the board shows it live', async (t) => {
   const kiln = await startTestKiln(t);
   await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }] });
-  const [first, ...queued] = await seedTickets(kiln, ['Busy', 'Older', 'Newer']);
+  const [first] = await seedTickets(kiln, ['Busy']);
+  // Up next is ordered by Story, so each waiting Ticket gets a Story of its own.
+  const queued: Item[] = [];
+  for (const title of ['Older', 'Newer']) {
+    const story = await kiln.api<Item>('POST', `/api/projects/${first!.projectId}/items`, { kind: 'story', title: `Story ${title}` });
+    queued.push(await kiln.api<Item>('POST', `/api/projects/${first!.projectId}/items`, { kind: 'ticket', title, parentId: story.id }));
+  }
   await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 1 });
   for (const ticket of [first!, ...queued]) await start(kiln, ticket);
   const page = await openShell(t, kiln);

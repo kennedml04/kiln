@@ -221,7 +221,9 @@ test('accepting a proposed Up next order reorders Up next; declining a proposal 
   await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 0 });
   const tickets: Item[] = [];
   for (const title of ['B', 'C']) {
-    const ticket = await kiln.api<Item>('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title, parentId: story.id });
+    // Up next is ordered by Story, so each Ticket gets a Story of its own.
+    const own = await kiln.api<Item>('POST', `/api/projects/${project.id}/items`, { kind: 'story', title: `Story ${title}` });
+    const ticket = await kiln.api<Item>('POST', `/api/projects/${project.id}/items`, { kind: 'ticket', title, parentId: own.id });
     await kiln.api('POST', `/api/items/${encodeURIComponent(ticket.id)}/start`);
     tickets.push(ticket);
   }

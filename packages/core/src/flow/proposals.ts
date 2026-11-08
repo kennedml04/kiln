@@ -26,7 +26,7 @@ export function createProposalApplier({ work, scheduler, audit }: { work: Work; 
     if (proposal.kind === 'reorder_queue') {
       const outside = proposal.order.find((id) => !id.startsWith(`${projectId}/`));
       if (outside) throw new WorkError(409, `"${outside}" is not one of this Project's Items`);
-      const state = await scheduler.reorder(proposal.order);
+      const state = await scheduler.reorder(proposal.order, projectId);
       const outcome: ProposalOutcome = { order: state.queue.filter((e) => e.projectId === projectId).map((e) => e.itemId) };
       record(by, ask.itemId, { ...detail, ...outcome });
       return outcome;

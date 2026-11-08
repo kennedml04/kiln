@@ -24,7 +24,7 @@ export interface QueueEntry {
   projectId: string;
   stage: string;
   pool: string;
-  /** Higher starts first; ties go to the oldest entry. Set by dragging within Up next. */
+  /** No longer used for ordering (Story order is); always 0 for entries made now. */
   priority: number;
   enqueuedAt: string;
   /** Why it may not start yet although its pool has room, e.g. a Budget's daily cap is reached. */
@@ -55,9 +55,14 @@ export interface StartResult {
   entry?: QueueEntry;
 }
 
-/** `PUT /api/scheduler/queue`: Item ids in the order they should start. Ids left out keep their place after these. */
+/**
+ * `PUT /api/scheduler/queue`: Story ids in the order they should start. Ids left out keep their place
+ * after these. Ticket ids are accepted until the next release and move their Story.
+ */
 export interface ReorderQueueRequest {
   order: string[];
+  /** Reorder only this Project's Stories, within the positions they already hold (400 for other Projects' Stories). */
+  projectId?: string;
 }
 
 /** `PUT /api/scheduler/pools/:name` (Admin). */

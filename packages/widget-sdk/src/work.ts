@@ -194,8 +194,6 @@ export interface Item {
   run?: ItemRun;
   /** Set when a Reset board archived this (shipped) Item: boards hide it; it is still shipped. */
   archived?: { at: string; batchId: string };
-  /** Set on a Project's Maintenance Story: it holds Story-less Tickets, never ships and never runs a Session of its own. */
-  maintenance?: true;
 }
 
 /** POST /api/archive/reset */
@@ -259,8 +257,6 @@ export interface TrackerItem {
   /** Set on a Project's Maintenance Story. */
   maintenance?: true;
   path?: string;
-  /** Set on a Story that is the Project's Maintenance Story. */
-  maintenance?: boolean;
 }
 
 export interface TrackerCreateInput {

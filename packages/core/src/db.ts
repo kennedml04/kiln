@@ -286,6 +286,12 @@ const MIGRATIONS: string[] = [
      project_id TEXT PRIMARY KEY,
      size INTEGER NOT NULL
    )`,
+  // Story order (story-first queue 03): one list of Story ids across Projects, the person's order.
+  `CREATE TABLE story_order (
+     story_id TEXT PRIMARY KEY,
+     project_id TEXT NOT NULL,
+     position REAL NOT NULL
+   )`,
 ];
 
 /** Opens (creating on first start) the core's one SQLite file in the data folder. */
