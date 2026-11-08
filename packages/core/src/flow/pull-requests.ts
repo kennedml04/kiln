@@ -15,6 +15,8 @@ export interface PullRequests {
   open(request: OpenPullRequestRequest): Promise<PullRequestRecord>;
   /** Every open pull request, whoever opened it: their Items wait at their Gates, even over a restart. */
   openAll(): PullRequestRecord[];
+  /** The Item's open pull requests (one per repo it ships to). */
+  openFor(itemId: string): PullRequestRecord[];
   /** The open pull requests this Widget opened. */
   openBy(widgetId: string): PullRequestRecord[];
   /** The Widget says one it opened merged on GitHub; the Gate's listener ships the Item. */
@@ -62,6 +64,7 @@ export function createPullRequests({ db, bus, bridge }: { db: DatabaseSync; bus:
     `INSERT OR REPLACE INTO pull_requests (item_id, project_id, repo, number, url, branch, widget_id, state, opened_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
   );
+  const itemOpenRows = db.prepare(`SELECT * FROM pull_requests WHERE item_id = ? AND state = 'open' ORDER BY opened_at`);
   const openRows = db.prepare(`SELECT * FROM pull_requests WHERE widget_id = ? AND state = 'open' ORDER BY opened_at`);
   const allOpenRows = db.prepare(`SELECT * FROM pull_requests WHERE state = 'open' ORDER BY opened_at`);
   const one = db.prepare('SELECT * FROM pull_requests WHERE project_id = ? AND number = ?');
@@ -93,6 +96,9 @@ export function createPullRequests({ db, bus, bridge }: { db: DatabaseSync; bus:
     },
     openAll() {
       return (allOpenRows.all() as unknown as Row[]).map(toRecord);
+    },
+    openFor(itemId) {
+      return (itemOpenRows.all(itemId) as unknown as Row[]).map(toRecord);
     },
     openBy(widgetId) {
       return (openRows.all(widgetId) as unknown as Row[]).map(toRecord);

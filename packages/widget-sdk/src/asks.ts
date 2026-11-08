@@ -80,6 +80,24 @@ export interface ReviewDetails {
   branch: string;
   /** The default branch the branch merges into on approval. */
   base: string;
+  /**
+   * A client Item with Linked Projects: every repo its Session touched, in the order they land
+   * (linked Projects first, the client last), each with its own diff. `branch`, `base` and
+   * `diffSummary` above are the client's.
+   */
+  repos?: ReviewRepo[];
+  /** On a Permission Ask for a pull request: the Project of the repo it pushes. Unset: the Item's own. */
+  projectId?: string;
+}
+
+/** One repo of a linked Review Ask. */
+export interface ReviewRepo {
+  projectId: string;
+  /** The Project's name. */
+  name: string;
+  branch: string;
+  base: string;
+  diffSummary: string;
 }
 
 /** A Review Ask's answers. Rejecting needs a comment, which goes to the fresh Session doing the rework. */

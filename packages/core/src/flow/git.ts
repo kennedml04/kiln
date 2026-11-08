@@ -28,6 +28,9 @@ const succeeds = async (cwd: string, ...args: string[]) => {
   }
 };
 
+/** Whether `branch` exists in `repo`. */
+export const branchExists = (repo: string, branch: string): Promise<boolean> => succeeds(repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`);
+
 /** The branch work merges into: origin's HEAD if known, else `main`, else `master`, else the checkout's branch. */
 export async function defaultBranch(repo: string): Promise<string> {
   try {
@@ -109,9 +112,9 @@ export function readHead(dir: string): string | undefined {
   }
 }
 
-/** How many commits `cwd`'s HEAD has that `base` does not. */
-export async function commitsAhead(cwd: string, base: string): Promise<number> {
-  return Number((await git(cwd, 'rev-list', '--count', `${base}..HEAD`)).trim());
+/** How many commits `tip` (default HEAD) has in `cwd` that `base` does not. */
+export async function commitsAhead(cwd: string, base: string, tip = 'HEAD'): Promise<number> {
+  return Number((await git(cwd, 'rev-list', '--count', `${base}..${tip}`)).trim());
 }
 
 /** Where an Item's Stage-runs work: one worktree per Item, kept across its Stages until it merges. */

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Item, Project, SessionInfo, StartResult } from '@kiln/widget-sdk';
+import type { Ask, Item, Project, SessionInfo, StartResult } from '@kiln/widget-sdk';
 import { createTempRepo, startTestKiln, type FakeAgentScripts, type TestKiln } from '@kiln/testing';
 import { seedScratch, writeRepoFile } from '@kiln/testing/scratch';
 
@@ -88,4 +88,65 @@ test('a linked repo the Session changed keeps its branch when the Session ends',
   await waitFor('the worktrees to be cleaned up', () => lib.git('worktree', 'list').trim().split('\n').length === 1);
   assert.ok(lib.git('branch', '--list', BRANCH).includes(BRANCH), 'the linked repo keeps the branch it changed');
   assert.equal(lib.git('show', `${BRANCH}:shared.txt`), 'shared\n');
+});
+
+// Linked Projects, slice 3: one Review Ask for the whole task, and each touched repo lands on approval.
+const FINDINGS = 'client/.scratch/home-board/reviews/01-draw-the-columns.md';
+const REVIEWER = [
+  { do: 'write', path: FINDINGS, content: '# Review\n\nLooks good.\n' },
+  { do: 'commit', message: 'Review findings', in: 'client' },
+] as const;
+
+const reviewAskOf = async (kiln: TestKiln, itemId: string): Promise<Ask> => {
+  let found: Ask | undefined;
+  await waitFor('the Review Ask', async () => {
+    found = (await kiln.api<Ask[]>('GET', '/api/asks')).find((a) => a.itemId === itemId && a.type === 'review');
+    return found !== undefined;
+  });
+  return found!;
+};
+
+test('one Review Ask shows both repos, and approving lands each touched repo on its default branch', async (t) => {
+  const { kiln, lib, ticket } = await setUp(t, {
+    implementer: [
+      { do: 'write', path: 'client/feature.txt', content: 'columns\n' },
+      { do: 'commit', message: 'Draw the columns', in: 'client' },
+      { do: 'write', path: 'lib/shared.txt', content: 'shared\n' },
+      { do: 'commit', message: 'Share the columns', in: 'lib' },
+    ],
+    reviewer: [...REVIEWER],
+  });
+  await kiln.api<StartResult>('POST', `/api/items/${encodeURIComponent(ticket.id)}/start`);
+  const ask = await reviewAskOf(kiln, ticket.id);
+  assert.deepEqual(ask.review!.repos!.map((r) => r.name), ['lib', 'client'], 'the linked Project lands first');
+  assert.match(ask.review!.repos![0]!.diffSummary, /shared\.txt/);
+  assert.match(ask.review!.repos![1]!.diffSummary, /feature\.txt/);
+  assert.match(ask.question, /lib and client/);
+
+  const res = await kiln.request('POST', `/api/asks/${encodeURIComponent(ask.id)}/answer`, { answer: 'Approve' });
+  assert.equal(res.status, 200);
+  await waitFor('both repos to land', () => lib.git('branch', '--list', 'kiln/*').trim() === '' && kiln.repo.git('branch', '--list', 'kiln/*').trim() === '');
+  assert.equal(lib.git('show', 'main:shared.txt'), 'shared\n');
+  assert.equal(kiln.repo.git('show', 'main:feature.txt'), 'columns\n');
+  assert.equal(lib.git('worktree', 'list').trim().split('\n').length, 1);
+});
+
+test('a linked repo the Session never touched is not in the Review Ask and is not landed', async (t) => {
+  const { kiln, lib, ticket } = await setUp(t, {
+    implementer: [
+      { do: 'write', path: 'client/feature.txt', content: 'columns\n' },
+      { do: 'commit', message: 'Draw the columns', in: 'client' },
+    ],
+    reviewer: [...REVIEWER],
+  });
+  const before = lib.git('rev-parse', 'main');
+  await kiln.api<StartResult>('POST', `/api/items/${encodeURIComponent(ticket.id)}/start`);
+  const ask = await reviewAskOf(kiln, ticket.id);
+  assert.equal(ask.review!.repos, undefined, 'only the client changed, so there is one diff');
+
+  await kiln.request('POST', `/api/asks/${encodeURIComponent(ask.id)}/answer`, { answer: 'Approve' });
+  await waitFor('the client to land', () => kiln.repo.git('branch', '--list', 'kiln/*').trim() === '');
+  assert.equal(kiln.repo.git('show', 'main:feature.txt'), 'columns\n');
+  assert.equal(lib.git('rev-parse', 'main'), before, 'the untouched repo was not changed');
+  assert.equal(lib.git('branch', '--list', 'kiln/*').trim(), '');
 });

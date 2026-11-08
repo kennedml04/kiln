@@ -145,12 +145,23 @@ function AskCard({ ask }: { ask: Ask }) {
             <h4>{ask.review.artifact ?? 'Review findings'}</h4>
             <pre>{ask.review.findings}</pre>
           </section>
-          <section aria-label="What the branch changes">
-            <h4>
-              Changes on {ask.review.branch} against {ask.review.base}
-            </h4>
-            <pre>{ask.review.diffSummary || 'No changes.'}</pre>
-          </section>
+          {ask.review.repos?.length ? (
+            ask.review.repos.map((repo) => (
+              <section key={repo.projectId} aria-label={`What ${repo.name} changes`}>
+                <h4>
+                  {repo.name}: changes on {repo.branch} against {repo.base}
+                </h4>
+                <pre>{repo.diffSummary || 'No changes.'}</pre>
+              </section>
+            ))
+          ) : (
+            <section aria-label="What the branch changes">
+              <h4>
+                Changes on {ask.review.branch} against {ask.review.base}
+              </h4>
+              <pre>{ask.review.diffSummary || 'No changes.'}</pre>
+            </section>
+          )}
         </div>
       )}
       <p>
