@@ -1,7 +1,7 @@
 ---
 title: Story-first board: the backlog is Stories, Tickets are a Story's checklist
 epic: board-ux
-stage: tickets
+stage: shipped
 blocked-by: []
 ---
 The person steers the board by Story, not by Ticket. Today Up next is one flat list of Tickets and the agents pull from it round-robin across Stories: on 2026-11-07 the queue read linked-projects/03, scratch-chat/05, pi-agent-widget/04, linked-projects/04, scratch-chat/06, pi-agent-widget/05 … six Stories interleaved, two agents nibbling at all six, none of them shipping. A Ticket card ("One Review Ask and landing across linked repos") says nothing about what it is for without its Story, so the person reads Tickets they never wanted to manage and still cannot tell what is close to done.
