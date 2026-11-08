@@ -97,6 +97,10 @@ function PagePanel({ panel }: { panel: PanelView }) {
       if (!frame.current || event.source !== frame.current.contentWindow) return;
       const data = event.data as PageToShell | null;
       if (data?.kiln === 'action' && typeof data.action === 'string') void runAction(panel, data.action, data.input).catch(() => {});
+      if (data?.kiln === 'resize' && typeof data.height === 'number' && Number.isFinite(data.height)) {
+        // The page knows its own height; the frame cannot read it across the opaque origin.
+        frame.current.style.height = `${Math.min(Math.max(Math.round(data.height), 192), 24000)}px`;
+      }
     };
     window.addEventListener('message', fromPage);
     const stop = onPageMessage((m) => {

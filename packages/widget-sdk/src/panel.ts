@@ -131,9 +131,11 @@ export interface WidgetActionCommand {
 /**
  * The message bridge between an embedded page and the Shell (`window.postMessage`):
  * - page to Shell: `{ kiln: 'action', action, input? }` runs one of its Widget's actions.
+ * - page to Shell: `{ kiln: 'resize', height }` asks for the frame to be that many CSS pixels tall (the Shell
+ *   clamps it between its minimum and 24000), so a long page scrolls with the Shell instead of inside the frame.
  * - Shell to page: `{ kiln: 'message', message }`, for each `POST /api/widget/panels/:panelId/messages`
  *   the Widget sends (body: any JSON message).
  * The Shell accepts messages only from that panel's frame and only for that panel's Widget.
  */
-export type PageToShell = { kiln: 'action'; action: string; input?: unknown };
+export type PageToShell = { kiln: 'action'; action: string; input?: unknown } | { kiln: 'resize'; height: number };
 export type ShellToPage = { kiln: 'message'; message: unknown };
