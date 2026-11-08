@@ -2290,3 +2290,25 @@ pre {
 .toast button { min-height: 44px; min-width: 44px; }
 .toast-error { border-color: var(--danger); }
 @media (max-width: 860px) { .toast-area { left: 0; right: 0; bottom: 0; max-width: none; padding: 0.5rem; } .toast { width: 100%; box-sizing: border-box; } }
+
+.story-line {
+  margin: 0.15rem 0;
+  min-width: 0;
+}
+
+.story-line p {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.story-line-title {
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.story-line-why {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}

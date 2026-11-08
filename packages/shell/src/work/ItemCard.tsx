@@ -1,6 +1,7 @@
 import { memo, type DragEvent } from 'react';
 import type { Item, Project } from '@kiln/widget-sdk';
 import { followLink, itemPath, projectPath } from '../router.ts';
+import { StoryLine, useStoryOf } from './StoryLine.tsx';
 import { UsageLine } from './Usage.tsx';
 
 export const ITEM_DRAG_TYPE = 'application/x-kiln-item';
@@ -33,6 +34,7 @@ interface Props {
 
 /** One Item. Memoised: an event about another Item leaves this card's props unchanged. */
 export const ItemCard = memo(function ItemCard({ item, project, showProject }: Props) {
+  const story = useStoryOf(item);
   const onDragStart = (event: DragEvent) => {
     event.dataTransfer.setData(ITEM_DRAG_TYPE, item.id);
     event.dataTransfer.effectAllowed = 'move';
@@ -44,6 +46,7 @@ export const ItemCard = memo(function ItemCard({ item, project, showProject }: P
           {item.title}
         </a>
       </h4>
+      <StoryLine story={story} />
       <p className="item-meta">
         <span className={`kind kind-${item.kind}`}>{kindName(project, item)}</span>
         <span className="stage">{stageName(project, item)}</span>

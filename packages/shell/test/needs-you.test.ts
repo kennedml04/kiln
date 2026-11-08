@@ -42,6 +42,8 @@ test('a person answers a blocking Ask in Needs you, and the badge on every page 
   await ask.getByText('The board layout depends on it.').waitFor();
   await ask.getByText('Blocking').waitFor();
   await ask.getByRole('link', { name: 'Draw the columns' }).waitFor();
+  await ask.getByText('Home board', { exact: true }).waitFor();
+  await ask.getByText('Show every Project on one board.').waitFor();
   assert.equal(await ask.getByRole('radio', { name: 'SQLite' }).isChecked(), true, 'the recommendation is chosen to start with');
 
   await ask.getByRole('radio', { name: 'Tracker' }).check();

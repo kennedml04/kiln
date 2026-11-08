@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import type { Digest, ExitStatus, Item, Project, ThreadEntry, ThreadMessageRequest } from '@kiln/widget-sdk';
 import { followLink, projectPath } from '../router.ts';
 import { addThreadEntries, api, useStore } from '../store.ts';
+import { StoryLine, useStoryOf } from './StoryLine.tsx';
 import { UsagePanel } from './Usage.tsx';
 
 const NO_ENTRIES: ThreadEntry[] = [];
@@ -145,6 +146,7 @@ export function MessageForm({ messagesPath }: { messagesPath: string }) {
 
 export function ItemView({ itemId }: { itemId: string }) {
   const item = useStore((s) => s.items[itemId]);
+  const story = useStoryOf(item);
   const project = useStore((s) => (item ? s.projects[item.projectId] : undefined));
   const thread = useStore((s) => s.threads[itemId] ?? NO_ENTRIES);
   const [error, setError] = useState<string>();
@@ -189,6 +191,7 @@ export function ItemView({ itemId }: { itemId: string }) {
   return (
     <article className="item-view">
       <h2>{item.title}</h2>
+      <StoryLine story={story} />
       {item.archived ? (
         <p className="archived-badge">
           <span className="badge">Archived {new Date(item.archived.at).toLocaleString()}</span>{' '}

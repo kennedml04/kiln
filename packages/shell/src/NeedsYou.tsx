@@ -5,6 +5,7 @@ import { GATE_REJECT, PERMISSION_REVIEW_ANSWERS, chatOfThread, projectOfThread, 
 import { InboxIcon } from './Icons.tsx';
 import { chatPath, followLink, itemPath, projectThreadPath, usePath } from './router.ts';
 import { api, openAsks, useStore } from './store.ts';
+import { StoryLine, useStoryOf } from './work/StoryLine.tsx';
 
 const TYPE_NAMES: Record<Ask['type'], string> = {
   decision: 'Decision',
@@ -50,6 +51,7 @@ function describeProposal(proposal: Proposal, project: Project | undefined, item
 function AskSubject({ ask }: { ask: Ask }) {
   const item = useStore((s) => s.items[ask.itemId]);
   const project = useStore((s) => s.projects[ask.projectId]);
+  const story = useStoryOf(item);
   const chatId = chatOfThread(ask.itemId);
   const chat = useStore((s) => (chatId === undefined ? undefined : s.chats[chatId]));
   if (chatId !== undefined) {
@@ -67,9 +69,13 @@ function AskSubject({ ask }: { ask: Ask }) {
     );
   }
   return (
-    <a href={itemPath(ask.itemId)} onClick={followLink}>
-      {item?.title ?? ask.itemId}
-    </a>
+    <>
+      <a href={itemPath(ask.itemId)} onClick={followLink}>
+        {item?.title ?? ask.itemId}
+      </a>
+      {story ? <StoryLine story={story} /> : null}
+      {item?.kind === 'story' ? <StoryLine story={item} withTitle={false} /> : null}
+    </>
   );
 }
 
