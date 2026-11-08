@@ -10,7 +10,7 @@ How to run it, from the repo root in PowerShell:
 
 The Widget refuses OpenCode 2.x; check `opencode --version` first.
 
-**Blocked by:** kiln-v1 23 (merged)
+**Blocked by:** kiln-v1/23 (merged)
 
 **Status:** wontfix
 

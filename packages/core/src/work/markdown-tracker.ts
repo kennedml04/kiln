@@ -79,8 +79,8 @@ function resolveBlockers(line: string | undefined, story: string, file: string, 
   const text = line?.replace(/\([^)]*\)/g, ' ').trim();
   if (!text || /^(none\b|n\/a|-|—)/i.test(text)) return undefined;
   const keys: string[] = [];
-  for (const token of text.split(/[\s,;]+/).filter(Boolean)) {
-    const match = BLOCKER.exec(token.replace(/[.`*]+$/g, '').replace(/^`/, ''));
+  for (const token of text.split(/[\s,;]+/).map((t) => t.replace(/^[`*]+/, '').replace(/[.`*]+$/g, '')).filter(Boolean)) {
+    const match = BLOCKER.exec(token);
     const found = match
       ? [...known].find((key) => {
           const [, s, n] = key.split('/');
