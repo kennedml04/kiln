@@ -31,8 +31,7 @@ test('Stop all asks first, then pauses the running work and the queue; Resume co
   await start(kiln, running!);
   await start(kiln, waiting!);
   const page = await openShell(t, kiln);
-  await card(page, 'Running', 'Keep going').waitFor();
-  await card(page, 'Up next', 'Wait your turn').waitFor();
+  await card(page, 'Running', 'Home board').getByText('Keep going').waitFor();
 
   await page.getByRole('button', { name: 'Stop all' }).click();
   const confirm = page.getByRole('alertdialog', { name: 'Stop all?' });
@@ -43,17 +42,34 @@ test('Stop all asks first, then pauses the running work and the queue; Resume co
   await confirm.getByRole('button', { name: 'Stop everything' }).click();
 
   await page.getByRole('status').filter({ hasText: 'Everything is stopped' }).waitFor();
-  await card(page, 'Running', 'Keep going').getByText('Paused').waitFor();
-  await card(page, 'Up next', 'Wait your turn').waitFor();
+  await card(page, 'Running', 'Home board').getByText('Paused').waitFor();
   const [session] = await kiln.api<SessionInfo[]>('GET', `/api/sessions?item=${encodeURIComponent(running!.id)}`);
   assert.equal(session?.state, 'paused');
 
   await page.getByRole('button', { name: 'Resume' }).click();
 
   await page.getByRole('button', { name: 'Stop all' }).waitFor();
-  await card(page, 'Running', 'Keep going').getByText('Paused').waitFor({ state: 'detached' });
+  await card(page, 'Running', 'Home board').getByText('Paused').waitFor({ state: 'detached' });
   const [after] = await kiln.api<SessionInfo[]>('GET', `/api/sessions?item=${encodeURIComponent(running!.id)}`);
   assert.equal(after?.state, 'running');
+});
+
+test('Up next and Running show Story cards: shipped count, running Ticket as a sub-row, Tickets never alone', async (t) => {
+  const kiln = await startTestKiln(t);
+  await kiln.installFakeAgent({ script: [{ do: 'wait_for_message' }] });
+  const [running, queued] = await seedTickets(kiln, ['Doing now', 'Doing later']);
+  await kiln.api('PUT', '/api/scheduler/pools/agents', { size: 1 });
+  await start(kiln, running!);
+  await start(kiln, queued!);
+  const page = await openShell(t, kiln);
+
+  const story = card(page, 'Running', 'Home board');
+  await story.waitFor();
+  await story.getByText(/\d of 4 shipped/).waitFor();
+  await story.getByText('Doing now').waitFor();
+  assert.equal(await card(page, 'Running', 'Doing now').count(), 0);
+  assert.equal(await column(page, 'Up next').getByRole('article').count(), 0);
+  assert.equal(await card(page, 'Up next', 'Doing later').count(), 0);
 });
 
 test('dragging within Up next changes the start order, and the board shows it live', async (t) => {
@@ -70,18 +86,23 @@ test('dragging within Up next changes the start order, and the board shows it li
   for (const ticket of [first!, ...queued]) await start(kiln, ticket);
   const page = await openShell(t, kiln);
   const order = () => column(page, 'Up next').getByRole('article').evaluateAll((cards) => cards.map((c) => c.getAttribute('aria-label')));
-  await card(page, 'Up next', 'Newer').waitFor();
-  assert.deepEqual(await order(), ['Older', 'Newer']);
+  await card(page, 'Up next', 'Story Newer').waitFor();
+  assert.deepEqual(await order(), ['Story Older', 'Story Newer']);
 
-  await card(page, 'Up next', 'Newer').dragTo(card(page, 'Up next', 'Older'));
+  await card(page, 'Up next', 'Story Newer').dragTo(card(page, 'Up next', 'Story Older'));
 
   await page.waitForFunction(() => {
     const cards = document.querySelectorAll('[aria-label="Up next"] article');
-    return cards[0]?.getAttribute('aria-label') === 'Newer';
+    return cards[0]?.getAttribute('aria-label') === 'Story Newer';
   });
-  assert.deepEqual(await order(), ['Newer', 'Older']);
+  assert.deepEqual(await order(), ['Story Newer', 'Story Older']);
   const state = await kiln.api<SchedulerState>('GET', '/api/scheduler');
   assert.deepEqual(state.queue.map((q) => q.itemId), [queued[1]!.id, queued[0]!.id]);
+
+  await page.getByRole('button', { name: 'Move Story Newer down' }).click();
+
+  await page.waitForFunction(() => document.querySelector('[aria-label="Up next"] article')?.getAttribute('aria-label') === 'Story Older');
+  assert.deepEqual(await order(), ['Story Older', 'Story Newer']);
 });
 
 test('an Admin changes a pool\'s size in Settings', async (t) => {

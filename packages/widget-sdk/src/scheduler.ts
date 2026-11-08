@@ -31,12 +31,33 @@ export interface QueueEntry {
   held?: string;
 }
 
+/** One Story's place on the board: its progress and what is running or waiting in it. */
+export interface StoryEntry {
+  storyId: string;
+  projectId: string;
+  inFlight: boolean;
+  parked: boolean;
+  started: boolean;
+  maintenance: boolean;
+  /** Tickets shipped / all Tickets. */
+  shipped: number;
+  total: number;
+  /** Items with a Session running now (its Tickets, or the Story itself). */
+  running: string[];
+  /** Tickets waiting on a person. */
+  waiting: string[];
+  /** The Ticket that will start next, if any. */
+  next?: string;
+}
+
 export interface SchedulerState {
   /** True after Stop all, until a person resumes: no Session starts and running ones are paused. */
   paused: boolean;
   pools: Pool[];
   /** In start order. */
   queue: QueueEntry[];
+  /** Stories with work waiting, running or parked, in the person's order. */
+  stories: StoryEntry[];
   limits: StoryLimits;
 }
 

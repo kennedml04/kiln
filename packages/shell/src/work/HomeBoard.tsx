@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import type { Item, Project, RunState } from '@kiln/widget-sdk';
+import type { Item, Project, RunState, StoryEntry } from '@kiln/widget-sdk';
 import { followLink, projectPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { BoardMenu } from './BoardMenu.tsx';
@@ -7,6 +7,7 @@ import { DemoControls, useDemo } from './Demo.tsx';
 import { ImportProject } from './ImportProject.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 import { NewProject } from './NewProject.tsx';
+import { StoryCard } from './StoryCard.tsx';
 
 const RUN_STATES: { id: RunState; name: string }[] = [
   { id: 'backlog', name: 'Backlog' },
@@ -36,9 +37,29 @@ function AddProject() {
   );
 }
 
-/** Up next in start order. Dropping a card on another moves it just before that one. */
-function UpNext({ items, projects }: { items: Item[]; projects: Record<string, Project> }) {
+/** The Stories Up next lists: work waiting and nothing running. A Project's board passes its own. */
+export function upNextStories(stories: StoryEntry[], items: Record<string, Item>, projectId?: string) {
+  return stories.filter(
+    (e) =>
+      (!projectId || e.projectId === projectId) &&
+      !e.running.length &&
+      Boolean(e.next || items[e.storyId]?.runState === 'up-next'),
+  );
+}
+
+/** Up next in Story order. Dropping a Story on another moves it just before that one; ▲ ▼ move it one place. */
+export function UpNext({ stories, projects, projectId }: { stories: StoryEntry[]; projects: Record<string, Project>; projectId?: string }) {
+  const items = useStore((s) => s.items);
   const [error, setError] = useState<string>();
+  const ids = stories.map((e) => e.storyId);
+  const send = async (order: string[]) => {
+    setError(undefined);
+    try {
+      await api('PUT', '/api/scheduler/queue', projectId ? { order, projectId } : { order });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
   const onDragOver = (event: DragEvent) => {
     if (event.dataTransfer.types.includes(ITEM_DRAG_TYPE)) event.preventDefault();
   };
@@ -46,25 +67,32 @@ function UpNext({ items, projects }: { items: Item[]; projects: Record<string, P
     event.preventDefault();
     event.stopPropagation();
     const id = event.dataTransfer.getData(ITEM_DRAG_TYPE);
-    if (!id || id === targetId || !items.some((i) => i.id === id)) return;
-    const order = items.map((i) => i.id).filter((i) => i !== id);
+    if (!id || id === targetId || !ids.includes(id)) return;
+    const order = ids.filter((i) => i !== id);
     const at = targetId ? order.indexOf(targetId) : order.length;
     order.splice(at < 0 ? order.length : at, 0, id);
-    setError(undefined);
-    try {
-      await api('PUT', '/api/scheduler/queue', { order });
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    await send(order);
+  };
+  const move = (index: number) => (direction: -1 | 1) => {
+    const order = [...ids];
+    [order[index], order[index + direction]] = [order[index + direction]!, order[index]!];
+    return send(order);
   };
   return (
     <section className="column" aria-label="Up next" onDragOver={onDragOver} onDrop={dropBefore(undefined)}>
       <h3>
-        Up next <span className="count">{items.length}</span>
+        Up next <span className="count">{stories.length}</span>
       </h3>
-      {items.map((item) => (
-        <div key={item.id} onDragOver={onDragOver} onDrop={dropBefore(item.id)}>
-          <ItemCard item={item} project={projects[item.projectId]} showProject />
+      {stories.map((entry, i) => (
+        <div key={entry.storyId} onDragOver={onDragOver} onDrop={dropBefore(entry.storyId)}>
+          <StoryCard
+            entry={entry}
+            items={items}
+            project={projects[entry.projectId]}
+            showProject={!projectId}
+            onMove={move(i)}
+            canMove={{ up: i > 0, down: i < stories.length - 1 }}
+          />
         </div>
       ))}
       {error ? <p role="alert">{error}</p> : null}
@@ -76,16 +104,24 @@ function UpNext({ items, projects }: { items: Item[]; projects: Record<string, P
 export function HomeBoard() {
   const projects = useStore((s) => s.projects);
   const items = useStore((s) => s.items);
-  const queue = useStore((s) => s.scheduler?.queue);
+  const stories = useStore((s) => s.scheduler?.stories);
   const demo = useDemo();
   const columns = useMemo(() => {
     const grouped = new Map<RunState, Item[]>(RUN_STATES.map((r) => [r.id, []]));
-    for (const item of Object.values(items)) if (!item.archived) grouped.get(item.runState)?.push(item);
-    // Up next shows the scheduler's start order; anything it doesn't know yet goes last.
-    const position = new Map((queue ?? []).map((entry, i) => [entry.itemId, i]));
-    grouped.get('up-next')!.sort((a, b) => (position.get(a.id) ?? Infinity) - (position.get(b.id) ?? Infinity));
+    const isMaintenanceTicket = (i: Item) => i.kind === 'ticket' && Boolean(i.parentId && items[i.parentId]?.maintenance);
+    for (const item of Object.values(items)) {
+      if (item.archived) continue;
+      // Stories stand for their Tickets in Up next and Running; Tickets show on their own only in Backlog,
+      // Waiting, and Shipped for Maintenance.
+      if (item.runState === 'up-next' && (item.kind === 'story' || item.kind === 'ticket')) continue;
+      if (item.runState === 'running' && (item.kind === 'story' || item.kind === 'ticket')) continue;
+      if (item.runState === 'shipped' && item.kind === 'ticket' && !isMaintenanceTicket(item)) continue;
+      grouped.get(item.runState)?.push(item);
+    }
     return grouped;
-  }, [items, queue]);
+  }, [items]);
+  const runningStories = (stories ?? []).filter((e) => e.running.length);
+  const upNext = upNextStories(stories ?? [], items);
   const projectList = Object.values(projects);
 
   return (
@@ -115,12 +151,18 @@ export function HomeBoard() {
       <div className="board">
         {RUN_STATES.map((runState) =>
           runState.id === 'up-next' ? (
-            <UpNext key={runState.id} items={columns.get('up-next')!} projects={projects} />
+            <UpNext key={runState.id} stories={upNext} projects={projects} />
           ) : (
             <section key={runState.id} className="column" aria-label={runState.name}>
               <h3>
-                {runState.name} <span className="count">{columns.get(runState.id)!.length}</span>
+                {runState.name}{' '}
+                <span className="count">{columns.get(runState.id)!.length + (runState.id === 'running' ? runningStories.length : 0)}</span>
               </h3>
+              {runState.id === 'running'
+                ? runningStories.map((entry) => (
+                    <StoryCard key={entry.storyId} entry={entry} items={items} project={projects[entry.projectId]} showProject />
+                  ))
+                : null}
               {columns.get(runState.id)!.map((item) => (
                 <ItemCard key={item.id} item={item} project={projects[item.projectId]} showProject />
               ))}

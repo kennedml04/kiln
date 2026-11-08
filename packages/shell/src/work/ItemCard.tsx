@@ -6,7 +6,7 @@ import { UsageLine } from './Usage.tsx';
 
 export const ITEM_DRAG_TYPE = 'application/x-kiln-item';
 
-const stageName = (project: Project | undefined, item: Item) =>
+export const stageName = (project: Project | undefined, item: Item) =>
   project?.workflow.kinds.find((k) => k.id === item.kind)?.stages.find((s) => s.id === item.stage)?.name ?? item.stage;
 
 /**

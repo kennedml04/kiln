@@ -2,9 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Page } from 'playwright';
 import type { Project } from '@kiln/widget-sdk';
-import { startTestKiln } from '@kiln/testing';
+import { startTestKiln, type TempRepo } from '@kiln/testing';
 import { openShell } from '@kiln/testing/browser';
-import { seedScratch } from '@kiln/testing/scratch';
+import { seedScratch, writeRepoFile } from '@kiln/testing/scratch';
+
+/** The seed plus a shipped Story: Shipped recently lists Stories, not their Tickets. */
+function seedShipped(repo: TempRepo) {
+  seedScratch(repo);
+  writeRepoFile(repo, '.scratch/old-story/story.md', ['---', 'title: Old story', 'epic: board-as-home', 'stage: shipped', 'blocked-by: []', '---', '', 'Already out.', ''].join(String.fromCharCode(10)));
+  repo.git('add', '.');
+  repo.git('commit', '-q', '-m', 'Seed shipped Story');
+}
 
 const column = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
 const sizes = { desktop: { width: 1280, height: 800 }, phone: { width: 390, height: 844 } };
@@ -12,12 +20,13 @@ const sizes = { desktop: { width: 1280, height: 800 }, phone: { width: 390, heig
 for (const [name, viewport] of Object.entries(sizes)) {
   test(`Home: Reset board empties Shipped, shows the toast, Undo puts the cards back (${name})`, async (t) => {
     const kiln = await startTestKiln(t);
-    seedScratch(kiln.repo);
-    await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+    seedShipped(kiln.repo);
+    const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
     const page = await openShell(t, kiln, '/', { viewport });
     const shipped = column(page, 'Shipped recently').getByRole('article');
     await shipped.first().waitFor();
-    const n = await shipped.count();
+    // Reset archives every shipped Item, Tickets too, though the board lists only Stories.
+    const n = (await kiln.api<{ runState: string }[]>('GET', `/api/projects/${project.id}/items`)).filter((i) => i.runState === 'shipped').length;
 
     const menu = page.getByRole('button', { name: 'Board menu' });
     const box = await menu.boundingBox();
@@ -46,23 +55,24 @@ for (const [name, viewport] of Object.entries(sizes)) {
 
   test(`Home: Undo brings the cards back (${name})`, async (t) => {
     const kiln = await startTestKiln(t);
-    seedScratch(kiln.repo);
-    await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
+    seedShipped(kiln.repo);
+    const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
     const page = await openShell(t, kiln, '/', { viewport });
     const shipped = column(page, 'Shipped recently').getByRole('article');
     await shipped.first().waitFor();
-    const n = await shipped.count();
+    // Reset archives every shipped Item, Tickets too, though the board lists only Stories.
+    const n = (await kiln.api<{ runState: string }[]>('GET', `/api/projects/${project.id}/items`)).filter((i) => i.runState === 'shipped').length;
     await page.getByRole('button', { name: 'Board menu' }).click();
     await page.getByRole('menuitem', { name: /Reset board/ }).click();
     await page.getByRole('button', { name: 'Undo' }).click();
     await page.getByText(`Put back ${n} Item`).waitFor();
     await shipped.first().waitFor();
-    assert.equal(await shipped.count(), n);
+    assert.equal(await shipped.count(), 1);
   });
 
   test(`Project board: the menu sits beside the name and Reset hides its shipped cards (${name})`, async (t) => {
     const kiln = await startTestKiln(t);
-    seedScratch(kiln.repo);
+    seedShipped(kiln.repo);
     const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
     const page = await openShell(t, kiln, `/projects/${project.id}`, { viewport });
     const shipped = column(page, 'Ticket Shipped').getByRole('article');
@@ -79,7 +89,7 @@ for (const [name, viewport] of Object.entries(sizes)) {
 test('a Viewer has no Reset board entry', async (t) => {
   const kiln = await startTestKiln(t, { login: 'tailscale' });
   await kiln.api('PUT', '/api/users/vic', { role: 'viewer' });
-  seedScratch(kiln.repo);
+  seedShipped(kiln.repo);
   await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
   const page = await openShell(t, kiln, '/', { as: 'vic' });
   await column(page, 'Shipped recently').getByRole('article').first().waitFor();

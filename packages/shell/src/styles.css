@@ -2291,6 +2291,39 @@ pre {
 .toast-error { border-color: var(--danger); }
 @media (max-width: 860px) { .toast-area { left: 0; right: 0; bottom: 0; max-width: none; padding: 0.5rem; } .toast { width: 100%; box-sizing: border-box; } }
 
+.story-card .story-sub-row {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted, var(--text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-card .sub-label {
+  font-weight: 550;
+  color: var(--text);
+}
+
+.story-card .shipped-count,
+.story-card .started {
+  background: var(--surface-3, var(--surface-2));
+}
+
+.story-card .story-move {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.15rem;
+}
+
+.story-card .story-move button {
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 .story-line {
   margin: 0.15rem 0;
   min-width: 0;

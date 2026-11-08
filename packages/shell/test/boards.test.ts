@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import type { DemoState, Project } from '@kiln/widget-sdk';
-import { startTestKiln, type TestKiln } from '@kiln/testing';
+import { startTestKiln, type TempRepo, type TestKiln } from '@kiln/testing';
 import { openShell } from '@kiln/testing/browser';
 import { readRepoFile, seedScratch, writeRepoFile } from '@kiln/testing/scratch';
 
@@ -12,16 +12,25 @@ const column = (page: Page, name: string) => page.getByRole('region', { name, ex
 const card = (page: Page, columnName: string, title: string) =>
   column(page, columnName).getByRole('article', { name: title, exact: true });
 
+/** The seed plus a shipped Story: Shipped recently lists Stories, not their Tickets. */
+function seedShipped(repo: TempRepo) {
+  seedScratch(repo);
+  writeRepoFile(repo, '.scratch/old-story/story.md', ['---', 'title: Old story', 'epic: board-as-home', 'stage: shipped', 'blocked-by: []', '---', '', 'Already out.', ''].join(String.fromCharCode(10)));
+  repo.git('add', '.');
+  repo.git('commit', '-q', '-m', 'Seed shipped Story');
+}
+
 test('the home board and the Project view show the same Items in the same Stages', async (t) => {
   const kiln = await startTestKiln(t);
-  seedScratch(kiln.repo);
+  seedShipped(kiln.repo);
   const project = await kiln.api<Project>('POST', '/api/projects', { path: kiln.repo.path });
   const page = await openShell(t, kiln);
 
   await card(page, 'Backlog', 'Home board').getByText('Spec').waitFor();
   await card(page, 'Backlog', 'Board as home').getByText('Roadmap').waitFor();
   await card(page, 'Backlog', 'Draw the columns').getByText('Implementing').waitFor();
-  await card(page, 'Shipped recently', 'Live updates').waitFor();
+  await card(page, 'Shipped recently', 'Old story').waitFor();
+  assert.equal(await card(page, 'Shipped recently', 'Live updates').count(), 0);
 
   await page.getByRole('link', { name: project.name }).first().click();
 

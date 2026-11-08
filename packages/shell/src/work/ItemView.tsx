@@ -1,7 +1,7 @@
 // One Item: its details, its latest Session's branch and Exit status, and its live Thread.
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { Digest, ExitStatus, Item, Project, ThreadEntry, ThreadMessageRequest } from '@kiln/widget-sdk';
-import { followLink, projectPath } from '../router.ts';
+import { followLink, itemPath, projectPath } from '../router.ts';
 import { addThreadEntries, api, useStore } from '../store.ts';
 import { StoryLine, useStoryOf } from './StoryLine.tsx';
 import { UsagePanel } from './Usage.tsx';
@@ -50,6 +50,32 @@ function describe(entry: ThreadEntry, project: Project | undefined, item: Item |
     default:
       return entry.type.replace(/^session\./, '').replaceAll('_', ' ');
   }
+}
+
+/** A Story's checklist: its Tickets in number order with their Stages. */
+function StoryTickets({ story, project }: { story: Item; project: Project | undefined }) {
+  const items = useStore((s) => s.items);
+  const number = (i: Item) => Number.parseInt(/d+/.exec(i.key.split('/').pop() ?? '')?.[0] ?? '', 10) || 0;
+  const tickets = story.childIds
+    .map((id) => items[id])
+    .filter((i): i is Item => i?.kind === 'ticket')
+    .sort((a, b) => number(a) - number(b));
+  if (!tickets.length) return null;
+  return (
+    <section aria-label="Tickets" className="story-tickets">
+      <h3>Tickets</h3>
+      <ol>
+        {tickets.map((t) => (
+          <li key={t.id}>
+            <a href={itemPath(t.id)} onClick={followLink}>
+              {t.title}
+            </a>{' '}
+            <span className="stage">{stageName(project, t)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 function ExitPanel({ exit }: { exit: ExitStatus | undefined }) {
@@ -239,6 +265,7 @@ export function ItemView({ itemId }: { itemId: string }) {
       </section>
       {run?.usage ? <UsagePanel usage={run.usage} /> : null}
       <ExitPanel exit={run?.exit} />
+      {item.kind === 'story' ? <StoryTickets story={item} project={project} /> : null}
       <section className="thread">
         <h3>Thread</h3>
         <ThreadLog thread={thread} project={project} item={item} />

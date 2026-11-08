@@ -23,6 +23,7 @@ import {
 } from '@kiln/widget-sdk';
 import type { EventBus } from '../events.ts';
 import { WorkError, type Work } from '../work/work.ts';
+import { storyEntries } from './story-entries.ts';
 import type { SessionManager } from './session-manager.ts';
 
 export interface Scheduler {
@@ -226,6 +227,15 @@ export function createScheduler({ db, bus, work, sessions, grantedPools = () => 
     paused: isPaused(),
     pools: [...poolSizes()].map(([name, size]): Pool => ({ name, size, active: activeIn(name) })),
     queue: queue(),
+    stories: storyEntries({
+      items: work.items(),
+      queue: queue(),
+      order: (selectStoryOrder.all() as unknown as { story_id: string; project_id: string; position: number }[]).map((r) => ({
+        storyId: r.story_id,
+        projectId: r.project_id,
+        position: r.position,
+      })),
+    }),
     limits: limits(),
   });
 

@@ -4,6 +4,7 @@ import { followLink, projectThreadPath } from '../router.ts';
 import { api, useStore } from '../store.ts';
 import { BoardMenu } from './BoardMenu.tsx';
 import { DemoControls, ReplayNote, useDemo } from './Demo.tsx';
+import { UpNext, upNextStories } from './HomeBoard.tsx';
 import { ITEM_DRAG_TYPE, ItemCard } from './ItemCard.tsx';
 
 function NewItemForm({ project, items }: { project: Project; items: Item[] }) {
@@ -126,6 +127,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const allItems = useStore((s) => s.items);
   const [notice, setNotice] = useState<string>();
   const demo = useDemo();
+  const stories = useStore((s) => s.scheduler?.stories);
+  const storyItems = useStore((s) => s.items);
   const items = useMemo(() => Object.values(allItems).filter((i) => i.projectId === projectId && !i.archived), [allItems, projectId]);
 
   if (!project) return <p>Loading Project…</p>;
@@ -170,6 +173,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
           </button>
         </p>
       ) : null}
+      <div className="board">
+        <UpNext stories={upNextStories(stories ?? [], storyItems, projectId)} projects={{ [project.id]: project }} projectId={projectId} />
+      </div>
       {project.workflow.kinds.map((kind) => (
         <section key={kind.id} className="kind-row" aria-label={`${kind.name} Items`}>
           <h3>{kind.name}</h3>
