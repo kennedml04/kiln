@@ -2274,6 +2274,31 @@
       "action": "other_commands",
       "match": "Out-Null",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git worktree prune",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "Group-Object *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "uniq",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "cd ../../../widget-sdk/src",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git diff *",
+      "decision": "allow"
     }
   ]
 }
