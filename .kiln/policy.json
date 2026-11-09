@@ -2304,6 +2304,16 @@
       "action": "other_commands",
       "match": "git rebase *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "rm .tmp-fix.mjs",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "mkdir -p *",
+      "decision": "allow"
     }
   ]
 }
