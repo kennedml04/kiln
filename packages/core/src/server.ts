@@ -584,11 +584,13 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     });
 
   // Local mode serves 127.0.0.1 only. Tailscale mode also serves the Tailscale addresses, on the same port.
-  const servers = [createServer(handle)];
+  // Keep idle connections longer than a client pauses between calls, so a reused socket is not reset mid-request.
+  const newServer = () => Object.assign(createServer(handle), { keepAliveTimeout: 65_000 });
+  const servers = [newServer()];
   await listen(servers[0]!, options.port, '127.0.0.1');
   port = (servers[0]!.address() as AddressInfo).port;
   for (const address of await login.bindAddresses()) {
-    const server = createServer(handle);
+    const server = newServer();
     await listen(server, port, address);
     servers.push(server);
   }

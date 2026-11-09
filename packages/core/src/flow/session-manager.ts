@@ -151,6 +151,8 @@ export interface SessionManager {
 
 /** How long releaseItem waits for an Agent to report its Session stopped. */
 const RELEASE_WAIT_MS = 10_000;
+/** `run.lastStepAt` reaches the board at most this often per Session. */
+const STEP_PUBLISH_MS = 5_000;
 
 interface Live {
   info: SessionInfo;
@@ -166,6 +168,9 @@ interface Live {
   queue: Promise<void>;
   /** Stops the Session if the Agent goes quiet after Exit feedback. */
   idleTimer?: ReturnType<typeof setTimeout>;
+  /** Throttle for `run.lastStepAt`: when it last published (ms) and the trailing publish. */
+  stepPublishedAt?: number;
+  stepTimer?: ReturnType<typeof setTimeout>;
   /** Whether the Session has written a Digest since it last started or came back. */
   digested: boolean;
   /** Why the Session is paused (saved, so a restart knows whether to resume it). */
@@ -248,6 +253,7 @@ const toRun = (info: SessionInfo): ItemRun => ({
   branch: info.branch,
   ...(info.exit ? { exit: info.exit } : {}),
   ...(info.usage ? { usage: info.usage } : {}),
+  ...(info.lastStepAt ? { lastStepAt: info.lastStepAt } : {}),
 });
 
 /** The Stage a Project Thread Session runs in: no worktree, no Exit, and the read-only Policy. */
@@ -691,6 +697,8 @@ export function createSessionManager({
   /** Every Session end: save the state, then make sure a Digest is left behind. */
   const end = async (session: Live, state: SessionState, note?: string) => {
     const { info } = session;
+    clearTimeout(session.stepTimer);
+    session.stepTimer = undefined;
     Object.assign(info, { state, endedAt: new Date().toISOString() });
     save(info);
     await recordLocalResult(session);
@@ -759,6 +767,25 @@ export function createSessionManager({
     else await work.advance(info.itemId);
   };
 
+  /** A step: keep the live `lastStepAt`, and publish it at most once per STEP_PUBLISH_MS, the last one on a trailing timer. */
+  const noteStep = (session: Live) => {
+    const { info } = session;
+    if (!ACTIVE.has(info.state)) return;
+    info.lastStepAt = new Date().toISOString();
+    if (session.stepTimer) return;
+    const wait = STEP_PUBLISH_MS - (Date.now() - (session.stepPublishedAt ?? -Infinity));
+    const publish = () => {
+      session.stepTimer = undefined;
+      session.stepPublishedAt = Date.now();
+      work.setRun(info.itemId, toRun(info));
+    };
+    if (wait <= 0) publish();
+    else {
+      session.stepTimer = setTimeout(publish, wait);
+      session.stepTimer.unref?.();
+    }
+  };
+
   widgets.routeAgentEvents((widgetId, report: AgentEventReport) => {
     const session = live.get(report.sessionId);
     if (!session) return false;
@@ -770,6 +797,7 @@ export function createSessionManager({
     clearTimeout(session.idleTimer);
     bus.publish(`session.${event.kind}`, { ...event, ...ref(session.info) });
     // An Agent that reports its Digest as an event (not through write_digest) gets it stored too.
+    if (event.kind === 'progress') noteStep(session);
     if (event.kind === 'digest_written' && event.digest.trim()) {
       recordDigest(session, { decided: [], changed: [], open: [], summary: event.digest.trim() }, 'session');
     }

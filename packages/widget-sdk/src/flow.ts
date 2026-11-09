@@ -78,6 +78,8 @@ export interface SessionInfo {
   exit?: ExitStatus;
   /** Live usage, once a turn is reported. */
   usage?: SessionUsage;
+  /** Live only, never stored: the time of the latest step. */
+  lastStepAt?: string;
 }
 
 /** What an Item shows about its latest Session: shown on the Item, carried in `item.updated`. */
@@ -90,6 +92,8 @@ export interface ItemRun {
   exit?: ExitStatus;
   /** The Session's live usage in its Budget's unit, plus tokens, context size and cap warnings. */
   usage?: SessionUsage;
+  /** The time of the Session's latest step (any `session.progress`, tool call or note), while it runs. */
+  lastStepAt?: string;
 }
 
 /** `.kiln/settings.json` in the Project's repo (read from the default branch's checkout). */

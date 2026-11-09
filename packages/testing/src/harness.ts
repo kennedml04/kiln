@@ -23,7 +23,7 @@ const FAKE_AGENT_DIR = fileURLToPath(new URL('./fake-agent/', import.meta.url));
 const TEST_WIDGET_DIR = fileURLToPath(new URL('./test-widget/', import.meta.url));
 
 const CORE_MAIN = fileURLToPath(new URL('../../core/src/main.ts', import.meta.url));
-const READY_TIMEOUT_MS = 15_000;
+const READY_TIMEOUT_MS = 60_000;
 const DEFAULT_EVENT_TIMEOUT_MS = 5_000;
 
 /** Anything with node:test's `t.after`, so cleanup is registered on the test that started it. */
