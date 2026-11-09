@@ -35,6 +35,7 @@ import type {
   FinishReason,
   Item,
   ItemRun,
+  LocalSessionModel,
   Project,
   RoleModel,
   ScratchChat,
@@ -326,6 +327,11 @@ export interface SessionManagerDeps {
   stageModel?: (projectId: string, kind: string, stage: string) => string | undefined;
   /** The id of the Budget a model draws from, if any: it decides which Agent offers a Stage's model. */
   budgetOf?: (model: string) => string | undefined;
+  /**
+   * The local variant a model names, if it is one (it throws a 409 for a disabled one): such a
+   * Session starts on an Agent that runs local variants, with the variant in `SessionStart.local`.
+   */
+  localModel?: (model: string) => LocalSessionModel | undefined;
   /** Local-first routing (Ticket 07), read when a Session starts. Unset: every Stage runs on its own model. */
   local?: () => { routing: Routing; variants: () => Variant[]; /** Whether local models are set up at all (a server is configured). */ inUse: () => boolean };
   /** Holds Items at Gate Stages once their Exit is met, and seeds rework Sessions. */
@@ -356,6 +362,7 @@ export function createSessionManager({
   upNext = () => [],
   stageModel,
   budgetOf,
+  localModel,
   gates,
   local,
   draftStory,
@@ -449,15 +456,19 @@ export function createSessionManager({
       ...(agent.model ? [agent.model] : []),
       ...(agent.models ?? []).map((m) => m.id),
     ];
-    const offers =
-      ready.find((r) => wanted && runs(r.agent).includes(wanted)) ??
-      ready.find((r) => budget && runs(r.agent).some((m) => budgetOf?.(m) === budget));
+    // A local variant runs on an Agent that runs local variants, never on another model of its Budget.
+    const local = wanted ? localModel?.(wanted) : undefined;
+    const offers = local
+      ? ready.find((r) => r.agent.runsLocalVariants)
+      : (ready.find((r) => wanted && runs(r.agent).includes(wanted)) ??
+        ready.find((r) => budget && runs(r.agent).some((m) => budgetOf?.(m) === budget)));
+    if (local && !offers) throw new WorkError(409, `No Agent that runs local variants is ready to run "${wanted}"`);
     if (wanted && budget && !offers) {
       throw new WorkError(409, `No Agent is ready to run the model "${wanted}": none that is ready runs a model of its Budget`);
     }
     const pick = offers ?? ready[0];
     if (!pick) throw new WorkError(409, stage.agent ? `The Agent "${stage.agent}" is not ready` : 'No Agent is ready to run a Session');
-    return { widgetId: pick.widgetId, agentId: pick.agent.id, model: stage.model ?? pick.agent.model };
+    return { widgetId: pick.widgetId, agentId: pick.agent.id, model: stage.model ?? pick.agent.model, runsLocalVariants: pick.agent.runsLocalVariants === true };
   };
 
   /**
@@ -477,7 +488,7 @@ export function createSessionManager({
     if (pick) {
       const variant = variants().find((v) => v.id === pick.variant.id)!;
       return {
-        stage: { ...stage, model: variant.serverModelId },
+        stage: { ...stage, model: variant.id },
         attempt: { variantId: variant.id, size, startedMs: Date.now() },
         note: `Running locally on ${variant.name} (${size} Ticket): ${pick.reason}`,
       };
@@ -996,9 +1007,12 @@ export function createSessionManager({
         throw new WorkError(409, `${item.title} already has a running Session`);
       }
       const planned: ReturnType<typeof planLocal> = project ? planLocal(item, stage, project) : { stage };
-      const { widgetId, agentId, model } = pickAgent(planned.stage);
+      const { widgetId, agentId, model, runsLocalVariants } = pickAgent(planned.stage);
       // Never the Agent tool's own default: the Budget guard holds such an Item before it gets here.
       if (!model) throw new WorkError(409, `${item.title}'s ${stage.name} Stage names no model, and neither does its Agent`);
+      // A local variant (local-first Ticket 03): its Agent is told where the server is.
+      const local = localModel?.(model);
+      if (local && !runsLocalVariants) throw new WorkError(409, `The Agent "${agentId}" doesn't run local variants, so it can't run "${model}"`);
       const sessionPolicy = project ? policy.effective({ project, kind: item.kind, stage: stage.id }) : policy.chat();
       // The Project's modules as they stand now: the Session keeps these skills and servers to the end.
       const kit = project ? moduleSessionKit(readProjectFiles(project.path).modules, toolPaths()) : { skills: [], mcpServers: {} };
@@ -1060,6 +1074,7 @@ export function createSessionManager({
           policy: sessionPolicy,
           ...(kit.skills.length ? { skills: kit.skills } : {}),
           ...(Object.keys(kit.mcpServers).length ? { mcpServers: kit.mcpServers } : {}),
+          ...(local ? { local } : {}),
         },
       });
       for (const text of held.get(itemId) ?? []) send(info, text, 'person');

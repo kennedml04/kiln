@@ -196,6 +196,8 @@ export async function startCore(options: CoreOptions): Promise<RunningCore> {
     stageModel: stageModels.get,
     // Read once the usage service below exists (only when a Session is planned or started).
     budgetOf: (model) => usage.budgets().find((b) => b.models.includes(model))?.id,
+    // Read once the variant service below exists: a local variant's Session runs on the local server.
+    localModel: (model) => variants.localModel(model),
     kilnToolsUrl: () => `http://127.0.0.1:${port}${KILN_TOOLS_PATH}`,
     // `setup` is made below; this is read only when a Session starts or its Exit is checked.
     toolPaths: () => setup.settings().toolPaths,

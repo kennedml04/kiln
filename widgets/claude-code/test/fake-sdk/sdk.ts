@@ -3,9 +3,11 @@
 // Widget config (`fakeScenario`, see scenario.ts), producing the message shapes Claude Code
 // produces, and goes through the Widget's hooks and permission callback the way Claude Code does:
 // a PreToolUse hook's allow runs the tool, its deny blocks it, and ask (or no decision) calls
-// `canUseTool`. Tools really run, so files change and commits land in the worktree.
+// `canUseTool`. Tools really run, so files change and commits land in the worktree. When its env
+// names an API (`ANTHROPIC_BASE_URL`, a local Session), each turn also sends one Messages request
+// there, as Claude Code would.
 import { execSync, spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { CanUseTool, HookCallbackMatcher, Options, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { FakeLogEntry, FakeScenario, FakeStep, FakeUsage } from './scenario.ts';
@@ -77,7 +79,30 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
   let totalCost = 0;
   /** Subagent id -> the Agent tool_use id it runs under. */
   const subagents = new Map<string, string>();
-  log({ kind: 'options', options: logged(options) });
+  const env = (options.env ?? {}) as Record<string, string | undefined>;
+  const configDir = env.CLAUDE_CONFIG_DIR;
+  log({ kind: 'options', options: logged(options), ...(configDir ? { configDirFiles: existsSync(configDir) ? readdirSync(configDir) : null } : {}) });
+  /** One Messages request to the API the env names, as Claude Code makes for each model call. */
+  const callApi = async (text: string) => {
+    const base = env.ANTHROPIC_BASE_URL;
+    if (!base) return;
+    const token = env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY ?? null;
+    const url = `${base}/v1/messages`;
+    const model = String(options.model);
+    let status = 0;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ model, max_tokens: 64, messages: [{ role: 'user', content: text }] }),
+      });
+      status = res.status;
+      await res.arrayBuffer();
+    } catch {
+      status = -1;
+    }
+    log({ kind: 'api', url, model, token, status });
+  };
   // claude.exe's stand-in: a process working in the Session's folder until the query is closed.
   const holder = scenario.holdsCwd ? spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { cwd, stdio: 'ignore', windowsHide: true }) : undefined;
   const holderGone = holder ? new Promise<void>((done) => holder.once('exit', () => (log({ kind: 'exited', cwd }), done()))) : Promise.resolve();
@@ -232,13 +257,16 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
     if ('assistant' in s) {
       const { model, usage, costUsd, subagent } = s.assistant;
       assistant([{ type: 'text', text: '…' }], subagent, { model, usage });
-      const m = costByModel.get(model) ?? { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0 };
+      // Claude Code keys `modelUsage` by the model it asked for. A cloud reply names that model; a
+      // local server's reply names its own (llama-server: the GGUF file), so the two keys differ.
+      const key = env.ANTHROPIC_BASE_URL ? String(options.model) : model;
+      const m = costByModel.get(key) ?? { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0 };
       m.inputTokens += usage.input_tokens;
       m.outputTokens += usage.output_tokens;
       m.cacheReadInputTokens += usage.cache_read_input_tokens ?? 0;
       m.cacheCreationInputTokens += usage.cache_creation_input_tokens ?? 0;
       m.costUSD += costUsd;
-      costByModel.set(model, m);
+      costByModel.set(key, m);
       totalCost += costUsd;
       turn.usage.input_tokens += usage.input_tokens;
       turn.usage.output_tokens += usage.output_tokens;
@@ -295,6 +323,7 @@ export function query(params: { prompt: string | AsyncIterable<SDKUserMessage>; 
       for await (const message of prompt) {
         if (closed) break;
         log({ kind: 'user', text: userText(message) });
+        await callApi(userText(message));
         const steps = scenario.turns[turnIndex++] ?? [{ text: '(the scenario has no more turns)' }];
         await runTurn(steps);
       }

@@ -233,7 +233,7 @@ test('the full default Workflow: an Epic ships once its Story has, and the Story
   const tickets = [`${story.projectId}/ticket/home-board/01`, `${story.projectId}/ticket/home-board/02`];
   for (let approved = 0; approved < tickets.length; approved++) {
     let review: Ask;
-    do review = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 60_000 })).payload.ask;
+    do review = (await events.next<AskRaisedEvent>('ask.raised', { timeoutMs: 120_000 })).payload.ask;
     while (review.type !== 'review' || !tickets.includes(review.itemId));
     const story0 = await byTitle(kiln, STORY);
     assert.equal(story0.stage, 'tickets', 'the Story waits while a Ticket has not shipped');

@@ -335,6 +335,7 @@ await serveAgent(agent, {
       id: 'fake',
       name: 'Fake Agent',
       cacheLifetimeMs: settings.cacheLifetimeMs ?? 300_000,
+      runsLocalVariants: true,
       ...(settings.model === null ? {} : { model: settings.model ?? 'fake-model' }),
       ...(settings.models ? { models: settings.models.map((id) => ({ id, name: id })) } : {}),
     },

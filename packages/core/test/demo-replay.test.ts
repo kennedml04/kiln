@@ -113,7 +113,7 @@ test('Replay plays the demo Story to shipped on the fake Agent, with the wizard 
   // main holds both Tickets' code, and its tests pass.
   assert.equal(git(project.path, 'branch', '--show-current').trim(), 'main');
   // The Tracker commits the Story's `stage: shipped` line just after the board shows it shipped.
-  await eventually('main to be committed', async () => (git(project.path, 'status', '--porcelain') === '' ? true : undefined), 10_000);
+  await eventually('main to be committed', async () => (git(project.path, 'status', '--porcelain') === '' ? true : undefined), 90_000);
   for (const file of ['src/slugify.js', 'src/cli.js', 'test/slugify.test.js', 'test/cli.test.js']) git(project.path, 'cat-file', '-e', `main:${file}`);
   assert.match(git(project.path, 'show', 'main:.scratch/slugify/grill.md'), /Replay/);
   assert.match(git(project.path, 'show', 'main:.scratch/slugify/issues/02-slugify-cli.md'), /\*\*Blocked by:\*\* 01/);

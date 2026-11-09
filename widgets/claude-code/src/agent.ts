@@ -2,10 +2,11 @@
 // kept open across turns: Kiln's messages go in as user messages, each `result` ends a turn, and
 // interrupt, resume and stop map onto the query's own controls. Claude Code's session ids, hooks
 // and settings stay in here; the core sees only Agent events.
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CanUseTool, HookCallback, Options, PermissionResult, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, SessionStart } from '@kiln/widget-sdk';
+import type { Agent, AgentEvent, AgentMessage, AgentModel, AgentSession, EffectivePolicy, LocalSessionModel, SessionStart } from '@kiln/widget-sdk';
 import { ORG_POLICY_DEFAULT } from '@kiln/widget-sdk';
 import { SCRATCH, ownFolderOf, requestFor, type ToolPlace } from '@kiln/widget-sdk/tool-classifier';
 import { buildSkillsPlugin, removeSessionConfig, sessionConfigDir } from './skills.ts';
@@ -94,6 +95,8 @@ interface Run {
   quotaTimer?: ReturnType<typeof setInterval>;
   overageBaseline: number | null;
   usingOverage: boolean;
+  /** Set when the Session runs on a local variant, with the fresh Claude Code config folder it uses. */
+  local?: { model: LocalSessionModel; configDir: string };
   /** Settles once Claude Code's message stream has ended, i.e. its process is gone. */
   done: Promise<void>;
   /** The Session's own config folder (its skills plugin), removed when it stops. */
@@ -134,14 +137,74 @@ const claudeEnv = () => ({
   CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
 });
 
+/** What a local Session's Claude Code sends as its token: the local server wants one, any one. */
+export const LOCAL_AUTH_TOKEN = 'kiln-local';
+
+/**
+ * The environment of a Session on a local variant: the Widget's own, less every Anthropic key or
+ * login, Claude Code setting and Kiln credential, with the local server as Claude Code's API and a
+ * fresh config folder (so no saved login is found). The settings are the ones the 02 check found
+ * Claude Code needs against llama-server (.scratch/local-first/issues/02-llama-swap-messages-check.md).
+ */
+export function localClaudeEnv(parent: NodeJS.ProcessEnv, local: LocalSessionModel, configDir: string): Record<string, string> {
+  const kept = Object.entries(parent).filter((entry): entry is [string, string] => entry[1] !== undefined && !/^(ANTHROPIC_|CLAUDE|KILN_)/i.test(entry[0]));
+  const model = local.serverModelId;
+  return {
+    ...Object.fromEntries(kept),
+    CLAUDE_CONFIG_DIR: configDir,
+    ANTHROPIC_BASE_URL: local.url.replace(/\/+$/, ''),
+    ANTHROPIC_AUTH_TOKEN: LOCAL_AUTH_TOKEN,
+    // Any side call Claude Code makes under a model alias goes to the same local model.
+    ANTHROPIC_SMALL_FAST_MODEL: model,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+    // Claude Code's mid-conversation system turn makes llama-server's chat templates fail (500).
+    CLAUDE_CODE_MODEL_CAPABILITIES: '-mid_conv_system',
+    // An unknown model is assumed to have a 200K window; the real one makes Claude Code compact in time.
+    ...(local.contextSize ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(local.contextSize) } : {}),
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    DISABLE_TELEMETRY: '1',
+  };
+}
+
+/**
+ * A local turn's usage: under the variant id (it decides the local Budget), with no dollar price
+ * (Claude Code makes one up for a model it doesn't know; the local Budget counts turns).
+ */
+function localUsage(event: AgentEvent, local: LocalSessionModel): AgentEvent {
+  if (event.kind !== 'usage') return event;
+  const { costUsd: _madeUp, ...rest } = event;
+  return { ...rest, model: local.variantId };
+}
+
+/**
+ * A local server's reply names the model its own way (llama-server: the GGUF file), while Claude
+ * Code's `result.modelUsage` uses the id it asked for. Read under that id, each call is matched to
+ * its turn's totals; otherwise the turn would be counted twice, and as one call the size of the
+ * whole turn, which sets off the context alarm in every turn.
+ */
+function asServerModel(message: Record<string, unknown>, serverModelId: string): Record<string, unknown> {
+  const inner = message.message as Record<string, unknown> | undefined;
+  if (message.type !== 'assistant' || !inner || inner.model === '<synthetic>') return message;
+  return { ...message, message: { ...inner, model: serverModelId } };
+}
+
 export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCodeConfig; dataDir: string }): Agent {
   const { sdk, config } = deps;
   const runs = new Map<string, Run>();
   let permissionIds = 0;
+  /** A new, empty Claude Code config folder for one local Session, under the Widget's data folder. */
+  const freshConfigDir = (sessionId: string) => {
+    const root = join(deps.dataDir, 'local-claude-config');
+    mkdirSync(root, { recursive: true });
+    return mkdtempSync(join(root, `${sessionId}-`));
+  };
 
   const emit = (run: Run, event: AgentEvent) => run.session.emit(event).catch((err: unknown) => process.stderr.write(`emit failed: ${String(err)}\n`));
 
   const pollQuota = async (run: Run) => {
+    if (run.local) return; // No Anthropic plan behind a local Session: nothing to read.
     let reply: UsageReply;
     try {
       reply = (await run.query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })) as UsageReply;
@@ -222,9 +285,11 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
         ? { behavior: 'allow', updatedInput: input }
         : { behavior: 'deny', message: `The person denied this (${request.action}: ${request.detail}). Do not try to get around it; carry on without it or raise an Ask.` };
     };
+    const local = run.local;
+    const model = local ? local.model.serverModelId : (start.model ?? config.model);
     return {
       cwd,
-      ...(start.model ?? config.model ? { model: start.model ?? config.model } : {}),
+      ...(model ? { model } : {}),
       permissionMode: 'default',
       settingSources: [],
       // Claude Code's preset asks for a Co-Authored-By trailer on commits and PRs; Kiln never wants one.
@@ -238,15 +303,16 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       },
       ...(skills ? { plugins: [skills.plugin] } : {}),
       systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(start, cwd) },
-      env: claudeEnv(),
-      ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
+      env: local ? localClaudeEnv(process.env, local.model, local.configDir) : claudeEnv(),
+      // A local Session's dollar figure is made up, so the dollar cap would stop it for nothing.
+      ...(config.maxBudgetUsd && !local ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
       ...(config.claudePath ? { pathToClaudeCodeExecutable: config.claudePath } : {}),
       stderr: (data: string) => process.stderr.write(data),
     };
   };
 
   const onMessage = async (run: Run, message: Record<string, unknown>, usage: ReturnType<typeof createUsageTracker>) => {
-    usage.see(message);
+    usage.see(run.local ? asServerModel(message, run.local.model.serverModelId) : message);
     if (message.type === 'assistant') {
       const content = ((message.message as { content?: unknown[] } | undefined)?.content ?? []) as { type?: string; text?: string; name?: string; input?: unknown }[];
       for (const block of content) {
@@ -256,6 +322,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       return;
     }
     if (message.type === 'rate_limit_event') {
+      if (run.local) return;
       const info = (message.rate_limit_info ?? {}) as Record<string, unknown>;
       if (info.isUsingOverage === true) run.usingOverage = true;
       const reading = readingFromRateLimit(info, new Date().toISOString());
@@ -263,7 +330,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
       return;
     }
     if (message.type !== 'result') return;
-    for (const event of usage.settle(message)) await emit(run, event);
+    for (const event of usage.settle(message)) await emit(run, run.local ? localUsage(event, run.local.model) : event);
     run.busy = false;
     if (run.stopped) return;
     if (run.paused) return; // `finished interrupted` went out when Kiln interrupted.
@@ -285,6 +352,14 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
     } finally {
       if (run.quotaTimer) clearInterval(run.quotaTimer);
       if (runs.get(run.session.start.sessionId) === run) runs.delete(run.session.start.sessionId);
+      // Claude Code is gone, so its local config folder (transcripts, state) goes too.
+      if (run.local) {
+        try {
+          await rm(run.local.configDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        } catch (err) {
+          process.stderr.write(`Could not remove ${run.local.configDir}: ${String(err)}\n`);
+        }
+      }
     }
   };
 
@@ -321,6 +396,7 @@ export function createClaudeCodeAgent(deps: { sdk: ClaudeSdk; config: ClaudeCode
         overageBaseline: null,
         usingOverage: false,
         configDir: sessionConfigDir(deps.dataDir, start.sessionId),
+        ...(start.local ? { local: { model: start.local, configDir: freshConfigDir(start.sessionId) } } : {}),
       } as Omit<Run, 'query' | 'done'> as Run;
       run.query = sdk.query({ prompt: input, options: optionsFor(run, start, cwd) });
       runs.set(start.sessionId, run);

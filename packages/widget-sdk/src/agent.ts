@@ -38,6 +38,11 @@ export interface SessionStart {
    * An Agent with no MCP client ignores this and reaches Kiln's tools through `kilnTools` some other way.
    */
   mcpServers?: Record<string, ModuleMcpServer>;
+  /**
+   * Set when `model` is a local variant: the Session runs on the local server, not the Agent's
+   * cloud. Report usage under `variantId` (it decides the local Budget); its dollar price is made up.
+   */
+  local?: LocalSessionModel;
 }
 
 /** One skill a Session runs with: a folder holding `SKILL.md` (and whatever files it refers to). */
@@ -49,6 +54,18 @@ export interface SessionSkill {
   commit: string | null;
   /** The skill's folder. Read-only to the Agent Widget. */
   folder: string;
+}
+
+/** The local variant a Session runs on, and where its server is (local-first Ticket 03). */
+export interface LocalSessionModel {
+  /** Kiln's variant id: the Session's `model`, and the model to report usage under. */
+  variantId: string;
+  /** The id the local server serves the variant under (the `model` of each request). */
+  serverModelId: string;
+  /** The local server's base URL, e.g. `http://127.0.0.1:8080` (it serves `/v1/messages`). */
+  url: string;
+  /** The variant's context size in tokens, when its settings say. */
+  contextSize?: number;
 }
 
 /**
@@ -146,6 +163,11 @@ export interface AgentRegistration {
    * from. Each id must be exactly the name the Agent reports usage under.
    */
   models?: AgentModel[];
+  /**
+   * Runs Sessions on Kiln's local variants (any enabled one, handed over as `SessionStart.local`),
+   * so a Stage whose model is a variant can start on this Agent.
+   */
+  runsLocalVariants?: boolean;
 }
 
 /** A model an Agent can run. */

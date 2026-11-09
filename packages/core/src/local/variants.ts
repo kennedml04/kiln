@@ -11,6 +11,7 @@ import {
   type AddVariantRequest,
   type EditVariantRequest,
   type GgufFile,
+  type LocalSessionModel,
   type LocalServerSettings,
   type SmokeTestResult,
   type Variant,
@@ -48,6 +49,11 @@ export interface VariantService {
   disable(id: string, reason?: string): Promise<Variant>;
   remove(id: string): Promise<Variant>;
   smokeTest(id: string): Promise<Variant>;
+  /**
+   * The local variant a Session on `model` runs on, or undefined when `model` is no variant's id
+   * (a cloud model). 409 for a disabled or removed variant, or while the server has no URL.
+   */
+  localModel(model: string): LocalSessionModel | undefined;
 }
 
 export interface VariantServiceDeps {
@@ -381,5 +387,14 @@ export function createVariantService({ db, bus, clock, server: makeServer = crea
         const result = await runSmokeTest(server(), v.serverModelId, settings().smokeTimeoutSeconds * 1000, clock.now);
         return save(withResult(v, result));
       }),
+    localModel(model) {
+      const v = records().find((r) => r.id === model);
+      if (!v) return undefined;
+      if (v.state === 'removed') throw new WorkError(409, `The local variant "${v.name}" was removed; add it again to run Sessions on it`);
+      if (v.state === 'disabled') throw new WorkError(409, `The local variant "${v.name}" is disabled: ${v.disabledReason ?? 'no reason given'}`);
+      const { url } = settings();
+      if (!url) throw new WorkError(409, `Set the local server's URL before running Sessions on "${v.name}" (PUT /api/local-server)`);
+      return { variantId: v.id, serverModelId: v.serverModelId, url, ...(v.settings.contextSize ? { contextSize: v.settings.contextSize } : {}) };
+    },
   };
 }

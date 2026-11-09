@@ -5,7 +5,8 @@
 // maxBudgetUsd, claudePath, and sdkModule (tests only). See ClaudeCodeConfig.
 //
 // Claude Code signs in the way it does on this PC (the person's own login); the Widget reads no
-// Claude Code settings files and passes none on.
+// Claude Code settings files and passes none on. A Session on a local variant is the exception: it
+// gets no login at all, a fresh config folder, and the local server as its API (local-first 03).
 import { pathToFileURL } from 'node:url';
 import { createWidgetClient, serveAgent } from '@kiln/widget-sdk';
 import { CLAUDE_MODELS, createClaudeCodeAgent, type ClaudeCodeConfig, type ClaudeSdk } from './agent.ts';
@@ -31,6 +32,8 @@ await serveAgent(createClaudeCodeAgent({ sdk, config, dataDir }), {
       cacheLifetimeMs: config.cacheLifetimeMs ?? 60 * 60_000,
       ...(config.model ? { model: config.model } : {}),
       models: config.models ?? CLAUDE_MODELS,
+      // A Session on a local variant runs Claude Code against the local server (see agent.ts).
+      runsLocalVariants: true,
     },
   ],
 });

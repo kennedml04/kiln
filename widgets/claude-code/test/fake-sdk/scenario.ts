@@ -51,7 +51,10 @@ export interface FakeScenario {
 
 /** One line of the fake's log (`<scenario>.log`, JSON lines), for tests to check what happened. */
 export type FakeLogEntry =
-  | { kind: 'options'; options: Record<string, unknown> }
+  /** `configDirFiles`: what the `env.CLAUDE_CONFIG_DIR` folder held when the query started (null: no such folder). */
+  | { kind: 'options'; options: Record<string, unknown>; configDirFiles?: string[] | null }
+  /** A turn's model call, made only when `env.ANTHROPIC_BASE_URL` is set (a local Session). */
+  | { kind: 'api'; url: string; model: string; token: string | null; status: number }
   | { kind: 'user'; text: string }
   | { kind: 'tool'; name: string; input: Record<string, unknown>; outcome: 'ran' | 'denied'; via: 'hook' | 'permission'; message?: string }
   | { kind: 'mcp'; tool: string; result: unknown }
