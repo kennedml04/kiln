@@ -2314,6 +2314,16 @@
       "action": "other_commands",
       "match": "mkdir -p *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git branch --contains *",
+      "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git checkout *",
+      "decision": "allow"
     }
   ]
 }
