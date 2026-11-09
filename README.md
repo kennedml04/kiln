@@ -31,6 +31,12 @@ Asks from every Agent on every Project land in **Needs you**: grill questions, p
 
 Each Ticket page shows its branch and worktree, what the Session spent (credits, turns, tokens, context), which Exit checks were met, the thread of events and a Digest of what happened. The audit log keeps every action.
 
+## Set up in seven steps
+
+![The setup wizard: Login, Knowledge store, Install, Agents, Models, Workflow roles, Demo, then the board](docs/readme/setup.gif)
+
+First run opens a wizard. Pick who can log in, where Digests go, what pays for the work, which Agents to install, a Budget per model and a model per Workflow role. Each step saves as you go, and you can come back to any of it from Settings.
+
 ## How it fits together
 
 ```mermaid
@@ -130,11 +136,11 @@ npm test
 The images in this README come from the Replay demo, photographed by a test. To remake them after a Shell change:
 
 ```powershell
-node --test scripts/readme-media.test.ts
+node --test scripts/readme-media.test.ts scripts/readme-setup.test.ts
 python -I scripts/readme-media.py
 ```
 
-The first writes numbered frames to `docs/readme/shots/` (not committed); the second needs Pillow and writes `docs/readme/*.png` and `demo.gif`.
+The tests write numbered frames to `docs/readme/shots/` (not committed); the script needs Pillow and writes `docs/readme/*.png`, `demo.gif` and `setup.gif`.
 
 ## License
 

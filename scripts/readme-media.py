@@ -3,7 +3,8 @@
   python -I scripts/readme-media.py
 
 Writes docs/readme/hero.png, needs-you.png, ticket.png (PNG-8, 1280 wide) and
-docs/readme/demo.gif (the demo Story from Grill to Shipped, 960 wide, captioned).
+docs/readme/demo.gif (the demo Story from Grill to Shipped) and docs/readme/setup.gif (the setup
+wizard, from scripts/readme-setup.test.ts), both 960 wide and captioned.
 Needs Pillow.
 """
 import glob
@@ -17,8 +18,8 @@ SHOTS = os.path.join(ROOT, "docs", "readme", "shots")
 OUT = os.path.join(ROOT, "docs", "readme")
 
 
-def shot(name):
-    hits = sorted(glob.glob(os.path.join(SHOTS, f"*-{name}.png")))
+def shot(name, prefix=""):
+    hits = sorted(glob.glob(os.path.join(SHOTS, f"{prefix}*-{name}.png")))
     if not hits:
         sys.exit(f"no frame named {name} in {SHOTS}")
     return Image.open(hits[-1]).convert("RGB")
@@ -52,6 +53,19 @@ BEATS = [
 ]
 
 
+# The setup wizard's steps, in order.
+SETUP_BEATS = [
+    ("login", "1. Login: this PC only, or your tailnet with roles."),
+    ("knowledge", "2. Knowledge store: a markdown folder, or your Obsidian vault."),
+    ("install", "3. Install: what pays for the work. Budgets come with it."),
+    ("agents", "4. Agents: install Claude Code or Pi from the Widget repo."),
+    ("models", "5. Models: each one draws from a Budget."),
+    ("roles", "6. Workflow roles: a model and a fallback for each role."),
+    ("demo", "7. Demo: Replay plays a Story with no models at all."),
+    ("board", "8. Finish. The board is up and the demo Story waits at Grill."),
+]
+
+
 def caption(im, text):
     W, H = im.size
     bar_h = 64
@@ -62,17 +76,17 @@ def caption(im, text):
     return out
 
 
-def gif(width=960):
+def gif(beats, out, prefix="", width=960):
     frames, durs = [], []
     # The beats mix full Shell frames and clipped boards, so each one is scaled to fit the GIF's
     # width and centred on a canvas as tall as the tallest, on the Shell's background colour.
     scaled = []
-    for name, _ in BEATS:
-        im = shot(name)
+    for name, _ in beats:
+        im = shot(name, prefix)
         scaled.append(im.resize((width, round(im.height * width / im.width)), Image.LANCZOS))
     height = max(im.height for im in scaled)
     stills = []
-    for im, (_, text) in zip(scaled, BEATS):
+    for im, (_, text) in zip(scaled, beats):
         canvas = Image.new("RGB", (width, height), im.getpixel((im.width - 2, 2)))
         canvas.paste(im, (0, (height - im.height) // 2))
         stills.append(caption(canvas, text))
@@ -87,13 +101,14 @@ def gif(width=960):
         sheet.paste(stills[idx], (0, stills[0].height * j))
     pal = sheet.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
     q = [f.quantize(palette=pal, dither=Image.Dither.NONE) for f in frames]
-    path = os.path.join(OUT, "demo.gif")
+    path = os.path.join(OUT, out)
     q[0].save(path, save_all=True, append_images=q[1:], duration=durs, loop=0, optimize=True, disposal=1)
-    print("demo.gif", len(q), "frames", round(os.path.getsize(path) / 1e6, 2), "MB")
+    print(out, len(q), "frames", round(os.path.getsize(path) / 1e6, 2), "MB")
 
 
 if __name__ == "__main__":
     still("home-review", "hero.png")
     still("needs-you-review-gate", "needs-you.png")
     still("ticket-thread", "ticket.png")
-    gif()
+    gif(BEATS, "demo.gif")
+    gif(SETUP_BEATS, "setup.gif", prefix="setup-")
