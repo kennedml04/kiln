@@ -32,8 +32,7 @@ test('the Item view streams the Session Thread live and shows the Exit status an
   await page.getByRole('button', { name: 'Start Session' }).click();
 
   const thread = page.getByRole('log', { name: 'Thread' });
-  await thread.getByText('reading the Ticket').waitFor();
-  await thread.getByText('committed the answer').waitFor();
+  await thread.getByRole('button', { name: /Steps/ }).waitFor();
   const exit = page.getByRole('region', { name: 'Exit' });
   await exit.getByText('Exit met').waitFor();
   for (const check of ['Branch has commits', 'Working tree clean', 'Tests pass']) {
@@ -70,18 +69,20 @@ test('a person sends a Thread message from the Item view; it starts a Session th
   await page.getByRole('button', { name: 'Send' }).click();
 
   await thread.getByText('Person: Use three columns').waitFor();
-  await thread.getByText('heard: Use three columns').waitFor();
   await thread.getByText(/Digest: decided Three columns/).waitFor();
+  const closed = thread.getByRole('button', { name: /Steps/, expanded: false });
+  while ((await closed.count()) > 0) await closed.first().click();
+  await thread.getByText('heard: Use three columns').waitFor();
   assert.equal(await page.getByRole('textbox', { name: 'Message' }).inputValue(), '', 'the box is cleared once sent');
 });
 
 test('streaming into the Thread keeps the text a person selected and where they scrolled to', async (t) => {
   const { page, thread } = await openTicket(t, [
-    { do: 'progress', text: 'pick me' },
     { do: 'tool', name: 'think', times: 'forever', intervalMs: 40 },
   ]);
   await page.getByRole('button', { name: 'Start Session' }).click();
-  await thread.getByText('pick me').waitFor();
+  await thread.getByText('Session started').waitFor();
+  await thread.getByRole('button', { name: /Steps/ }).click();
   // Let the Thread overflow its box, then scroll up away from the bottom and select a line.
   await page.waitForFunction(() => {
     const log = document.querySelector('[role="log"][aria-label="Thread"]')!;
@@ -90,7 +91,7 @@ test('streaming into the Thread keeps the text a person selected and where they 
   const before = await page.evaluate(() => {
     const log = document.querySelector('[role="log"][aria-label="Thread"]')!;
     log.scrollTop = 40;
-    const line = [...log.querySelectorAll('li')].find((li) => li.textContent === 'pick me')!;
+    const line = [...log.querySelectorAll('li')].find((li) => li.textContent === 'Session started')!;
     const range = document.createRange();
     range.selectNodeContents(line);
     getSelection()!.removeAllRanges();
@@ -104,7 +105,7 @@ test('streaming into the Thread keeps the text a person selected and where they 
     scrollTop: document.querySelector('[role="log"][aria-label="Thread"]')!.scrollTop,
     selected: getSelection()!.toString(),
   }));
-  assert.equal(after.selected, 'pick me');
+  assert.equal(after.selected, 'Session started');
   assert.equal(after.scrollTop, before.scrollTop);
 });
 
@@ -112,6 +113,7 @@ test('the Thread follows new lines while the person is at its bottom', async (t)
   const { page, thread } = await openTicket(t, [{ do: 'tool', name: 'think', times: 'forever', intervalMs: 40 }]);
   await page.getByRole('button', { name: 'Start Session' }).click();
   await thread.getByText('Session started').waitFor();
+  await thread.getByRole('button', { name: /Steps/ }).click();
   await page.waitForFunction(() => {
     const log = document.querySelector('[role="log"][aria-label="Thread"]')!;
     return log.scrollHeight > log.clientHeight + 200 && log.scrollHeight - log.scrollTop - log.clientHeight < 2;

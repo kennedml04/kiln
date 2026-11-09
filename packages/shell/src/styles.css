@@ -1244,6 +1244,67 @@ form [role='alert'],
   color: var(--text-faint);
 }
 
+.thread-steps button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-muted, inherit);
+}
+
+.thread-steps button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.steps-toggle,
+.step-line {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.steps-list {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding-left: 0.75rem;
+}
+
+.step-quiet {
+  color: var(--text-faint);
+}
+
+.step-detail {
+  margin: 0.2rem 0 0.4rem 1rem;
+}
+
+.step-detail dt {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}
+
+.step-detail dd {
+  margin: 0 0 0.3rem;
+}
+
+.step-detail pre {
+  margin: 0;
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .thread-steps .steps-toggle,
+  .thread-steps button.step-line {
+    min-height: 44px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+  }
+}
+
 .thread-digest-written {
   font-style: italic;
   color: var(--accent-strong);

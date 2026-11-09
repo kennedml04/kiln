@@ -5,6 +5,7 @@ import { followLink, itemPath, projectPath } from '../router.ts';
 import { addThreadEntries, api, useStore } from '../store.ts';
 import { StoryLine, useStoryOf } from './StoryLine.tsx';
 import { UsagePanel } from './Usage.tsx';
+import { hasDetail, stepDetail, stepLine } from './steps.ts';
 
 const NO_ENTRIES: ThreadEntry[] = [];
 
@@ -34,8 +35,7 @@ function describe(entry: ThreadEntry, project: Project | undefined, item: Item |
     case 'session.started':
       return 'Session started';
     case 'session.progress': {
-      const tool = p.tool as { name: string } | undefined;
-      return (p.text as string | undefined) ?? (tool ? `Tool: ${tool.name}` : 'Working');
+      return stepLine(p, item?.run?.worktree);
     }
     case 'session.finished':
       return `Agent finished (${String(p.reason)})${p.message ? `: ${String(p.message)}` : ''}`;
@@ -101,34 +101,181 @@ function ExitPanel({ exit }: { exit: ExitStatus | undefined }) {
   );
 }
 
+type StepsRow = { kind: 'steps'; id: number; steps: ThreadEntry[]; extras: Map<number | 'end', ThreadEntry[]> };
+type Row =
+  | { kind: 'entry'; entry: ThreadEntry }
+  | StepsRow;
+
+const NOT_CARRIED = new Set([
+  'session.started',
+  'session.finished',
+  'session.updated',
+  'session.message',
+  'session.permission_request',
+  'session.progress',
+]);
+/** Usage, quota and any other unknown session.* entry ride inside a group without ending it. */
+const carried = (type: string) => type.startsWith('session.') && !NOT_CARRIED.has(type);
+
+/** Consecutive steps become one group; carried entries sit inside it, uncounted. */
+function toRows(thread: ThreadEntry[]): Row[] {
+  const rows: Row[] = [];
+  let group: StepsRow | undefined;
+  let pending: ThreadEntry[] = [];
+  const settle = (key: number | 'end', g = group) => {
+    if (g && pending.length) g.extras.set(key, pending);
+    pending = [];
+  };
+  for (const entry of thread) {
+    if (entry.type === 'session.progress') {
+      if (!group) {
+        group = { kind: 'steps', id: entry.id, steps: [], extras: new Map() };
+        rows.push(group);
+      }
+      if (group.steps.length) settle(group.steps[group.steps.length - 1]!.id, group);
+      group.steps.push(entry);
+    } else if (group && carried(entry.type)) {
+      pending.push(entry);
+    } else {
+      settle('end');
+      group = undefined;
+      rows.push({ kind: 'entry', entry });
+    }
+  }
+  settle('end');
+  return rows;
+}
+
+const CUT = 2000;
+
+function StepDetailView({ entry, worktree }: { entry: ThreadEntry; worktree?: string | null }) {
+  const [all, setAll] = useState(false);
+  return (
+    <dl className="step-detail">
+      {stepDetail(entry.payload, worktree).map((d, i) => {
+        const long = d.value.length > CUT && !all;
+        const value = long ? d.value.slice(0, CUT) : d.value;
+        return (
+          <div key={i}>
+            <dt>{d.label}</dt>
+            <dd>
+              {d.pre ? <pre>{value}</pre> : value}
+              {long ? (
+                <button type="button" onClick={() => setAll(true)}>
+                  show all
+                </button>
+              ) : null}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
 /**
  * The Thread's log. New lines are appended without touching the ones shown, so a selection
  * survives; it follows new lines only while the person is at its bottom, and otherwise stays put.
+ * Consecutive steps fold into one "Steps (n)" group; what is open is kept while steps arrive.
  */
 export function ThreadLog({ thread, project, item }: { thread: ThreadEntry[]; project: Project | undefined; item?: Item }) {
   const log = useRef<HTMLOListElement>(null);
   const atBottom = useRef(true);
+  const [openGroups, setOpenGroups] = useState<Set<number>>(() => new Set());
+  const [openSteps, setOpenSteps] = useState<Set<number>>(() => new Set());
+  const toggle = (set: Set<number>, id: number) => {
+    const next = new Set(set);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  };
   const onScroll = () => {
     const el = log.current;
     if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4;
   };
+  const lastId = thread[thread.length - 1]?.id;
   useLayoutEffect(() => {
     const el = log.current;
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-  }, [thread.length]);
+  }, [lastId, openGroups, openSteps]);
+  const worktree = item?.run?.worktree;
+  const rows = toRows(thread);
   return (
     <ol ref={log} role="log" aria-label="Thread" aria-live="polite" className="thread-log" onScroll={onScroll}>
-      {thread.map((entry) => (
-        <li key={entry.id} className={`thread-${entry.type.replace('.', '-')}`}>
-          {entry.type === 'item.from_chat' && typeof (entry.payload as { chatId?: unknown }).chatId === 'string' ? (
-            <a href={`/chats/${encodeURIComponent((entry.payload.chatId as string))}`} onClick={followLink}>
-              {describe(entry, project, item)}
-            </a>
-          ) : (
-            describe(entry, project, item)
-          )}
-        </li>
-      ))}
+      {rows.map((row, index) => {
+        if (row.kind === 'steps') {
+          const open = openGroups.has(row.id);
+          const filling = index === rows.length - 1;
+          const latest = row.steps[row.steps.length - 1]!;
+          return (
+            <li key={row.id} className="thread-steps">
+              <button
+                type="button"
+                className="steps-toggle"
+                aria-expanded={open}
+                onClick={() => setOpenGroups((s) => toggle(s, row.id))}
+              >
+                <span aria-hidden="true">{open ? '−' : '+'}</span> Steps ({row.steps.length})
+                {filling ? (
+                  <span className="steps-latest" aria-live="off">
+                    {' · '}
+                    {stepLine(latest.payload, worktree)}
+                  </span>
+                ) : null}
+              </button>
+              {open ? (
+                <ul className="steps-list">
+                  {row.steps.map((step) => {
+                    const line = stepLine(step.payload, worktree);
+                    const stepOpen = openSteps.has(step.id);
+                    return (
+                      <li key={step.id}>
+                        {hasDetail(step.payload, worktree) ? (
+                          <button
+                            type="button"
+                            className="step-line"
+                            title={line}
+                            aria-expanded={stepOpen}
+                            onClick={() => setOpenSteps((s) => toggle(s, step.id))}
+                          >
+                            <span aria-hidden="true">{stepOpen ? '−' : '+'}</span> {line}
+                          </button>
+                        ) : (
+                          <span className="step-line" title={line}>
+                            {line}
+                          </span>
+                        )}
+                        {stepOpen ? <StepDetailView entry={step} worktree={worktree} /> : null}
+                        {(row.extras.get(step.id) ?? []).map((e) => (
+                          <div key={e.id} className="step-quiet">
+                            {describe(e, project, item)}
+                          </div>
+                        ))}
+                      </li>
+                    );
+                  })}
+                  {(row.extras.get('end') ?? []).map((e) => (
+                    <li key={e.id} className="step-quiet">
+                      {describe(e, project, item)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        }
+        const entry = row.entry;
+        return (
+          <li key={entry.id} className={`thread-${entry.type.replace('.', '-')}`}>
+            {entry.type === 'item.from_chat' && typeof (entry.payload as { chatId?: unknown }).chatId === 'string' ? (
+              <a href={`/chats/${encodeURIComponent(entry.payload.chatId as string)}`} onClick={followLink}>
+                {describe(entry, project, item)}
+              </a>
+            ) : (
+              describe(entry, project, item)
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }
