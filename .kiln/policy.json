@@ -2299,6 +2299,11 @@
       "action": "other_commands",
       "match": "git diff *",
       "decision": "allow"
+    },
+    {
+      "action": "other_commands",
+      "match": "git rebase *",
+      "decision": "allow"
     }
   ]
 }
