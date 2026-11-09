@@ -10,9 +10,9 @@ The Policy, the Kiln MCP tools, the no-attribution settings and the trailer chec
 
 **Blocked by:** 02, 04
 
-**Status:** in-review
+**Status:** done
 
-**Stage:** review
+**Stage:** shipped
 
 **Decided (2026-11-05):** local Agents get their own real check that judges outcomes, not the shared Agent contract. The last box moves to ticket 14.
 
