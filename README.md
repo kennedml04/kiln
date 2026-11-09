@@ -1,13 +1,78 @@
 # Kiln
 
-Kiln is a local board for running coding agents across many projects. It has a small core that owns the work (Projects, Items, Stages, Gates and Sessions), permissions and runaway-cost protection. Everything else, including the agents themselves, is a Widget: a separate process the core installs, starts and supervises.
+**A local board that runs coding agents across all your projects, and only interrupts you when a decision is yours.**
 
-- **One work model.** Epics, Stories and Tickets move through the Stages of a Workflow. An Item moves forward when Kiln checks that its Stage's Exit is met, or when a person approves a Gate in the Needs you inbox.
-- **A fresh Session per Stage, a worktree per Ticket.** Each Ticket gets its own git worktree and branch. Kiln checks the Exit (commits, clean tree, tests pass) and merges, or opens a pull request. Whatever the Workflow says, every Stage with a worktree also checks that no commit on the branch has a `Co-Authored-By:` trailer (the Agent is told to rewrite those messages), and the merge and the pull request refuse such a branch.
-- **Kiln owns the Policy.** One layered Policy (Org → Project → Stage) over abstract actions, translated by each Agent Widget into its tool's own settings. Permission requests become Asks.
-- **Budgets on by default.** Metered (credits or dollars), subscription (plan usage windows) and local (turns and time) Budgets, with per-Session caps, pacing, reserves, a stall rule, a context alarm and Stop all.
+![The Kiln board: three Projects, a Story in review, one Gate waiting in Needs you](docs/readme/hero.png)
+
+You write a Story. Kiln grills you on it, writes the spec, cuts it into Tickets, gives each Ticket its own git worktree and a fresh Agent Session, checks the exit (commits, clean tree, tests green), merges, and asks you to approve at each Gate. Every Project on one board. Every question in one inbox. Budgets on by default, so a runaway Agent costs you a Stop, not a bill.
+
+## Watch a Story ship
+
+The demo below is Kiln's Replay mode: a scripted Agent plays one Story, "Add `slugify(title)`", from Grill to Shipped on a dev instance. No models, no cost, same screens.
+
+![A Story moving through Grill, spec, Tickets, review and Shipped on the Kiln board](docs/readme/demo.gif)
+
+1. **Grill.** The griller Agent asks you the questions a good tech lead would, before anyone writes code.
+2. **Spec Gate.** The spec lands in Needs you with a recommendation. You approve, reject or comment.
+3. **Tickets.** The Story becomes Tickets with dependencies. Each Ticket gets a branch and a worktree.
+4. **Implement and review.** A fresh Session per Stage. The Exit is checked, not trusted: commits, clean tree, tests pass, no `Co-Authored-By` trailers.
+5. **Review Gate.** Findings and the diff stat wait for you. Approve, and Kiln merges to main. The blocked Ticket unblocks and starts on its own.
+6. **Shipped.** Both Tickets merged, the Story moves to Shipped recently, and the board is quiet again.
+
+## One inbox for everything that needs a human
+
+![Needs you: the Review Gate for Ticket 01 with findings, diff stat, a recommendation and Approve, Reject and Comment](docs/readme/needs-you.png)
+
+Asks from every Agent on every Project land in **Needs you**: grill questions, permission requests, Gates. Each one carries the Agent's recommendation, so a decision is usually one click. Nothing moves past a Gate without you.
+
+## Every Session, accounted for
+
+![A Ticket's page: branch, worktree, usage, the Exit checks that were met, and the thread of events](docs/readme/ticket.png)
+
+Each Ticket page shows its branch and worktree, what the Session spent (credits, turns, tokens, context), which Exit checks were met, the thread of events and a Digest of what happened. The audit log keeps every action.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    subgraph core["Kiln core (one process)"]
+        work["Work<br/>Projects · Items · Stages · Gates · Sessions"]
+        policy["Policy<br/>Org → Project → Stage"]
+        budgets["Budgets · Scheduler<br/>caps, pacing, stall rule, Stop all"]
+    end
+    shell["Shell<br/>board · Needs you · chats · audit"] <-->|"local API + events"| core
+    core <-->|"local API, own credential"| agents
+    core <--> trackers
+    core <--> panels
+    subgraph widgets["Widgets (separate processes)"]
+        agents["Agents<br/>claude-code · pi"]
+        trackers["Trackers<br/>github · local markdown"]
+        panels["Panels<br/>gpu-monitor"]
+    end
+    agents -->|"worktree per Ticket"| repos[("your git repos")]
+```
+
+- **The core is small and owns the work.** Projects, Items (Epic, Story, Ticket), Workflow Stages, Gates and Sessions. One model, many views ([ADR 0001](docs/adr/0001-work-is-core-one-model-many-views.md)).
+- **A fresh Session per Stage, a worktree per Ticket.** Kiln checks the Exit and merges, or opens a pull request ([ADR 0002](docs/adr/0002-fresh-session-per-stage.md), [ADR 0003](docs/adr/0003-worktree-per-ticket-checked-exits.md)).
+- **Agents are Widgets.** Claude Code, Pi, or your own: a separate process the core installs, starts, supervises and talks to over its local API ([ADR 0004](docs/adr/0004-agents-are-widgets.md), [ADR 0007](docs/adr/0007-widgets-are-separate-processes.md)).
+- **Kiln owns the Policy.** One layered Policy over abstract actions, translated by each Agent Widget into its tool's own settings. Permission requests become Asks ([ADR 0006](docs/adr/0006-kiln-owns-a-layered-policy.md)).
+- **Budgets on by default.** Metered (credits or dollars), subscription (plan usage windows) and local (turns and time), with per-Session caps, pacing, reserves, a stall rule, a context alarm and Stop all.
 
 The design lives in `.scratch/kiln-v1/spec.md`, the vocabulary in `GLOSSARY.md` and the decisions in `docs/adr/`.
+
+## Try it in two minutes
+
+No API key needed. The dev instance runs beside any Kiln you already have, on a free port with a throwaway data folder.
+
+```powershell
+git clone https://github.com/kennedml04/kiln.git
+cd kiln
+npm ci
+npm run build
+node packages/core/src/cli.ts dev
+```
+
+Open the URL it prints. The setup wizard's Demo step offers **Replay (no models)**; pick it, or start it later from the **Demo** Project with **Start demo**. Open the Story, start a Session, then answer its questions and approve the Gates in Needs you. **Stop all** halts everything at any time.
 
 ## Install
 
@@ -41,11 +106,12 @@ The port defaults to 8300 (`--port` or `KILN_PORT`) and the data folder to `%LOC
 
 ## Widgets
 
-A Widget is a folder with a `kiln-widget.json` Manifest that says what it provides (Agents, Trackers, panels) and what it needs (Asks, network domains, a data folder). Widgets are installed from this repo or from a private Widget source (a local folder or a private git repo), pinned in a lockfile, approved by a person, and started, stopped or updated without restarting the core.
+A Widget is a folder with a `kiln-widget.json` Manifest that says what it provides (Agents, Trackers, panels) and what it needs (Asks, network domains, secrets, a data folder). Widgets are installed from this repo or from a private Widget source (a local folder or a private git repo), pinned in a lockfile, approved by a person, and started, stopped or updated without restarting the core.
 
 First-party Widgets in `widgets/`:
 
 - `claude-code`: the Claude Code Agent, through the Claude Agent SDK, with subscription quota readings.
+- `pi`: the Pi Agent, for OpenAI, Anthropic or OpenRouter models with an API key.
 - `github`: a GitHub Issues Tracker.
 - `gpu-monitor`: a read-only NVIDIA GPU panel.
 
@@ -60,6 +126,15 @@ npm test
 ```
 
 `npm test` checks the lock file and banned patterns, builds the Shell, typechecks and runs every test. Tests start a real core on a free port with a throwaway data folder (`startTestKiln` from `@kiln/testing`) and never touch the live Kiln. Node runs the TypeScript directly, so only the Shell has a build step. `CLAUDE.md` has the rules agents follow in this repo.
+
+The images in this README come from the Replay demo, photographed by a test. To remake them after a Shell change:
+
+```powershell
+node --test scripts/readme-media.test.ts
+python -I scripts/readme-media.py
+```
+
+The first writes numbered frames to `docs/readme/shots/` (not committed); the second needs Pillow and writes `docs/readme/*.png` and `demo.gif`.
 
 ## License
 

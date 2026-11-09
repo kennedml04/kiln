@@ -3,3 +3,5 @@ dist/
 *.tsbuildinfo
 .claude/settings.local.json
 .claude/worktrees/
+# raw README frames (scripts/readme-media.test.ts); the README uses docs/readme/*.png and demo.gif
+docs/readme/shots/
